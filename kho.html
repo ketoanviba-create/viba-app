@@ -1,0 +1,19 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="VIBA Thủ kho"><meta name="theme-color" content="#167a4f">
+<title>VIBA Thủ kho</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="app.css"><link rel="icon" href="icon.svg"><link rel="apple-touch-icon" href="icon.png"></head><body>
+
+<div class="wrap" id="wrap">
+  <header class="top"><div class="who" id="who"><span class="chip">Đang kết nối…</span></div><div id="modeSw"></div></header>
+  <main id="view"></main>
+</div>
+<nav class="tabbar" id="tabbar" hidden><div class="in" id="tabs"></div></nav>
+<div id="sheet" hidden></div>
+<div id="viewer" hidden></div>
+<div id="toast" hidden></div>
+<input type="file" id="fileCam" accept="image/*" hidden>
+<input type="file" id="fileXls" accept=".xlsx,.xls,.csv" hidden>
+<datalist id="dlShip"></datalist>
+
+<script>window.APP_MODE="kho";</script><script src="config.js"></script><script src="gas-shim.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="app.js"></script></body></html>
