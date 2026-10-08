@@ -571,7 +571,15 @@ function editStaff(id){const s=R.staff.get(id)||{role:'sale',name:'',pct:'',acti
    <label class="f">Tên hiển thị<input id="es_name" value="${esc(s.name||R.names[id]||'')}" ${ro?'readonly':''}></label>
    <label class="f">% hoa hồng (cho sale, để trống dùng mức chung ${fmt(ST().salePct)}%)<input id="es_pct" inputmode="decimal" class="num" value="${esc(s.pct??'')}" ${ro?'readonly':''}></label>
    <div class="group"><div class="toggle"><span style="font-weight:600">Cho phép sử dụng</span><input type="checkbox" class="sw" id="es_act" ${s.active!==false?'checked':''} ${ro?'disabled':''}></div></div>
-   ${ro?'':'<button class="btn block pri" id="es_save">Lưu</button>'}`,b=>{const sv=b.querySelector('#es_save');if(sv)sv.onclick=async()=>{
+   ${ro?'':'<button class="btn block pri" id="es_save">Lưu</button>'}
+   ${!ro&&window.vibaAdmin&&id!==R.uid?'<div class="sec">Mật khẩu</div><div id="es_pwBox" class="stack"><button class="btn block" id="es_reset">Cấp lại mật khẩu</button><div class="tiny muted">Dùng khi nhân viên quên mật khẩu. App tạo mật khẩu tạm 6 số, tài khoản và dữ liệu cũ giữ nguyên.</div></div>':''}`,b=>{const sv=b.querySelector('#es_save');
+    const rs=b.querySelector('#es_reset');if(rs)rs.onclick=()=>{const box=b.querySelector('#es_pwBox');
+      box.innerHTML=`<div class="alert w">Mật khẩu cũ của ${esc(staffName(id))} sẽ không dùng được nữa.</div><button class="btn block pri" id="es_resetOk">Xác nhận cấp mật khẩu mới</button>`;
+      box.querySelector('#es_resetOk').onclick=async()=>{box.innerHTML='<div class="empty">Đang tạo mật khẩu…</div>';
+        try{const r=await window.vibaAdmin.resetPassword(id);box.innerHTML=`<div class="card stack"><div class="tiny muted">Gửi cho nhân viên để đăng nhập:</div><div>Email: <b>${esc(r.email)}</b></div><div>Mật khẩu mới: <b style="font-size:22px;letter-spacing:2px" class="num">${esc(r.password)}</b></div><button class="btn sm" id="es_copy">Sao chép</button><div class="tiny muted">Nhân viên nên tự đổi mật khẩu sau khi đăng nhập (nút Đổi MK cạnh Đăng xuất).</div></div>`;
+          const cp=box.querySelector('#es_copy');cp.onclick=()=>{const t='Email: '+r.email+'\nMật khẩu: '+r.password;try{navigator.clipboard.writeText(t).then(()=>toast('Đã sao chép'),()=>{})}catch(e){}}}
+        catch(e){box.innerHTML=`<div class="alert r">Không cấp được: ${esc(e.message||'')}</div>`}}};
+    if(sv)sv.onclick=async()=>{
     const d={role:$('#es_role').value,name:$('#es_name').value.trim(),pct:$('#es_pct').value===''?null:toNum($('#es_pct').value),active:$('#es_act').checked,updatedAt:Date.now()};
     try{await R.db.doc('staff/'+id).set(d);toast('Đã phân quyền');closeSheet()}catch(e){toast('Không lưu được ('+(e.code||'')+')')}}})}
 
@@ -644,11 +652,11 @@ function go(tab){R.tab=tab;try{localStorage.setItem('viba.tab',R.mode+':'+tab)}c
 function render(){const role=myRole();const who=$('#who');
   if(!R.db){who.innerHTML=R.checked?'<span class="chip r">Chưa kết nối</span>':'<span class="chip">Đang kết nối…</span>';
     $('#view').innerHTML=R.checked?'<h1 class="big">VIBA FOOD</h1><div class="alert r">Không kết nối được máy chủ dữ liệu. Kiểm tra mạng rồi tải lại trang.</div>':'<div class="empty">Đang tải…</div>';$('#tabbar').hidden=true;return}
-  if(!role){who.innerHTML=`<span class="chip">${esc(R.names[R.uid]||'Tài khoản mới')}</span><button class="btn sm" onclick="vibaLogout()">Đăng xuất</button>`;$('#tabbar').hidden=true;$('#modeSw').innerHTML='';
+  if(!role){who.innerHTML=`<span class="chip">${esc(R.names[R.uid]||'Tài khoản mới')}</span>${window.vibaChangePw?'<button class="btn sm" onclick="vibaChangePw()">Đổi MK</button>':''}<button class="btn sm" onclick="vibaLogout()">Đăng xuất</button>`;$('#tabbar').hidden=true;$('#modeSw').innerHTML='';
     $('#view').innerHTML=`<h1 class="big">Xin chào</h1><div class="card stack"><div style="font-weight:700;font-size:17px">Tài khoản chưa được phân quyền</div><div class="muted">App đã gửi yêu cầu tới quản lý. Khi được giao vai trò (Bán hàng, Giao hàng hoặc Thủ kho), màn hình làm việc sẽ tự hiện ra.</div>${R.staff.get(R.uid)&&R.staff.get(R.uid).active===false?'<div class="alert r">Tài khoản đang bị khóa.</div>':''}</div>`;return}
   if(role!=='admin')R.mode=role;else if(!R.mode)R.mode='admin';
   const tabs=TABS[R.mode];if(!tabs.some(t=>t[0]===R.tab))R.tab=tabs[0][0];
-  who.innerHTML=`<span class="chip g">${ROLE_NAME[role]}</span><span>${esc(staffName(R.uid))}</span><button class="btn sm" onclick="vibaLogout()">Đăng xuất</button>`;
+  who.innerHTML=`<span class="chip g">${ROLE_NAME[role]}</span><span>${esc(staffName(R.uid))}</span>${window.vibaChangePw?'<button class="btn sm" onclick="vibaChangePw()">Đổi MK</button>':''}<button class="btn sm" onclick="vibaLogout()">Đăng xuất</button>`;
   $('#modeSw').innerHTML=role==='admin'?`<select id="modeSel" aria-label="Chế độ xem" style="min-height:36px;padding:6px 10px;font-size:14px;width:auto">${Object.entries(ROLE_NAME).map(([k,l])=>`<option value="${k}" ${R.mode===k?'selected':''}>${k==='admin'?'Xem: Quản lý':'Xem như '+l}</option>`).join('')}</select>`:'';
   const ms=$('#modeSel');if(ms)ms.onchange=()=>{R.mode=ms.value;R.tab=TABS[R.mode][0][0];try{localStorage.setItem('viba.tab',R.mode+':'+R.tab)}catch(e){}render()};
   const pend=[...R.requests.keys()].filter(id=>!R.staff.has(id)).length;

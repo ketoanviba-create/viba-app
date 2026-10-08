@@ -85,5 +85,16 @@ if(window.VIBA_API&&!/^https:\/\/script\.google\.com\//.test(window.VIBA_API))wi
 const ready=(async()=>{if(!window.VIBA_API&&!(window.google&&google.script)){document.body.insertAdjacentHTML('afterbegin','<div class="alert w" style="margin:16px">App chưa được nối với máy chủ dữ liệu Google Drive. Quản lý cần triển khai Code.gs và cập nhật config.js.</div>');throw new Error('noapi')}if(!token)await loginUI();try{me=await call('me')}catch(e){ls.del(TK);token=null;await loginUI();me=await call('me')}
   const p=null;startSync();await firstLoad;const pr=store.get('profiles/'+me.uid);me.name=pr&&pr.name})();
 window.vibaLogout=()=>{ls.del(TK);location.reload()};
+window.vibaAdmin={resetPassword:uid=>call('resetPassword',{uid})};
+window.vibaChangePw=()=>{if(document.getElementById('loginBox'))return;const box=document.createElement('div');box.id='loginBox';
+  box.innerHTML=`<div class="lg-card"><div class="lg-brand">VIBA FOOD</div><h1 class="big" style="margin:4px 0 10px">Đổi mật khẩu</h1>
+   <div class="stack"><label class="f">Mật khẩu hiện tại<input id="cpOld" type="password" autocomplete="current-password"></label>
+   <label class="f">Mật khẩu mới (ít nhất 6 ký tự)<input id="cpNew" type="password" autocomplete="new-password"></label>
+   <label class="f">Nhập lại mật khẩu mới<input id="cpNew2" type="password" autocomplete="new-password"></label>
+   <div id="cpMsg"></div><button class="btn block pri" id="cpGo">Đổi mật khẩu</button><button class="btn block" id="cpX">Huỷ</button></div></div>`;
+  document.body.appendChild(box);const $=s=>box.querySelector(s);const msg=(t,c)=>$('#cpMsg').innerHTML=t?`<div class="alert ${c||'r'}">${esc(t)}</div>`:'';
+  $('#cpX').onclick=()=>box.remove();
+  $('#cpGo').onclick=async()=>{const o=$('#cpOld').value,n=$('#cpNew').value;if(!o||!n)return msg('Nhập đủ mật khẩu.');if(n.length<6)return msg('Mật khẩu mới ít nhất 6 ký tự.');if(n!==$('#cpNew2').value)return msg('Hai lần nhập mật khẩu mới không giống nhau.');
+    $('#cpGo').disabled=true;try{await call('changePassword2',{old:o,pw:n});msg('Đã đổi mật khẩu.','g');setTimeout(()=>box.remove(),1200)}catch(e){$('#cpGo').disabled=false;msg(e.message)}}};
 window.claude={use:async n=>{try{await ready}catch(e){return null}return ({db,user,downloads})[n]||null}};
 })();
