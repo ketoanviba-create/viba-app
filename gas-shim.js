@@ -4,7 +4,12 @@
 const TK='viba.token';
 const ls={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}},del:k=>{try{localStorage.removeItem(k)}catch(e){}}};
 let token=ls.get(TK),me=null;
-function call(op,a){if(window.VIBA_API)return fetch(window.VIBA_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({api:1,tok:token,op,a:a||{}})}).then(r=>r.json()).catch(e=>{throw Object.assign(new Error('Mất kết nối mạng'),{code:'unavailable'})}).then(o=>{if(o.ok)return o.r;if(/^AUTH:/.test(o.error||'')){ls.del(TK);location.reload();return new Promise(()=>{})}throw Object.assign(new Error(o.error),{code:o.code||'unavailable'})});
+/* Google đôi khi trả 404 ở bước chuyển hướng (script.googleusercontent.com/macros/echo) dù máy chủ đã chạy xong: thử lại tối đa 4 lần */
+async function fetchApi(op,a){let last;for(let i=0;i<4;i++){try{const r=await fetch(window.VIBA_API,{method:'POST',credentials:'omit',cache:'no-store',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({api:1,tok:token,op,a:a||{}})});const t=await r.text();if(r.ok&&t.charAt(0)==='{'){const o=JSON.parse(t);
+      if(i>0&&op==='signup'&&/đã có tài khoản/.test(o.error||''))return fetchApi('login',a); /* lần trước đã tạo xong nhưng mất phản hồi */
+      return o}last=new Error('HTTP '+r.status)}catch(e){last=e}await new Promise(r=>setTimeout(r,600*(i+1)))}
+  throw Object.assign(new Error(navigator.onLine===false?'Mất kết nối mạng':'Máy chủ dữ liệu chưa phản hồi, thử lại sau ít phút'),{code:'unavailable',cause:last})}
+function call(op,a){if(window.VIBA_API)return fetchApi(op,a).then(o=>{if(o.ok)return o.r;if(/^AUTH:/.test(o.error||'')){ls.del(TK);location.reload();return new Promise(()=>{})}throw Object.assign(new Error(o.error),{code:o.code||'unavailable'})});
   return new Promise((res,rej)=>{google.script.run.withSuccessHandler(s=>{let o;try{o=JSON.parse(s)}catch(e){return rej(Object.assign(new Error('Phản hồi lỗi'),{code:'unavailable'}))}
     if(o.ok)return res(o.r);if(/^AUTH:/.test(o.error||'')){ls.del(TK);location.reload();return}rej(Object.assign(new Error(o.error),{code:o.code||'unavailable'}))})
   .withFailureHandler(e=>rej(Object.assign(new Error(String(e&&e.message||e)),{code:'unavailable'}))).api(token,op,a||{})})}
