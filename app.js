@@ -138,13 +138,17 @@ function confirmSheet(title,text,ok,danger){return new Promise(res=>{openSheet(t
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#viewer').hidden){$('#viewer').hidden=true;return}if(!$('#sheet').hidden)closeSheet()}});
 
 /* chọn khách hàng */
-function pickCustomer(onPick){let q='';const hit=new Map();const draw=b=>{const nq=noAcc(q);hit.clear();
-  const list=[...R.customers.values()].filter(c=>!c.stopped&&wMatch(custNorm(c),nq)).sort((a,b)=>a.name.localeCompare(b.name,'vi')).slice(0,60);
-  /* nếu khớp theo một địa điểm giao khác (không phải tên/địa chỉ chính) thì hiện và dùng luôn địa điểm đó */
-  if(nq)for(const c of list){if(qMatch(c.code+' '+c.name+' '+(c.address||'')+' '+(c.phone||''),nq))continue;const a=custAddrs(c).find(x=>qMatch(x,nq));if(a)hit.set(c.code,a)}
-    b.querySelector('#pcList').innerHTML=list.length?list.map(c=>{const h=hit.get(c.code);return `<div class="row tap" data-c="${esc(c.code)}"><div class="grow"><div class="t ell">${esc(c.name)}</div><div class="s ell">${h?'📍 '+esc(h):esc(c.address||'Chưa có địa chỉ')}${c.phone?' · '+esc(c.phone):''}</div>${custPL(c).length?`<div class="tiny" style="color:var(--accent)">${esc(custPL(c).join(', '))}</div>`:''}</div><span class="chev">›</span></div>`}).join(''):`<div class="empty">${R.customers.size?'Không tìm thấy khách phù hợp.':'Chưa có khách hàng nào.'}</div>`;
-    $$('[data-c]',b).forEach(r=>r.onclick=()=>{const c=findCust(r.dataset.c);const h=hit.get(r.dataset.c);closeSheet();onPick(c,h)})};
-  openSheet('Chọn khách hàng',`<input id="pcQ" placeholder="Tìm tên khách hoặc địa điểm giao hàng" autocomplete="off"><button class="btn" id="pcNew">${ICON.plus.replace('<svg','<svg width="18" height="18"')} Thêm khách mới</button><div class="group pick" id="pcList"></div>`,b=>{
+/* Danh sách tìm kiếm = các ĐỊA ĐIỂM GIAO HÀNG (mỗi địa điểm 1 dòng, kèm tên khách bên dưới); tính sẵn 1 lần */
+let _locIdx=null,_locSrc=null;
+function locIndex(){if(_locSrc===R.customers&&_locIdx)return _locIdx;const out=[];
+  for(const c of R.customers.values()){if(c.stopped)continue;const ls=[c.address,...String(c.alt||'').split('|')].map(x=>String(x||'').trim()).filter((x,i,a)=>x&&a.indexOf(x)===i);
+    if(!ls.length)ls.push('');for(const l of ls)out.push({c,loc:l,n:noAcc(l||c.name)})}
+  out.sort((x,y)=>(x.loc||x.c.name).localeCompare(y.loc||y.c.name,'vi'));_locSrc=R.customers;_locIdx=out;return out}
+function pickCustomer(onPick){let q='';let shown=[];const draw=b=>{const nq=noAcc(q);
+  shown=locIndex().filter(x=>wMatch(x.n,nq)).slice(0,80);
+    b.querySelector('#pcList').innerHTML=shown.length?shown.map((x,i)=>`<div class="row tap" data-i="${i}"><div class="grow"><div class="t ell">📍 ${esc(x.loc||'(chưa có địa điểm giao)')}</div><div class="s ell">${esc(x.c.name)}${x.c.phone?' · '+esc(x.c.phone):''}</div>${custPL(x.c).length?`<div class="tiny" style="color:var(--accent)">${esc(custPL(x.c).join(', '))}</div>`:''}</div><span class="chev">›</span></div>`).join(''):`<div class="empty">${R.customers.size?'Không tìm thấy địa điểm giao phù hợp.':'Chưa có khách hàng nào.'}</div>`;
+    $$('[data-i]',b).forEach(r=>r.onclick=()=>{const x=shown[+r.dataset.i];closeSheet();onPick(x.c,x.loc||'')})};
+  openSheet('Chọn địa điểm giao',`<input id="pcQ" placeholder="Tìm địa điểm giao hàng (vd: vm ha dong)" autocomplete="off"><button class="btn" id="pcNew">${ICON.plus.replace('<svg','<svg width="18" height="18"')} Thêm khách mới</button><div class="group pick" id="pcList"></div>`,b=>{
     draw(b);const i=b.querySelector('#pcQ');let dT;i.oninput=()=>{clearTimeout(dT);dT=setTimeout(()=>{q=i.value;draw(b)},150)};setTimeout(()=>i.focus(),50);
     b.querySelector('#pcNew').onclick=()=>{closeSheet();editCustomer(null,c=>onPick(c),q)}})}
 /* chọn sản phẩm */
