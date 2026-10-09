@@ -1,8 +1,9 @@
 (function(){
 "use strict";
 /* ================= TIỆN ÍCH ================= */
-const $=s=>document.querySelector(s);
-const $$=(s,r)=>[...(r||document).querySelectorAll(s)];
+let ROOT=null;/* khi vẽ lại màn hình lúc đang gõ ô tìm kiếm: vẽ vào khung tạm rồi ghép, giữ nguyên ô đang gõ */
+const $=s=>(ROOT&&ROOT.querySelector(s))||document.querySelector(s);
+const $$=(s,r)=>{if(!r&&ROOT){const x=[...ROOT.querySelectorAll(s)];if(x.length)return x}return [...(r||document).querySelectorAll(s)]};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const toNum=v=>{if(typeof v==='number')return isFinite(v)?v:0;v=String(v??'').trim().replace(/\s/g,'');if(!v)return 0;
   if(/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(v))v=v.replace(/\./g,'').replace(',','.');else if(/^-?\d+,\d+$/.test(v))v=v.replace(',','.');else v=v.replace(/,/g,'');
@@ -21,7 +22,10 @@ const noAcc=s=>String(s??'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ
 /* tìm theo nhiều từ (không dấu, không cần đúng thứ tự): "marie my dinh" khớp "Trường Marie Curie … Mỹ Đình" */
 const qMatch=(text,nq)=>{if(!nq)return true;const t=noAcc(text);return nq.split(/\s+/).every(w=>t.includes(w))};
 const custAddrs=c=>[c.address,c.billAddr,...String(c.alt||'').split('|')].map(x=>String(x||'').trim()).filter((x,i,a)=>x&&a.indexOf(x)===i);
-const custText=c=>[c.code,c.name,c.phone,c.taxCode,...custAddrs(c)].join(' ');
+const custText=c=>[c.code,c.name,c.phone,c.taxCode,...(c.groups||[]),...custAddrs(c)].join(' ');
+/* chuỗi tìm kiếm không dấu của mỗi khách được tính sẵn 1 lần (3.000+ khách, gõ trên điện thoại không bị khựng) */
+const _ctN=new WeakMap();const custNorm=c=>{let t=_ctN.get(c);if(t==null){t=noAcc(custText(c));_ctN.set(c,t)}return t};
+const wMatch=(t,nq)=>!nq||nq.split(/\s+/).every(w=>t.includes(w));
 const idFor=code=>/^[A-Za-z0-9_\-.~:@+]{1,180}$/.test(code)&&code!=='.'&&code!=='..'?code:'x'+[...new TextEncoder().encode(code)].map(b=>b.toString(16).padStart(2,'0')).join('').slice(0,190);
 const uidShort=()=>Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,5).toUpperCase();
 const ICON={
@@ -126,7 +130,7 @@ let sheetClose=null;
 function openSheet(title,html,bind,opts){const s=$('#sheet');opts=opts||{};
   s.innerHTML=`<div class="pane" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="bar"><button class="btn ghost" data-close>${opts.cancel||'Đóng'}</button><h3>${esc(title)}</h3>${opts.action?`<button class="btn ghost" data-act style="font-weight:700">${esc(opts.action)}</button>`:'<span style="width:64px"></span>'}</div><div class="body">${html}</div></div>`;
   s.hidden=false;document.body.style.overflow='hidden';sheetClose=opts.onClose||null;
-  s.onclick=e=>{if(e.target===s)closeSheet()};s.querySelector('[data-close]').onclick=closeSheet;
+  s.onclick=e=>{if(e.target===s&&!s.querySelector('input:not([type=checkbox]),textarea,select'))closeSheet()};s.querySelector('[data-close]').onclick=closeSheet;
   const a=s.querySelector('[data-act]');if(a&&opts.onAction)a.onclick=opts.onAction;bind&&bind(s.querySelector('.body'),s)}
 function closeSheet(){const s=$('#sheet');s.hidden=true;s.innerHTML='';document.body.style.overflow='';const f=sheetClose;sheetClose=null;f&&f()}
 function confirmSheet(title,text,ok,danger){return new Promise(res=>{openSheet(title,`<p style="margin:0">${text}</p><button class="btn block ${danger?'danger':'pri'}" data-ok>${esc(ok)}</button><button class="btn block" data-no>Thôi</button>`,b=>{
@@ -135,13 +139,13 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#viewer').hi
 
 /* chọn khách hàng */
 function pickCustomer(onPick){let q='';const hit=new Map();const draw=b=>{const nq=noAcc(q);hit.clear();
-  const list=[...R.customers.values()].filter(c=>!c.stopped&&qMatch(custText(c),nq)).sort((a,b)=>a.name.localeCompare(b.name,'vi')).slice(0,60);
+  const list=[...R.customers.values()].filter(c=>!c.stopped&&wMatch(custNorm(c),nq)).sort((a,b)=>a.name.localeCompare(b.name,'vi')).slice(0,60);
   /* nếu khớp theo một địa điểm giao khác (không phải tên/địa chỉ chính) thì hiện và dùng luôn địa điểm đó */
   if(nq)for(const c of list){if(qMatch(c.code+' '+c.name+' '+(c.address||'')+' '+(c.phone||''),nq))continue;const a=custAddrs(c).find(x=>qMatch(x,nq));if(a)hit.set(c.code,a)}
     b.querySelector('#pcList').innerHTML=list.length?list.map(c=>{const h=hit.get(c.code);return `<div class="row tap" data-c="${esc(c.code)}"><div class="grow"><div class="t ell">${esc(c.name)}</div><div class="s ell">${h?'📍 '+esc(h):esc(c.address||'Chưa có địa chỉ')}${c.phone?' · '+esc(c.phone):''}</div>${custPL(c).length?`<div class="tiny" style="color:var(--accent)">${esc(custPL(c).join(', '))}</div>`:''}</div><span class="chev">›</span></div>`}).join(''):`<div class="empty">${R.customers.size?'Không tìm thấy khách phù hợp.':'Chưa có khách hàng nào.'}</div>`;
     $$('[data-c]',b).forEach(r=>r.onclick=()=>{const c=findCust(r.dataset.c);const h=hit.get(r.dataset.c);closeSheet();onPick(c,h)})};
   openSheet('Chọn khách hàng',`<input id="pcQ" placeholder="Tìm tên khách hoặc địa điểm giao hàng" autocomplete="off"><button class="btn" id="pcNew">${ICON.plus.replace('<svg','<svg width="18" height="18"')} Thêm khách mới</button><div class="group pick" id="pcList"></div>`,b=>{
-    draw(b);const i=b.querySelector('#pcQ');i.oninput=()=>{q=i.value;draw(b)};setTimeout(()=>i.focus(),50);
+    draw(b);const i=b.querySelector('#pcQ');let dT;i.oninput=()=>{clearTimeout(dT);dT=setTimeout(()=>{q=i.value;draw(b)},150)};setTimeout(()=>i.focus(),50);
     b.querySelector('#pcNew').onclick=()=>{closeSheet();editCustomer(null,c=>onPick(c),q)}})}
 /* chọn sản phẩm */
 function pickProduct(cust,onPick){let q='';const bal=stockMap();const draw=b=>{const nq=noAcc(q);const list=sortedProducts().filter(p=>p.active!==false&&(!nq||noAcc(p.code+' '+p.name+' '+(p.group||'')).includes(nq))).slice(0,80);
@@ -515,9 +519,10 @@ function viewDash(v){const [f,t]=periodRange();const all=ordersIn(f,t);
    <div class="tiny muted">Giao theo đơn = SL bán + khuyến mại + hàng đổi của các đơn đã giao trong kỳ. Lệch khác 0 nghĩa là chưa lập phiếu xuất, hoặc phiếu xuất khác với số thực giao.</div>
    <button class="btn" id="dXls">Xuất Excel chi tiết đơn hàng trong kỳ</button></div>`;
   bindPeriod();$('#dXls').onclick=()=>exportOrders(all,f,t)}
-function exportOrders(list,f,t){const rows=[['Ngày','Số đơn','Trạng thái','Sale','Ship','Mã KH','Khách hàng','Địa chỉ','Mã SP','Tên SP','ĐVT','SL','KM','Đổi','Trả','Đơn giá','Giá mặc định','Thành tiền','Đã thanh toán','Số tiền đã thu','Người thu','Ship ngoài','Phiếu xuất','Phiếu nhập trả']];
-  list.slice().sort((a,b)=>(a.date+a.no).localeCompare(b.date+b.no)).forEach(o=>o.lines.forEach((l,i)=>rows.push([xDate(o.date),o.no,ST_NAME[o.status],staffName(o.saleId),o.shipId?staffName(o.shipId):'',o.cust,o.custName,o.address,l.code,l.name,l.unit,toNum(l.qty),toNum(l.promo),toNum(l.swap),toNum(l.ret),toNum(l.price),l.listPrice==null?'':toNum(l.listPrice),lineAmt(l),o.paid?'Có':'Chưa',i===0&&o.paid?toNum(o.paidAmount):'',o.paid?(o.paidBy==='ship'?'Ship':'Sale'):'',o.outside?'Có':'',o.px||'',o.pn||''])));
-  xlsxFile(`Don_hang_${f}_${t}.xlsx`,[{name:'Don hang',rows,cols:[11,13,10,16,16,10,28,30,10,28,7,7,6,6,6,11,11,12,8,12,8,8,12,12]}])}
+function exportOrders(list,f,t){const rows=[['Ngày','Số đơn','Trạng thái','Sale','Ship','Mã KH','Khách hàng','Địa chỉ','Mã SP','Tên SP','ĐVT','SL','KM','Đổi','Trả','Đơn giá','Giá mặc định','Thành tiền','Tình trạng thanh toán','Số tiền đã thu','Người thu','Còn phải thu','Ship ngoài','Phiếu xuất','Phiếu nhập trả']];
+  const oTot=o=>(o.lines||[]).reduce((s,l)=>s+lineAmt(l),0),oPaid=o=>o.paid?toNum(o.paidAmount||oTot(o)):0,oPay=o=>{const t=oTot(o),p=oPaid(o);return p>=t&&p>0?'Đã thanh toán đủ':p>0?'Thanh toán một phần':'Chưa thanh toán'};
+  list.slice().sort((a,b)=>(a.date+a.no).localeCompare(b.date+b.no)).forEach(o=>o.lines.forEach((l,i)=>rows.push([xDate(o.date),o.no,ST_NAME[o.status],staffName(o.saleId),o.shipId?staffName(o.shipId):'',o.cust,o.custName,o.address,l.code,l.name,l.unit,toNum(l.qty),toNum(l.promo),toNum(l.swap),toNum(l.ret),toNum(l.price),l.listPrice==null?'':toNum(l.listPrice),lineAmt(l),oPay(o),i===0&&o.paid?oPaid(o):'',o.paid?(o.paidBy==='ship'?'Ship':'Sale'):'',i===0?Math.max(0,oTot(o)-oPaid(o)):'',o.outside?'Có':'',o.px||'',o.pn||''])));
+  xlsxFile(`Don_hang_${f}_${t}.xlsx`,[{name:'Don hang',rows,cols:[11,13,10,16,16,10,28,30,10,28,7,7,6,6,6,11,11,12,18,12,8,12,8,12,12]}])}
 function viewAllOrders(v){orderListView(v,R.orders,{title:'Tất cả đơn hàng',who:'saleId',extra:'<div class="tiny muted">Hiển thị đơn 3 tháng gần nhất. Kỳ cũ hơn xem ở Tổng quan → Xuất Excel.</div>'})}
 
 /* ================= QUẢN LÝ: DANH MỤC ================= */
@@ -526,7 +531,7 @@ function viewCatalog(v){const T=R.ui.catTab,q=noAcc(R.ui.catQ);
   if(T==='products'){const L=sortedProducts().filter(p=>!q||noAcc(p.code+' '+p.name+' '+(p.group||'')).includes(q));
     body=`<div class="hrow"><button class="btn sm pri" id="cNew">+ Thêm sản phẩm</button><button class="btn sm" id="cImp">Nhập Excel</button><button class="btn sm" id="cTpl">File mẫu</button><button class="btn sm" id="cExp">Xuất Excel</button></div>
      <div class="group">${L.slice(0,300).map(p=>`<div class="row tap" data-ep="${esc(p.code)}"><div class="grow"><div class="t ell">${esc(p.name)}${p.active===false?' <span class="chip">Ngừng bán</span>':''}</div><div class="s">${esc(p.code)} · ${esc(p.unit)}${p.group?' · '+esc(p.group):''}</div></div><div class="money">${p.price?vnd(p.price):'<span class="chip w">Chưa có giá</span>'}</div></div>`).join('')||'<div class="empty">Chưa có sản phẩm.</div>'}</div>`}
-  else if(T==='customers'){const L=[...R.customers.values()].filter(c=>qMatch(custText(c),q)).sort((a,b)=>a.name.localeCompare(b.name,'vi'));
+  else if(T==='customers'){const L=[...R.customers.values()].filter(c=>wMatch(custNorm(c),q)).sort((a,b)=>a.name.localeCompare(b.name,'vi'));
     body=`<div class="hrow"><button class="btn sm pri" id="cNew">+ Thêm khách</button><button class="btn sm" id="cImp">Nhập Excel (MISA)</button><button class="btn sm" id="cTpl">File mẫu</button></div>
      <div class="group">${L.slice(0,300).map(c=>`<div class="row tap" data-ec="${esc(c.code)}"><div class="grow"><div class="t ell">${esc(c.name)}</div><div class="s ell">${esc(c.code)} · ${esc(c.address||'Chưa có địa chỉ')}</div></div>${R.prices.has(c.code)?'<span class="chip g">Giá riêng</span>':custPL(c).length?`<span class="chip">${esc(custPL(c)[0].replace(/^PL\s*/i,''))}</span>`:''}</div>`).join('')||'<div class="empty">Chưa có khách hàng.</div>'}</div>${L.length>300?'<div class="tiny muted">Hiện 300/'+L.length+'. Dùng ô tìm.</div>':''}`}
   else if(T==='prices'){const L=[...R.prices.values()].filter(p=>!String(p.cust).startsWith('G:')).map(p=>({p,c:findCust(p.cust)})).filter(x=>!q||noAcc(x.p.cust+' '+(x.c?x.c.name:'')).includes(q));
@@ -656,6 +661,14 @@ function views(){return{
   kho:{vnew:viewKhoNew,vlist:viewKhoList,stock:viewStock,byorder:viewKhoByOrder},
   admin:{dash:viewDash,orders:viewAllOrders,stock:viewStock,catalog:viewCatalog,settings:viewSettings}}}
 function go(tab){R.tab=tab;try{localStorage.setItem('viba.tab',R.mode+':'+tab)}catch(e){}render();window.scrollTo({top:0})}
+/* ghép cây mới (nf) vào cây cũ (oldP) mà KHÔNG gỡ ô đang gõ (focus) khỏi trang: iPhone không đóng bàn phím, gõ tiếng Việt không bị mất chữ */
+function graft(oldP,newP,focus){const nf=newP.querySelector('#'+CSS.escape(focus.id));if(!nf)return false;
+  const step=(op,np)=>{if(op!==focus&&op!==oldP){for(const at of [...op.attributes])if(!np.hasAttribute(at.name))op.removeAttribute(at.name);for(const at of [...np.attributes])if(op.getAttribute(at.name)!==at.value)op.setAttribute(at.name,at.value)}
+    if(op===focus){for(const k of ['oninput','onkeydown','onkeyup','onchange','onfocus','onblur','onclick'])op[k]=np[k];return}
+    const oc=[...op.children].find(c=>c===focus||c.contains(focus)),nc=[...np.childNodes].find(c=>c===nf||(c.contains&&c.contains(nf)));if(!oc||!nc)return;
+    for(const c of [...op.childNodes])if(c!==oc)c.remove();let before=true;for(const c of [...np.childNodes]){if(c===nc){before=false;continue}if(before)op.insertBefore(c,oc);else op.appendChild(c)}
+    step(oc,nc)};
+  step(oldP,newP);return true}
 function render(){const role=myRole();const who=$('#who');
   if(!R.db){who.innerHTML=R.checked?'<span class="chip r">Chưa kết nối</span>':'<span class="chip">Đang kết nối…</span>';
     $('#view').innerHTML=R.checked?'<h1 class="big">VIBA FOOD</h1><div class="alert r">Không kết nối được máy chủ dữ liệu. Kiểm tra mạng rồi tải lại trang.</div>':'<div class="empty">Đang tải…</div>';$('#tabbar').hidden=true;return}
@@ -671,9 +684,12 @@ function render(){const role=myRole();const who=$('#who');
   $$('#tabs [data-tab]').forEach(b=>b.onclick=()=>go(b.dataset.tab));
   $('#wrap').classList.toggle('wide',R.mode==='admin'||R.mode==='kho');
   const v=$('#view');const a=document.activeElement;const keep=a&&a.id&&v.contains(a)?{id:a.id,s:a.selectionStart,e:a.selectionEnd}:null;
+  if(keep&&(a.tagName==='INPUT'&&!/^(checkbox|radio|file)$/.test(a.type)||a.tagName==='TEXTAREA')){const tmp=document.createElement('div');ROOT=tmp;try{views()[R.mode][R.tab](tmp)}finally{ROOT=null}
+    if(graft(v,tmp,a))return finishRender()}
   views()[R.mode][R.tab](v);
   if(keep){const el=document.getElementById(keep.id);if(el){el.focus();try{if(keep.s!=null)el.setSelectionRange(keep.s,keep.e)}catch(e){}}}
-  $('#dlShip').innerHTML=[...R.staff.entries()].filter(([i,s])=>s.role==='ship').map(([i])=>`<option value="${esc(staffName(i))}"></option>`).join('')}
+  finishRender()}
+function finishRender(){$('#dlShip').innerHTML=[...R.staff.entries()].filter(([i,s])=>s.role==='ship').map(([i])=>`<option value="${esc(staffName(i))}"></option>`).join('')}
 
 /* ================= KẾT NỐI ================= */
 let rT;const soon=()=>{clearTimeout(rT);rT=setTimeout(()=>{if(!$('#sheet').hidden){R._pending=true;return}const a=document.activeElement;if(a&&a.closest&&a.closest('#view')&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA')&&(R.tab==='new'||R.tab==='vnew')){R._pending=true;return}render()},80)};
