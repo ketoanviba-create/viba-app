@@ -256,7 +256,7 @@ function vParse(text){const out={loc:null,lines:[],unknown:[],note:'',paid:false
 
 function voiceOrder(){const d=R.odraft||(R.odraft=newOrderDraft());const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null,on=false,P=null,base='',locC=[];const locOpts=()=>locC.map((x,i)=>`<option value="${i}">📍 ${esc(x.loc||'(chưa có địa điểm)')} — ${esc(x.c.name)}</option>`).join('')+'<option value="-1">— Không đổi khách —</option>';
   openSheet('🎤 Đọc đơn',`<div class="tiny muted">Đọc <b>địa điểm giao</b> trước, rồi từng mặt hàng, ví dụ: “Giao VM Hà Đông, 10 gói bơ, 5 gói xoài, 20 quả chuối tiêu 170 gam, nem bùi 10 gói khuyến mại 1 gói, đã chuyển khoản, ghi chú giao trước 9 giờ”. Đọc “số + đơn vị + tên” hay “tên + số + đơn vị” đều được; nói rõ quy cách (300 gam, 1 ký…) nếu cùng loại có nhiều gói.</div>
-   ${SR?'<button class="btn block pri" id="vcMic" style="font-size:18px;padding:16px">🎤 Bấm để nói</button>':'<div class="alert w">Trình duyệt này chưa cho nhận giọng nói trực tiếp. Bấm vào ô dưới rồi bấm 🎤 trên bàn phím điện thoại để đọc.</div>'}
+   ${SR?'<button class="btn block" id="vcMic" style="font-size:16px;padding:14px">🔴 Đang nghe… (bấm để dừng)</button>':'<div class="alert w">Trình duyệt này chưa cho nhận giọng nói trực tiếp. Bấm vào ô dưới rồi bấm 🎤 trên bàn phím điện thoại để đọc.</div>'}
    <textarea id="vcT" rows="3" placeholder="Nội dung đọc sẽ hiện ở đây (có thể sửa hoặc gõ tay)"></textarea>
    <button class="btn block" id="vcGo">Phân tích</button><div id="vcR"></div>`,b=>{
     const T=b.querySelector('#vcT'),Rb=b.querySelector('#vcR'),mic=b.querySelector('#vcMic');
@@ -282,9 +282,10 @@ function voiceOrder(){const d=R.odraft||(R.odraft=newOrderDraft());const SR=wind
     b.querySelector('#vcGo').onclick=show;
     if(mic){rec=new SR();rec.lang='vi-VN';rec.interimResults=true;rec.continuous=true;rec.maxAlternatives=1;
       rec.onresult=e=>{let fin='',tmp='';for(let i=0;i<e.results.length;i++){const r=e.results[i];if(r.isFinal)fin+=r[0].transcript+' ';else tmp+=r[0].transcript}T.value=(base+' '+fin+tmp).trim()};
-      rec.onend=()=>{on=false;mic.textContent='🎤 Bấm để nói';mic.classList.add('pri');if(T.value.trim())show()};
-      rec.onerror=e=>{on=false;mic.textContent='🎤 Bấm để nói';Rb.innerHTML=`<div class="alert r">${e.error==='not-allowed'||e.error==='service-not-allowed'?'Chưa cho phép dùng micro. Vào Cài đặt › Safari › Micro (hoặc bấm “Cho phép” khi được hỏi), hoặc bấm vào ô trên rồi dùng 🎤 của bàn phím.':e.error==='no-speech'?'Không nghe thấy tiếng nói, thử lại.':'Lỗi nhận giọng nói ('+esc(e.error)+'). Có thể dùng 🎤 của bàn phím.'}</div>`};
-      mic.onclick=()=>{if(on){try{rec.stop()}catch(e){}return}base=T.value.trim();Rb.innerHTML='';try{rec.start();on=true;mic.textContent='⏹ Đang nghe… bấm để dừng';mic.classList.remove('pri')}catch(e){Rb.innerHTML='<div class="alert r">Không bật được micro.</div>'}}}
+      rec.onend=()=>{on=false;mic.textContent='🎤 Nói lại';if(T.value.trim())show()};
+      rec.onerror=e=>{on=false;mic.textContent='🎤 Nói lại';Rb.innerHTML=`<div class="alert r">${e.error==='not-allowed'||e.error==='service-not-allowed'?'Chưa cho phép dùng micro. Vào Cài đặt › Safari › Micro (hoặc bấm “Cho phép” khi được hỏi), hoặc bấm vào ô trên rồi dùng 🎤 của bàn phím.':e.error==='no-speech'?'Không nghe thấy tiếng nói, thử lại.':'Lỗi nhận giọng nói ('+esc(e.error)+'). Có thể dùng 🎤 của bàn phím.'}</div>`};
+      mic.onclick=()=>{if(on){try{rec.stop()}catch(e){}return}base=T.value.trim();Rb.innerHTML='';try{rec.start();on=true;mic.textContent='🔴 Đang nghe… (bấm để dừng)'}catch(e){Rb.innerHTML='<div class="alert r">Không bật được micro.</div>'}};
+      mic.onclick()/* tự bật micro ngay khi mở khung (vẫn trong lượt bấm của người dùng) */}
     else setTimeout(()=>T.focus(),50)},{onClose:()=>{if(rec&&on)try{rec.abort()}catch(e){}}})}
 
 function viewSaleNew(v){if(!R.odraft)R.odraft=newOrderDraft();const d=R.odraft;const c=d.cust?findCust(d.cust):null;
