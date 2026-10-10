@@ -71,7 +71,7 @@ const downloads={save:async({filename,data})=>{const blob=data instanceof Blob?d
 
 /* ---------- đăng nhập ---------- */
 function loginUI(){return new Promise(resolve=>{const box=document.createElement('div');box.id='loginBox';
-  box.innerHTML=`<div class="lg-card"><div class="lg-brand">VIBA FOOD</div><h1 class="big" style="margin:4px 0 2px">${esc(document.title)}</h1><div class="muted small">Đăng nhập bằng email công ty cấp cho bạn.</div>
+  box.innerHTML=`<div class="lg-card"><img class="lg-logo" src="logo.png" alt="VIBA FOOD"><h1 class="big" style="margin:4px 0 2px">${esc(document.title)}</h1><div class="muted small">Đăng nhập bằng email công ty cấp cho bạn.</div>
    <div class="seg" style="margin:14px 0"><button data-m="in" class="on">Đăng nhập</button><button data-m="up">Tạo tài khoản</button></div>
    <div class="stack"><label class="f" id="lgNameW" hidden>Họ và tên<input id="lgName" autocomplete="name"></label>
    <label class="f">Email<input id="lgEmail" type="email" autocomplete="username" inputmode="email"></label>
@@ -88,7 +88,7 @@ const ready=(async()=>{if(!window.VIBA_API&&!(window.google&&google.script)){doc
 window.vibaLogout=()=>{ls.del(TK);location.reload()};
 window.vibaAdmin={resetPassword:uid=>call('resetPassword',{uid})};
 window.vibaChangePw=()=>{if(document.getElementById('loginBox'))return;const box=document.createElement('div');box.id='loginBox';
-  box.innerHTML=`<div class="lg-card"><div class="lg-brand">VIBA FOOD</div><h1 class="big" style="margin:4px 0 10px">Đổi mật khẩu</h1>
+  box.innerHTML=`<div class="lg-card"><img class="lg-logo" src="logo.png" alt="VIBA FOOD"><h1 class="big" style="margin:4px 0 10px">Đổi mật khẩu</h1>
    <div class="stack"><label class="f">Mật khẩu hiện tại<input id="cpOld" type="password" autocomplete="current-password"></label>
    <label class="f">Mật khẩu mới (ít nhất 6 ký tự)<input id="cpNew" type="password" autocomplete="new-password"></label>
    <label class="f">Nhập lại mật khẩu mới<input id="cpNew2" type="password" autocomplete="new-password"></label>

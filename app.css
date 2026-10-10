@@ -1,33 +1,33 @@
 
 /* Layout: kiểu ứng dụng điện thoại — tiêu đề lớn, thẻ nhóm bo tròn, thanh tab dưới đáy; desktop giữ cột giữa rộng hơn */
 :root{
-  --bg:#f2f3f1; --card:#ffffff; --sunk:#eceeeb; --line:#dfe3df; --fg:#141a17; --muted:#6a756f; --faint:#9aa39e;
-  --accent:#167a4f; --accent-fg:#ffffff; --accent-soft:#e1f2e9;
-  --blue:#1f6fd1; --blue-soft:#e3eefb; --orange:#b85a12; --orange-soft:#fbeadb;
+  --bg:#f1f4f8; --card:#ffffff; --sunk:#e9eef4; --line:#dbe3ec; --fg:#0f1b29; --muted:#5f6d7d; --faint:#97a3b1;
+  --accent:#1b6aa5; --accent-fg:#ffffff; --accent-soft:#e2edf7; --accent-2:#2f86c8;
+  --blue:#0e7c86; --blue-soft:#ddf1f2; --orange:#b85a12; --orange-soft:#fbeadb; --good:#1f8a52; --good-soft:#e1f2e9;
   --warn:#9a6a00; --warn-soft:#fbf1d2; --bad:#c0362c; --bad-soft:#fbe3e1;
   --font:"Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
   --r:16px; --tabh:64px;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0f1311; --card:#1a201d; --sunk:#232a26; --line:#2e3732; --fg:#e8eeea; --muted:#9aa6a0; --faint:#6f7a74;
-  --accent:#4cc38a; --accent-fg:#06170e; --accent-soft:#183427;
-  --blue:#6aa8f0; --blue-soft:#172a42; --orange:#efa064; --orange-soft:#3a2617;
+  --bg:#0c1219; --card:#16202b; --sunk:#1e2a37; --line:#2a3846; --fg:#e7eef6; --muted:#98a7b8; --faint:#6b7a8b;
+  --accent:#5aa7e6; --accent-fg:#06131f; --accent-soft:#16324a; --accent-2:#7dbbee;
+  --blue:#5cc6cf; --blue-soft:#143438; --orange:#efa064; --orange-soft:#3a2617; --good:#4cc38a; --good-soft:#183427;
   --warn:#e8c45c; --warn-soft:#352d14; --bad:#f08a80; --bad-soft:#3c1e1b; color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#0f1311; --card:#1a201d; --sunk:#232a26; --line:#2e3732; --fg:#e8eeea; --muted:#9aa6a0; --faint:#6f7a74;
-  --accent:#4cc38a; --accent-fg:#06170e; --accent-soft:#183427;
-  --blue:#6aa8f0; --blue-soft:#172a42; --orange:#efa064; --orange-soft:#3a2617;
+  --bg:#0c1219; --card:#16202b; --sunk:#1e2a37; --line:#2a3846; --fg:#e7eef6; --muted:#98a7b8; --faint:#6b7a8b;
+  --accent:#5aa7e6; --accent-fg:#06131f; --accent-soft:#16324a; --accent-2:#7dbbee;
+  --blue:#5cc6cf; --blue-soft:#143438; --orange:#efa064; --orange-soft:#3a2617; --good:#4cc38a; --good-soft:#183427;
   --warn:#e8c45c; --warn-soft:#352d14; --bad:#f08a80; --bad-soft:#3c1e1b; color-scheme:dark}
 [hidden]{display:none!important}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
-body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:16px;line-height:1.45}
+body{background:linear-gradient(180deg,var(--accent-soft) 0,var(--bg) 220px) no-repeat,var(--bg);color:var(--fg);font-family:var(--font);font-size:16px;line-height:1.45}
 .wrap{max-width:760px;margin:0 auto;padding-inline:16px;padding-block:8px calc(var(--tabh) + 32px + env(safe-area-inset-bottom,0px))}
 .wrap.wide{max-width:1180px}
 header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding-block:14px 6px;flex-wrap:wrap}
 .who{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);flex-wrap:wrap}
 .chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--sunk);color:var(--muted);white-space:nowrap}
-.chip.g{background:var(--accent-soft);color:var(--accent)} .chip.b{background:var(--blue-soft);color:var(--blue)} .chip.o{background:var(--orange-soft);color:var(--orange)}
+.chip.g{background:var(--good-soft);color:var(--good)} .chip.b{background:var(--blue-soft);color:var(--blue)} .chip.o{background:var(--orange-soft);color:var(--orange)}
 .chip.w{background:var(--warn-soft);color:var(--warn)} .chip.r{background:var(--bad-soft);color:var(--bad)}
 h1.big{font-size:30px;font-weight:800;letter-spacing:-.02em;margin:2px 0 10px;text-wrap:balance}
 h2{font-size:19px;font-weight:700;margin:22px 0 8px;letter-spacing:-.01em}
@@ -85,7 +85,7 @@ tr.tap{cursor:pointer} tr.tap:hover td{background:var(--sunk)}
 .empty b{display:block;color:var(--fg);font-size:16px;margin-bottom:4px}
 .money{font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
 .alert{border-radius:12px;padding:10px 14px;font-size:14px}
-.alert.r{background:var(--bad-soft);color:var(--bad)} .alert.w{background:var(--warn-soft);color:var(--warn)} .alert.g{background:var(--accent-soft);color:var(--accent)} .alert.b{background:var(--blue-soft);color:var(--blue)}
+.alert.r{background:var(--bad-soft);color:var(--bad)} .alert.w{background:var(--warn-soft);color:var(--warn)} .alert.g{background:var(--good-soft);color:var(--good)} .alert.b{background:var(--blue-soft);color:var(--blue)}
 /* order line card */
 .line{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
 .line .top{display:flex;gap:10px;align-items:flex-start}
@@ -143,3 +143,14 @@ nav.tabbar button.on{color:var(--accent)}
 #loginBox{position:fixed;inset:0;z-index:90;background:var(--bg);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:max(40px,env(safe-area-inset-top)) 16px 40px}
 #loginBox .lg-card{width:100%;max-width:400px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px 20px}
 #loginBox .lg-brand{font-weight:800;color:var(--accent);letter-spacing:.08em;font-size:13px}
+
+/* ===== Nhận diện VIBA FOOD: logo + màu xanh thương hiệu (#1b6aa5) ===== */
+.brandbar{display:flex;align-items:center;gap:10px;padding-top:calc(10px + env(safe-area-inset-top,0px))}
+.brandbar img{height:40px;width:auto;display:block}
+.brandbar .tag{margin-left:auto;font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--accent);text-transform:uppercase}
+.lg-logo{height:64px;width:auto;display:block;margin:0 auto 12px}
+h1.big{color:var(--fg)}
+.btn.pri{background:linear-gradient(180deg,var(--accent-2),var(--accent));box-shadow:0 2px 8px rgba(27,106,165,.25)}
+nav.tabbar button.on svg{filter:drop-shadow(0 1px 2px rgba(27,106,165,.25))}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .brandbar img,:root:not([data-theme="light"]) .lg-logo{background:#fff;border-radius:10px;padding:4px 8px;box-sizing:content-box}}
+:root[data-theme="dark"] .brandbar img,:root[data-theme="dark"] .lg-logo{background:#fff;border-radius:10px;padding:4px 8px;box-sizing:content-box}
