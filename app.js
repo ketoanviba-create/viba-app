@@ -25,7 +25,11 @@ const custAddrs=c=>[c.address,c.billAddr,...String(c.alt||'').split('|')].map(x=
 const custText=c=>[c.code,c.name,c.phone,c.taxCode,...(c.groups||[]),...custAddrs(c)].join(' ');
 /* chuỗi tìm kiếm không dấu của mỗi khách được tính sẵn 1 lần (3.000+ khách, gõ trên điện thoại không bị khựng) */
 const _ctN=new WeakMap();const custNorm=c=>{let t=_ctN.get(c);if(t==null){t=noAcc(custText(c));_ctN.set(c,t)}return t};
-const wMatch=(t,nq)=>!nq||nq.split(/\s+/).every(w=>t.includes(w));
+/* chuỗi VM: gõ/nói vm, wm, winmart, vinmart, "vin mát", "uyn mát", "vê em", "đáp liu em"… (kể cả VM+/plus) đều quy về "vm" */
+const VM_RE=/(^|\s)(vin ?mart|win ?mart|vin ?mat|win ?mat|uyn ?mat|quyn ?mat|vin ?mac|win ?mac|wm|ve em|vi em|ve mo|vi mo|dap ?(bo )?(liu|lu) ?em|dup ?(bo )?(liu|lu) ?em|double ?u ?em|w m|v m)(?=\s|$)/g;
+const vmQ=nq=>(' '+nq+' ').replace(VM_RE,'$1vm').replace(VM_RE,'$1vm').replace(/(^|\s)vm\s*(\+|plus|cong|pl)(?=\s|$)/g,'$1vm').replace(/\s+/g,' ').trim();
+const VM_ALT=['vm','winmart','vinmart','wm'];
+const wMatch=(t,nq)=>!nq||vmQ(nq).split(/\s+/).every(w=>w==='vm'?VM_ALT.some(a=>t.includes(a)):t.includes(w));
 const idFor=code=>/^[A-Za-z0-9_\-.~:@+]{1,180}$/.test(code)&&code!=='.'&&code!=='..'?code:'x'+[...new TextEncoder().encode(code)].map(b=>b.toString(16).padStart(2,'0')).join('').slice(0,190);
 const uidShort=()=>Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,5).toUpperCase();
 const ICON={
@@ -196,7 +200,7 @@ function vTokens(text){let s=' '+vLow(text)+' ';
   s=s.replace(/[,;!?\n]+/g,' | ').replace(/\.(?!\d)/g,' | ');
   s=s.replace(/(\d+)\s*(gam|gram|gờ ram|gr|g)(?=[\s|])/g,'$1g').replace(/(\d+)\s*(mi li lít|mililít|ml)(?=[\s|])/g,'$1ml');
   s=s.replace(/\b(ki lô gam|ki lô|kilôgam|kilogram|kilô|kí lô|ký lô)\b/g,'kg');
-  s=s.replace(/\b(vê em|vi em|vin mart|win mart|vinmart|winmart)\b/g,'vm');
+  s=s.replace(/(^|\s)(vin ?mart|win ?mart|vin ?mát|win ?mát|uyn ?mát|quyn ?mát|vin ?mác|win ?mác|wm|vê em|vi em|vê mờ|vi mờ|đáp ?(bờ )?(liu|lu) ?em|đắp ?(bờ )?(liu|lu) ?em|đúp ?(bờ )?(liu|lu) ?em|double ?u ?em|w m|v m)(?=\s|$)/g,'$1vm').replace(/(^|\s)vm\s*(\+|plus|cộng)(?=\s|$)/g,'$1vm');
   return s.split(/\s+/).filter(Boolean).map(t=>t==='|'?t:t.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}.,]+$/gu,'')).filter(Boolean)}
 /* so khớp 1 từ nói với tên: đúng dấu = 1; khác dấu chỉ chấp nhận với từ ≥3 chữ hoặc khi câu gõ không dấu */
 function vWordHit(w,acc,flat,flatStr,noAccMode){if(acc.includes(w))return 1;const f=noAcc(w);
