@@ -72,6 +72,9 @@ function custPL(c){return c&&Array.isArray(c.pl)?c.pl:[]}
 function rebuildCustomers(){const m=new Map(),bc=new Map();const packs=[...R.custPacks.entries()].sort((a,b)=>a[0].localeCompare(b[0]));for(const [,arr] of packs)for(const c of arr||[])if(c&&c.code){m.set(idFor(c.code),c)}for(const [id,c] of R.custInd)m.set(id,c);for(const c of m.values())bc.set(c.code,c);R.customers=m;R.custByCode=bc}
 /* ẩn mã hàng hỗ trợ / khuyến mại / đổi trả (tên có chữ dt, đt, đổi trả, km, khuyến mại, ht, hỗ trợ) */
 const PROD_HIDE=/ (dt|doi tra|km|khuyen mai|ht|ho tro) /;
+const pAlias=p=>((R.palias||{})[p.code])||[];/* tên gọi khác (config/prodAlias) */
+const pHay=p=>noAcc(p.code+' '+p.name+' '+(p.group||'')+' '+pAlias(p).join(' '));
+const wAll=(hay,nq)=>!nq||nq.split(/\s+/).filter(Boolean).every(w=>hay.includes(w));
 function sortedProducts(){return [...R.products.values()].sort((a,b)=>(toNum(b.soldQty)-toNum(a.soldQty))||a.code.localeCompare(b.code,'vi'))}/* bán chạy nhất (SL bán 3 tháng gần nhất từ MISA, trừ trả lại) lên đầu */
 function lastPrice(cust,code){let best=null;for(const o of R.orders){if(o.cust!==cust||o.status==='cancel')continue;for(const l of o.lines||[])if(l.code===code&&toNum(l.price)>0&&(!best||o.date>best.d))best={d:o.date,p:toNum(l.price)}}return best?best.p:null}
 function defaultPrice(cust,code){const pr=R.prices.get(cust);if(pr&&pr.items&&pr.items[code]!=null)return {p:toNum(pr.items[code]),src:'Bảng giá khách'};
@@ -158,8 +161,8 @@ function pickCustomer(onPick){let q='';let shown=[];const draw=b=>{const nq=noAc
     draw(b);const i=b.querySelector('#pcQ');let dT;i.oninput=()=>{clearTimeout(dT);dT=setTimeout(()=>{q=i.value;draw(b)},150)};setTimeout(()=>i.focus(),50);
     b.querySelector('#pcNew').onclick=()=>{closeSheet();editCustomer(null,c=>onPick(c),q)}})}
 /* chọn sản phẩm */
-function pickProduct(cust,onPick){let q='';const bal=stockMap();const draw=b=>{const nq=noAcc(q);const list=sortedProducts().filter(p=>p.active!==false&&(!nq||noAcc(p.code+' '+p.name+' '+(p.group||'')).includes(nq))).slice(0,80);
-    b.querySelector('#ppList').innerHTML=list.length?list.map(p=>{const dp=cust?defaultPrice(cust,p.code):{p:toNum(p.price)};const t=bal.get(p.code)||0;return `<div class="row tap" data-p="${esc(p.code)}"><div class="grow"><div class="t ell">${esc(p.name)}</div><div class="s">${esc(p.code)} · ${esc(p.unit)} · tồn ${fmt(t)}</div></div><div class="money">${dp.p?vnd(dp.p):''}</div></div>`}).join(''):`<div class="empty">${R.products.size?'Không tìm thấy sản phẩm.':'Chưa có sản phẩm. Quản lý cần thêm danh mục.'}</div>`;
+function pickProduct(cust,onPick){let q='';const bal=stockMap();const draw=b=>{const nq=noAcc(q);const list=sortedProducts().filter(p=>p.active!==false&&wAll(pHay(p),nq)).slice(0,80);
+    b.querySelector('#ppList').innerHTML=list.length?list.map(p=>{const dp=cust?defaultPrice(cust,p.code):{p:toNum(p.price)};const t=bal.get(p.code)||0;return `<div class="row tap" data-p="${esc(p.code)}"><div class="grow"><div class="t ell">${esc(p.name)}</div><div class="s">${esc(p.code)} · ${esc(p.unit)} · tồn ${fmt(t)}</div>${pAlias(p).length?`<div class="tiny" style="color:var(--accent)">${esc(pAlias(p).join(' · '))}</div>`:''}</div><div class="money">${dp.p?vnd(dp.p):''}</div></div>`}).join(''):`<div class="empty">${R.products.size?'Không tìm thấy sản phẩm.':'Chưa có sản phẩm. Quản lý cần thêm danh mục.'}</div>`;
     $$('[data-p]',b).forEach(r=>r.onclick=()=>{closeSheet();onPick(findProd(r.dataset.p))})};
   openSheet('Chọn sản phẩm',`<input id="ppQ" placeholder="Tìm tên hoặc mã sản phẩm" autocomplete="off"><div class="group pick" id="ppList"></div>`,b=>{draw(b);const i=b.querySelector('#ppQ');i.oninput=()=>{q=i.value;draw(b)};setTimeout(()=>i.focus(),50)})}
 
@@ -201,17 +204,23 @@ function vTokens(text){let s=' '+vLow(text)+' ';
   s=s.replace(/(\d+)\s*(gam|gram|gờ ram|gr|g)(?=[\s|])/g,'$1g').replace(/(\d+)\s*(mi li lít|mililít|ml)(?=[\s|])/g,'$1ml');
   s=s.replace(/\b(ki lô gam|ki lô|kilôgam|kilogram|kilô|kí lô|ký lô)\b/g,'kg');
   s=s.replace(/(^|\s)(vin ?mart|win ?mart|vin ?mát|win ?mát|uyn ?mát|quyn ?mát|vin ?mác|win ?mác|wm|vê em|vi em|vê mờ|vi mờ|đáp ?(bờ )?(liu|lu) ?em|đắp ?(bờ )?(liu|lu) ?em|đúp ?(bờ )?(liu|lu) ?em|double ?u ?em|w m|v m)(?=\s|$)/g,'$1vm').replace(/(^|\s)vm\s*(\+|plus|cộng)(?=\s|$)/g,'$1vm');
+  s=vAliasNorm(s);
   return s.split(/\s+/).filter(Boolean).map(t=>t==='|'?t:t.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}.,]+$/gu,'')).filter(Boolean)}
+/* cách đọc quy cách chuối: pack (péc/pắc…), plus (plớt…), mini, 1F (một ép…), pack 3 quả → 1 từ */
+function vAliasNorm(s){const B='(?=\\s|\\|$)';const r=(a,b)=>{s=s.replace(new RegExp('(^|\\s)(?:'+a+')'+B,'g'),(m,p)=>p+b)};
+  r('pack|páck|péc|pếch|pẹc|pắc|pặc|pác|pạc|pách|pẹt|bẹc','pack');r('plus|plớt|plút|plu|plợt|pờ lớt|pờ lút|pơ lớt|pơ lút|pờ lu','plus');r('mini|mi ni|mi-ni|min ni|mí ni','mini');
+  r('1f|1 f|một f|1 ép|một ép|1 ép phờ|một ép phờ|wan ép|oan ép|uăn ép|one f|1 phờ|một phờ','1f');r('pack (?:3|ba) (?:quả|trái)|pack3 (?:quả|trái)','pack3qua');return s}
 /* so khớp 1 từ nói với tên: đúng dấu = 1; khác dấu chỉ chấp nhận với từ ≥3 chữ hoặc khi câu gõ không dấu */
 function vWordHit(w,acc,flat,flatStr,noAccMode){if(acc.includes(w))return 1;const f=noAcc(w);
   if(noAccMode||f.length>=3||/\d/.test(f)){if(flat.includes(f))return noAccMode?1:.8;if(f.length>=4&&flatStr.includes(f))return .5}return 0}
-let _vP=null,_vPsrc=null;
-function vProdIdx(){if(_vPsrc===R.products&&_vP)return _vP;_vP=[...R.products.values()].filter(p=>p.active!==false).map(p=>{const src=vLow(p.name).replace(/(\d+)\s*(gam|gram|gr|g)\b/g,'$1g')+' '+vLow(p.code);const acc=src.split(/[^\p{L}\p{N}]+/u).filter(Boolean);const flat=acc.map(noAcc);return {p,acc,flat,str:flat.join(' '),u:vUnit(p.unit||'')}});_vPsrc=R.products;return _vP}
+let _vP=null,_vPsrc=null,_vPa=null;
+function vProdIdx(){if(_vPsrc===R.products&&_vPa===R.palias&&_vP)return _vP;_vP=[];const mk=(p,txt,al)=>{const src=vAliasNorm(' '+vLow(txt).replace(/(\d+)\s*(gam|gram|gr|g)\b/g,'$1g')+' ');const acc=src.split(/[^\p{L}\p{N}]+/u).filter(Boolean);const flat=acc.map(noAcc);_vP.push({p,acc,flat,str:flat.join(' '),u:vUnit(p.unit||''),al})};
+  for(const p of R.products.values()){if(p.active===false)continue;mk(p,p.name+' '+p.code,0);for(const a of pAlias(p))mk(p,a,1)}_vPsrc=R.products;_vPa=R.palias;return _vP}
 const V_FILL=/^(lấy|cho|thêm|sản|phẩm|mặt|hàng|loại|của|là|thì|nữa|với|và|em|anh|chị|ơi|nhé|nha|ạ|à)$/;
 function vMatchProd(words,unit,noAccMode){const q=words.filter(w=>!V_FILL.test(w));if(!q.length)return {list:[],q,sc:0};
   const L=vProdIdx().map(x=>{let m=0;for(const w of q)m+=vWordHit(w,x.acc,x.flat,x.str,noAccMode);let cov=0;for(const t of x.flat)if(q.some(w=>noAcc(w)===t))cov++;
     return {p:x.p,sc:m/q.length,ub:unit&&x.u===unit?1:0,cov:cov/Math.max(1,x.flat.length-1),sold:toNum(x.p.soldQty)}}).filter(x=>x.sc>=.5)
-   .sort((a,b)=>b.sc-a.sc||b.ub-a.ub||(b.cov>=.99)-(a.cov>=.99)||b.sold-a.sold||b.cov-a.cov);
+   .sort((a,b)=>b.sc-a.sc||b.ub-a.ub||(b.cov>=.99)-(a.cov>=.99)||b.sold-a.sold||b.cov-a.cov).filter((x,i,a)=>a.findIndex(y=>y.p===x.p)===i);
   const top=L[0],sec=L[1];const sure=!!top&&top.sc>=.99&&(!sec||sec.sc<top.sc-.01||sec.ub<top.ub||(top.cov>=.99&&sec.cov<top.cov));
   return {list:L.slice(0,6),q,sure,sc:top?top.sc:0}}
 /* địa điểm giao: chỉ so với tên ĐỊA ĐIỂM (không so tên khách) */
@@ -671,7 +680,7 @@ function viewAllOrders(v){orderListView(v,R.orders,{title:'Tất cả đơn hàn
 /* ================= QUẢN LÝ: DANH MỤC ================= */
 function viewCatalog(v){const T=R.ui.catTab,q=noAcc(R.ui.catQ);
   let body='';
-  if(T==='products'){const L=sortedProducts().filter(p=>!q||noAcc(p.code+' '+p.name+' '+(p.group||'')).includes(q));
+  if(T==='products'){const L=sortedProducts().filter(p=>wAll(pHay(p),q));
     body=`<div class="hrow"><button class="btn sm pri" id="cNew">+ Thêm sản phẩm</button><button class="btn sm" id="cImp">Nhập Excel</button><button class="btn sm" id="cTpl">File mẫu</button><button class="btn sm" id="cExp">Xuất Excel</button></div>
      <div class="group">${L.slice(0,300).map(p=>`<div class="row tap" data-ep="${esc(p.code)}"><div class="grow"><div class="t ell">${esc(p.name)}${p.active===false?' <span class="chip">Ngừng bán</span>':''}</div><div class="s">${esc(p.code)} · ${esc(p.unit)}${p.group?' · '+esc(p.group):''}</div></div><div class="money">${p.price?vnd(p.price):'<span class="chip w">Chưa có giá</span>'}</div></div>`).join('')||'<div class="empty">Chưa có sản phẩm.</div>'}</div>`}
   else if(T==='customers'){const L=[...R.customers.values()].filter(c=>wMatch(custNorm(c),q)).sort((a,b)=>a.name.localeCompare(b.name,'vi'));
@@ -848,6 +857,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   const hm=window.APP_MODE||(location.hash||'').replace('#','');if(['sale','ship','kho','admin'].includes(hm)){R.mode=hm;R.tab=null}
   const sub=(coll,fn)=>db.collection(coll).onSnapshot(s=>{fn(s);soon();resolveNames()},e=>toast('Mất kết nối '+coll+' ('+e.code+')'));
   sub('staff',s=>{R.staff=new Map(s.docs.map(d=>[d.id,d.data()]))});
+  sub('config',s=>{const d=s.docs.find(x=>x.id==='prodAlias');const it=(d&&d.data()||{}).items||{};R.palias=Object.fromEntries(Object.entries(it).map(([k,v])=>[k,(Array.isArray(v)?v:String(v||'').split(/[;|\n]/)).map(x=>String(x).trim()).filter(Boolean)]))});
   sub('requests',s=>{R.requests=new Map(s.docs.map(d=>[d.id,d.data()]))});
   sub('products',s=>{R.products=new Map(s.docs.map(d=>[d.id,d.data()]).filter(x=>x[1]&&x[1].code&&/^(HH|TP)/i.test(String(x[1].code).trim())&&!PROD_HIDE.test(' '+noAcc(x[1].name).replace(/[^a-z0-9]+/g,' ')+' ')))});/* chỉ dùng mã hàng hoá HH và thành phẩm TP */
   sub('customers',s=>{R.custInd=new Map(s.docs.map(d=>[d.id,d.data()]).filter(x=>x[1]&&x[1].code));rebuildCustomers()});
