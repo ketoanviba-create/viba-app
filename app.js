@@ -172,7 +172,7 @@ function editCustomer(c,after,preName){const isNew=!c;c=c||{code:'',name:preName
       const old=findCust(code)||{};const dd=Object.assign({},old,d);try{await R.db.doc('customers/'+idFor(code)).set(dd);R.custInd.set(idFor(code),dd);rebuildCustomers();d=dd;toast('Đã lưu khách '+name);closeSheet();after&&after(d);render()}catch(e){$('#ec_msg').innerHTML='<div class="alert r">Không lưu được ('+esc(e.code||'lỗi')+').</div>'}}})}
 
 /* ================= SALE: LÊN ĐƠN ================= */
-function newOrderDraft(){return {id:null,cust:'',custName:'',address:'',phone:'',lines:[],paid:false,paidAmount:'',payPhotos:[],note:'',date:today(),showMore:{}}}
+function newOrderDraft(){return {id:null,cust:'',custName:'',address:'',phone:'',lines:[],paid:false,paidAmount:'',payPhotos:[],note:'',date:today(),showMore:{},delivered:true}}
 /* ===== ĐỌC ĐƠN BẰNG GIỌNG NÓI =====
    Sale đọc 1 câu, vd: "Giao VM Hà Đông, chuối tiêu 170 gam 20 quả, nem bùi 10 gói khuyến mại 1 gói, đã chuyển khoản, ghi chú giao trước 9 giờ"
    → app tách địa điểm giao + mặt hàng + số lượng, cho xem lại, bấm "Điền vào đơn". KHÔNG tự gửi đơn. */
@@ -274,7 +274,7 @@ function voiceOrder(){const d=R.odraft||(R.odraft=newOrderDraft());const SR=wind
 
 function viewSaleNew(v){if(!R.odraft)R.odraft=newOrderDraft();const d=R.odraft;const c=d.cust?findCust(d.cust):null;
   const total=orderTotal(d);const bal=stockMap();
-  v.innerHTML=`<h1 class="big">${d.id?'Sửa đơn '+esc(d.no):'Lên đơn'}</h1>
+  v.innerHTML=`<h1 class="big">${d.id?'Sửa đơn '+esc(d.no):R.mode==='ship'?'Đơn phát sinh':'Lên đơn'}</h1>${R.mode==='ship'&&!d.id?'<div class="alert" style="margin-bottom:10px">Đơn khách đặt thêm khi đang giao. Đơn ghi tên bạn là người tạo và người giao, đánh dấu <b>Phát sinh</b>.</div>':''}
   <div class="stack">
   <button class="btn block" id="oVoice" style="font-size:16px">🎤 Đọc đơn bằng giọng nói</button>
   <div class="group"><div class="row tap" id="oCust"><div class="grow">${c||d.custName?`<div class="t">${esc(c?c.name:d.custName)}</div><div class="s">${esc(d.address||'Chưa có địa chỉ giao')}${d.phone?' · '+esc(d.phone):''}</div>`:'<div class="t" style="color:var(--accent)">Chọn khách hàng</div><div class="s">Bấm để tìm hoặc thêm khách mới</div>'}</div><span class="chev">›</span></div></div>
@@ -289,7 +289,8 @@ function viewSaleNew(v){if(!R.odraft)R.odraft=newOrderDraft();const d=R.odraft;c
   <label class="f">Ghi chú cho đơn<textarea id="oNote" rows="2" placeholder="VD: giao trước 9h">${esc(d.note)}</textarea></label>
   <div class="card"><div class="totalbar"><span class="muted">${d.lines.length} sản phẩm · ${fmt(sumL(d,'qty'))} SL${sumL(d,'promo')?' · KM '+fmt(sumL(d,'promo')):''}</span><span class="money">${vnd(total)}</span></div></div>
   <div id="oMsg"></div>
-  <button class="btn block pri" id="oSave">${d.id?'Lưu thay đổi':'Gửi đơn hàng'}</button>
+  ${R.mode==='ship'&&!d.id?`<div class="group"><div class="toggle"><div><div style="font-weight:600">Đã giao cho khách luôn</div><div class="tiny muted">${d.delivered!==false?'Đơn lưu ở trạng thái Đã giao':'Đơn vào mục Cần giao của bạn để giao sau'}</div></div><input type="checkbox" class="sw" id="oDeliv" ${d.delivered!==false?'checked':''} aria-label="Đã giao luôn"></div></div>`:''}
+  <button class="btn block pri" id="oSave">${d.id?'Lưu thay đổi':R.mode==='ship'?'Lưu đơn phát sinh':'Gửi đơn hàng'}</button>
   ${d.id||d.lines.length||d.cust?'<button class="btn block" id="oReset">'+(d.id?'Hủy sửa':'Làm lại từ đầu')+'</button>':''}
   </div>`;
   $('#oVoice').onclick=()=>voiceOrder();
@@ -301,6 +302,7 @@ function viewSaleNew(v){if(!R.odraft)R.odraft=newOrderDraft();const d=R.odraft;c
   const pa=$('#oPaidAmt');if(pa)pa.oninput=()=>d.paidAmount=pa.value;
   $('#oNote').oninput=e=>d.note=e.target.value;
   bindPhotos(v,()=>d.payPhotos,()=>render());
+  const dlv=$('#oDeliv');if(dlv)dlv.onchange=e=>{d.delivered=e.target.checked;render()};
   $('#oSave').onclick=saveOrder;const rs=$('#oReset');if(rs)rs.onclick=()=>{R.odraft=newOrderDraft();render()}}
 function lineCard(l,i,bal,opt){opt=opt||{};const edited=l.listPrice!=null&&toNum(l.price)!==toNum(l.listPrice);const more=opt.more||l._more||(toNum(l.promo)||toNum(l.swap)||toNum(l.ret));const t=bal?bal.get(l.code):null;
   return `<div class="line" data-li="${i}"><div class="top"><div class="nm">${esc(l.name)}<div class="tiny muted" style="font-weight:500">${esc(l.code)} · ${esc(l.unit)}${t!=null?' · tồn kho '+fmt(t):''}</div></div><button class="btn sm danger" data-ldel="${i}" aria-label="Bỏ sản phẩm">Bỏ</button></div>
@@ -325,13 +327,14 @@ async function saveOrder(){const d=R.odraft,msg=$('#oMsg');const err=t=>msg.inne
   const zero=lines.find(l=>l.qty>0&&!l.price);if(zero&&!d._zeroOk){d._zeroOk=true;return msg.innerHTML=`<div class="alert w">${esc(zero.name)} đang có đơn giá 0đ. Bấm Gửi lần nữa nếu đúng là hàng không tính tiền.</div>`}
   const btn=$('#oSave');btn.disabled=true;
   try{const total=lines.reduce((s,l)=>s+lineAmt(l),0);const base={cust:d.cust,custName:d.custName,address:d.address.trim(),phone:d.phone,lines,note:d.note.trim(),total,
-      paid:!!d.paid,paidAmount:d.paid?Math.round(d.paidAmount===''?total:toNum(d.paidAmount)):0,paidBy:d.paid?'sale':null};
+      paid:!!d.paid,paidAmount:d.paid?Math.round(d.paidAmount===''?total:toNum(d.paidAmount)):0,paidBy:d.paid?(R.mode==='ship'?'ship':'sale'):null};
     if(d.id){const o=R.orders.find(x=>x.id===d.id);if(!o||o.status!=='new')throw{message:'Đơn đã được nhận giao, không sửa được nữa.'};
       base.payPhotos=await savePhotos(d.payPhotos,d.id,'pay');await R.db.doc('orders/'+d.id).update(Object.assign(base,{updatedAt:Date.now(),updatedBy:R.uid}));toast('Đã lưu đơn '+o.no)}
     else{let no=nextNo('DH',d.date,R.orders),ref;for(let k=0;k<40;k++){ref=R.db.doc('orders/'+no);const s=await ref.get();if(!s.exists)break;no=bumpNo(no)}
       base.payPhotos=await savePhotos(d.payPhotos,no,'pay');
-      await ref.set(Object.assign(base,{no,date:d.date,saleId:R.uid,status:'new',shipId:null,outside:false,retPhotos:[],createdAt:Date.now()}));toast('Đã gửi đơn '+no)}
-    R.odraft=newOrderDraft();R.tab='orders';render()}
+      const now=Date.now(),arise=R.mode==='ship',dv=arise&&d.delivered!==false;
+      await ref.set(Object.assign(base,{no,date:d.date,saleId:R.uid,status:arise?(dv?'done':'shipping'):'new',shipId:arise?R.uid:null,outside:false,retPhotos:[],createdAt:now},arise?{arising:true,saleLines:lines,shipAt:now}:{},dv?{doneAt:now}:{}));toast((arise?'Đã lưu đơn phát sinh ':'Đã gửi đơn ')+no)}
+    const wasShip=R.mode==='ship';R.odraft=newOrderDraft();R.tab=wasShip?(d.delivered!==false||d.id?'done':'todo'):'orders';render()}
   catch(e){btn.disabled=false;err(e.code==='invalid_argument'?'Bạn không có quyền ghi dữ liệu.':e.code==='quota_exceeded'?'Kho dữ liệu đầy, báo quản lý.':'Không lưu được: '+esc(e.message||e.code||'lỗi'))}}
 
 /* ================= DANH SÁCH ĐƠN (dùng chung) ================= */
@@ -339,7 +342,7 @@ function orderCard(o,opt){opt=opt||{};const items=(o.lines||[]).map(l=>esc(l.nam
   return `<div class="oc" data-oid="${esc(o.id)}"><div class="h1"><span class="cn ell">${esc(o.custName)}</span><span class="money">${vnd(orderTotal(o))}</span></div>
    <div class="addr">${ICON.pin}<span>${esc(o.address||'Chưa có địa chỉ')}</span></div>
    <div class="tiny muted ell">${items}</div>
-   <div class="hrow">${stChip(o)}${payChip(o)}${o.outside?'<span class="chip b">Ship ngoài</span>':''}<span class="tiny muted right">${esc(o.no)} · ${dm(o.date)}${opt.who?' · '+esc(staffName(o[opt.who])):''}</span></div>${opt.actions||''}</div>`}
+   <div class="hrow">${stChip(o)}${payChip(o)}${o.arising?'<span class="chip b">Phát sinh</span>':''}${o.outside?'<span class="chip b">Ship ngoài</span>':''}<span class="tiny muted right">${esc(o.no)} · ${dm(o.date)}${opt.who?' · '+esc(staffName(o[opt.who])):''}</span></div>${opt.actions||''}</div>`}
 function orderListView(v,list,opt){const q=noAcc(R.ui.ordQ);const st=R.ui.ordStatus;
   let L=list.filter(o=>(!st||o.status===st)&&qMatch(o.no+' '+o.custName+' '+o.address+' '+(o.lines||[]).map(l=>l.name).join(' '),q));
   L.sort((a,b)=>(b.date+b.no).localeCompare(a.date+a.no));
@@ -355,7 +358,7 @@ function orderDetail(o){if(!o)return;const role=R.mode;const mine=o.saleId===R.u
   const canDeliver=(role==='ship'&&(o.shipId===R.uid||!o.shipId)||role==='admin')&&(o.status==='new'||o.status==='shipping');
   const lines=(o.lines||[]).map(l=>`<div class="row"><div class="grow"><div class="t">${esc(l.name)}</div><div class="s">${fmt(l.qty)} ${esc(l.unit)} × ${vnd(l.price)}${l.listPrice!=null&&l.price!==l.listPrice?' <span class="edited">(giá gốc '+vnd(l.listPrice)+')</span>':''}${l.promo?' · KM '+fmt(l.promo):''}${l.swap?' · Đổi '+fmt(l.swap):''}${l.ret?' · Trả '+fmt(l.ret):''}</div></div><div class="money">${vnd(lineAmt(l))}</div></div>`).join('');
   const pay=(o.payPhotos||[]).map(id=>({id})),rp=(o.retPhotos||[]).map(id=>({id}));
-  openSheet('Đơn '+o.no,`<div class="hrow">${stChip(o)}${payChip(o)}${o.outside?'<span class="chip b">Ship ngoài</span>':''}${o.px?'<span class="chip">Đã xuất kho '+esc(o.px)+'</span>':''}</div>
+  openSheet('Đơn '+o.no,`<div class="hrow">${stChip(o)}${payChip(o)}${o.arising?'<span class="chip b">Phát sinh</span>':''}${o.outside?'<span class="chip b">Ship ngoài</span>':''}${o.px?'<span class="chip">Đã xuất kho '+esc(o.px)+'</span>':''}</div>
    <div class="group"><div class="row"><div class="grow"><div class="t">${esc(o.custName)}</div><div class="s">${esc(o.address||'')}${o.phone?' · '+esc(o.phone):''}</div></div>${o.address?`<a class="mapl" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address)}" target="_blank" rel="noopener">Bản đồ</a>`:''}</div>
    <div class="row"><div class="grow s">Ngày ${dmy(o.date)} · Sale: ${esc(staffName(o.saleId))}${o.shipId?' · Ship: '+esc(staffName(o.shipId)):''}</div></div></div>
    <div class="group">${lines}<div class="row"><div class="grow t">Tổng cộng</div><div class="money" style="font-size:18px">${vnd(orderTotal(o))}</div></div>
@@ -626,10 +629,10 @@ function viewDash(v){const [f,t]=periodRange();const all=ordersIn(f,t);
    <div class="tiny muted">Giao theo đơn = SL bán + khuyến mại + hàng đổi của các đơn đã giao trong kỳ. Lệch khác 0 nghĩa là chưa lập phiếu xuất, hoặc phiếu xuất khác với số thực giao.</div>
    <button class="btn" id="dXls">Xuất Excel chi tiết đơn hàng trong kỳ</button></div>`;
   bindPeriod();$('#dXls').onclick=()=>exportOrders(all,f,t)}
-function exportOrders(list,f,t){const rows=[['Ngày','Số đơn','Trạng thái','Sale','Ship','Mã KH','Khách hàng','Địa chỉ','Mã SP','Tên SP','ĐVT','SL','KM','Đổi','Trả','Đơn giá','Giá mặc định','Thành tiền','Tình trạng thanh toán','Số tiền đã thu','Người thu','Còn phải thu','Ship ngoài','Phiếu xuất','Phiếu nhập trả']];
+function exportOrders(list,f,t){const rows=[['Ngày','Số đơn','Trạng thái','Sale','Ship','Mã KH','Khách hàng','Địa chỉ','Mã SP','Tên SP','ĐVT','SL','KM','Đổi','Trả','Đơn giá','Giá mặc định','Thành tiền','Tình trạng thanh toán','Số tiền đã thu','Người thu','Còn phải thu','Ship ngoài','Phiếu xuất','Phiếu nhập trả','Nguồn đơn']];
   const oTot=o=>(o.lines||[]).reduce((s,l)=>s+lineAmt(l),0),oPaid=o=>o.paid?toNum(o.paidAmount||oTot(o)):0,oPay=o=>{const t=oTot(o),p=oPaid(o);return p>=t&&p>0?'Đã thanh toán đủ':p>0?'Thanh toán một phần':'Chưa thanh toán'};
-  list.slice().sort((a,b)=>(a.date+a.no).localeCompare(b.date+b.no)).forEach(o=>o.lines.forEach((l,i)=>rows.push([xDate(o.date),o.no,ST_NAME[o.status],staffName(o.saleId),o.shipId?staffName(o.shipId):'',o.cust,o.custName,o.address,l.code,l.name,l.unit,toNum(l.qty),toNum(l.promo),toNum(l.swap),toNum(l.ret),toNum(l.price),l.listPrice==null?'':toNum(l.listPrice),lineAmt(l),oPay(o),i===0&&o.paid?oPaid(o):'',o.paid?(o.paidBy==='ship'?'Ship':'Sale'):'',i===0?Math.max(0,oTot(o)-oPaid(o)):'',o.outside?'Có':'',o.px||'',o.pn||''])));
-  xlsxFile(`Don_hang_${f}_${t}.xlsx`,[{name:'Don hang',rows,cols:[11,13,10,16,16,10,28,30,10,28,7,7,6,6,6,11,11,12,18,12,8,12,8,12,12]}])}
+  list.slice().sort((a,b)=>(a.date+a.no).localeCompare(b.date+b.no)).forEach(o=>o.lines.forEach((l,i)=>rows.push([xDate(o.date),o.no,ST_NAME[o.status],staffName(o.saleId),o.shipId?staffName(o.shipId):'',o.cust,o.custName,o.address,l.code,l.name,l.unit,toNum(l.qty),toNum(l.promo),toNum(l.swap),toNum(l.ret),toNum(l.price),l.listPrice==null?'':toNum(l.listPrice),lineAmt(l),oPay(o),i===0&&o.paid?oPaid(o):'',o.paid?(o.paidBy==='ship'?'Ship':'Sale'):'',i===0?Math.max(0,oTot(o)-oPaid(o)):'',o.outside?'Có':'',o.px||'',o.pn||'',o.arising?'Ship phát sinh':'Sale']))); 
+  xlsxFile(`Don_hang_${f}_${t}.xlsx`,[{name:'Don hang',rows,cols:[11,13,10,16,16,10,28,30,10,28,7,7,6,6,6,11,11,12,18,12,8,12,8,12,12,14]}])}
 function viewAllOrders(v){orderListView(v,R.orders,{title:'Tất cả đơn hàng',who:'saleId',extra:'<div class="tiny muted">Hiển thị đơn 3 tháng gần nhất. Kỳ cũ hơn xem ở Tổng quan → Xuất Excel.</div>'})}
 
 /* ================= QUẢN LÝ: DANH MỤC ================= */
@@ -759,12 +762,12 @@ function viewSettings(v){const s=ST(),ro=!R.isOwner;const F=(k,l,t)=>`<label cla
 /* ================= ĐIỀU HƯỚNG ================= */
 const TABS={
   sale:[['new','Lên đơn','cart'],['orders','Đơn của tôi','list'],['report','Báo cáo','chart']],
-  ship:[['todo','Cần giao','truck'],['done','Đã giao','check'],['report','Báo cáo','chart']],
+  ship:[['todo','Cần giao','truck'],['new','Phát sinh','cart'],['done','Đã giao','check'],['report','Báo cáo','chart']],
   kho:[['vnew','Lập phiếu','doc'],['vlist','Phiếu','list'],['stock','Tồn kho','box'],['byorder','Theo đơn','truck']],
   admin:[['dash','Tổng quan','home'],['orders','Đơn hàng','list'],['stock','Kho','box'],['catalog','Danh mục','book'],['settings','Cài đặt','gear']]};
 function views(){return{
   sale:{new:viewSaleNew,orders:v=>orderListView(v,R.orders.filter(o=>o.saleId===R.uid),{title:'Đơn của tôi',emptyHint:'Đơn bạn lên sẽ hiện ở đây.'}),report:v=>viewSaleReport(v,R.uid)},
-  ship:{todo:viewShipTodo,done:viewShipDone,report:v=>viewShipReport(v,R.uid)},
+  ship:{todo:viewShipTodo,new:viewSaleNew,done:viewShipDone,report:v=>viewShipReport(v,R.uid)},
   kho:{vnew:viewKhoNew,vlist:viewKhoList,stock:viewStock,byorder:viewKhoByOrder},
   admin:{dash:viewDash,orders:viewAllOrders,stock:viewStock,catalog:viewCatalog,settings:viewSettings}}}
 function go(tab){R.tab=tab;try{localStorage.setItem('viba.tab',R.mode+':'+tab)}catch(e){}render();window.scrollTo({top:0})}
