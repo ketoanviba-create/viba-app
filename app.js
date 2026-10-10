@@ -66,6 +66,8 @@ function findProd(code){code=String(code||'').trim();if(!code)return null;for(co
 function findCust(code){if(!code)return null;return R.custByCode.get(code)||null}
 function custPL(c){return c&&Array.isArray(c.pl)?c.pl:[]}
 function rebuildCustomers(){const m=new Map(),bc=new Map();const packs=[...R.custPacks.entries()].sort((a,b)=>a[0].localeCompare(b[0]));for(const [,arr] of packs)for(const c of arr||[])if(c&&c.code){m.set(idFor(c.code),c)}for(const [id,c] of R.custInd)m.set(id,c);for(const c of m.values())bc.set(c.code,c);R.customers=m;R.custByCode=bc}
+/* ẩn mã hàng hỗ trợ / khuyến mại / đổi trả (tên có chữ dt, đt, đổi trả, km, khuyến mại, ht, hỗ trợ) */
+const PROD_HIDE=/ (dt|doi tra|km|khuyen mai|ht|ho tro) /;
 function sortedProducts(){return [...R.products.values()].sort((a,b)=>(toNum(b.soldQty)-toNum(a.soldQty))||a.code.localeCompare(b.code,'vi'))}/* bán chạy nhất (SL bán 3 tháng gần nhất từ MISA, trừ trả lại) lên đầu */
 function lastPrice(cust,code){let best=null;for(const o of R.orders){if(o.cust!==cust||o.status==='cancel')continue;for(const l of o.lines||[])if(l.code===code&&toNum(l.price)>0&&(!best||o.date>best.d))best={d:o.date,p:toNum(l.price)}}return best?best.p:null}
 function defaultPrice(cust,code){const pr=R.prices.get(cust);if(pr&&pr.items&&pr.items[code]!=null)return {p:toNum(pr.items[code]),src:'Bảng giá khách'};
@@ -811,7 +813,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   const sub=(coll,fn)=>db.collection(coll).onSnapshot(s=>{fn(s);soon();resolveNames()},e=>toast('Mất kết nối '+coll+' ('+e.code+')'));
   sub('staff',s=>{R.staff=new Map(s.docs.map(d=>[d.id,d.data()]))});
   sub('requests',s=>{R.requests=new Map(s.docs.map(d=>[d.id,d.data()]))});
-  sub('products',s=>{R.products=new Map(s.docs.map(d=>[d.id,d.data()]).filter(x=>x[1]&&x[1].code&&/^(HH|TP)/i.test(String(x[1].code).trim())))});/* chỉ dùng mã hàng hoá HH và thành phẩm TP */
+  sub('products',s=>{R.products=new Map(s.docs.map(d=>[d.id,d.data()]).filter(x=>x[1]&&x[1].code&&/^(HH|TP)/i.test(String(x[1].code).trim())&&!PROD_HIDE.test(' '+noAcc(x[1].name).replace(/[^a-z0-9]+/g,' ')+' ')))});/* chỉ dùng mã hàng hoá HH và thành phẩm TP */
   sub('customers',s=>{R.custInd=new Map(s.docs.map(d=>[d.id,d.data()]).filter(x=>x[1]&&x[1].code));rebuildCustomers()});
   sub('custpack',s=>{R.custPacks=new Map(s.docs.map(d=>[d.id,(d.data()||{}).items||[]]));rebuildCustomers()});
   sub('prices',s=>{R.prices=new Map(s.docs.map(d=>{const x=d.data();return [x.cust,x]}))});
