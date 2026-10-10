@@ -171,10 +171,110 @@ function editCustomer(c,after,preName){const isNew=!c;c=c||{code:'',name:preName
 
 /* ================= SALE: LÊN ĐƠN ================= */
 function newOrderDraft(){return {id:null,cust:'',custName:'',address:'',phone:'',lines:[],paid:false,paidAmount:'',payPhotos:[],note:'',date:today(),showMore:{}}}
+/* ===== ĐỌC ĐƠN BẰNG GIỌNG NÓI =====
+   Sale đọc 1 câu, vd: "Giao VM Hà Đông, chuối tiêu 170 gam 20 quả, nem bùi 10 gói khuyến mại 1 gói, đã chuyển khoản, ghi chú giao trước 9 giờ"
+   → app tách địa điểm giao + mặt hàng + số lượng, cho xem lại, bấm "Điền vào đơn". KHÔNG tự gửi đơn. */
+const VU={kg:'kg',ki:'kg',kilo:'kg',ky:'kg',can:'kg',goi:'goi',hop:'hop',qua:'qua',trai:'qua',khay:'khay',thung:'thung',tui:'tui',bich:'tui',chai:'chai',lo:'lo',hu:'hu',nai:'nai',buong:'nai',bo:'bo',cai:'cai',chiec:'cai',kien:'kien',bao:'bao',cu:'cu',me:'me',bat:'bat',cay:'cay',lon:'lon',set:'set',vi:'vi'};
+const vUnit=u=>{const t=noAcc(u).replace(/[^a-z0-9]/g,'');return VU[t]||t};
+const VNUM={khong:0,linh:0,le:0,mot:1,hai:2,ba:3,bon:4,tu:4,nam:5,lam:5,nham:5,sau:6,bay:7,tam:8,chin:9};
+function vWordsToNum(ws){/* "hai muoi lam" → 25, "muoi" → 10, "mot tram linh nam" → 105 */let tot=0,h=0,p=null,aft=false,ok=false;
+  for(const w of ws){ok=true;if(w in VNUM){if(aft){h+=VNUM[w];aft=false;p=null}else p=VNUM[w]}
+    else if(w==='muoi'||w==='chuc'){h+=(p==null?1:p)*10;p=null;aft=true}
+    else if(w==='tram'){h+=(p==null?1:p)*100;p=null;aft=false}
+    else if(w==='nghin'||w==='ngan'){tot+=((h+(p||0))||1)*1000;h=0;p=null;aft=false}else return null}
+  return ok?tot+h+(p||0):null}
+function vNorm(text){let s=' '+noAcc(text)+' ';
+  s=s.replace(/[,;!?\n]+/g,' | ').replace(/\.(?!\d)/g,' | ');
+  s=s.replace(/(\d)\s*(ki lo gam|kilogam|kilogram|ki lo|kilo|ky|kg)\b/g,'$1 kg ').replace(/(\d+)\s*(gam|gram|gr|g)\b/g,'$1g').replace(/(\d+)\s*(mi li lit|mililit|ml)\b/g,'$1ml');
+  s=s.replace(/\bve em\b|\bvi em\b|\bvin mart\b|\bwin mart\b/g,'vm');
+  /* chữ số đọc bằng lời ngay trước đơn vị: "hai muoi qua" → "20 qua" */
+  const UN=Object.keys(VU).join('|');s=s.replace(new RegExp('\\b((?:(?:khong|linh|le|mot|hai|ba|bon|tu|nam|lam|nham|sau|bay|tam|chin|muoi|chuc|tram|nghin|ngan)\\s+)+)('+UN+')\\b','g'),(m,ws,u)=>{const n=vWordsToNum(ws.trim().split(/\s+/));return n==null?m:n+' '+u});
+  s=s.replace(/\s+va\s+|\s+them\s+|\s+voi\s+/g,' | ');
+  return s.replace(/\s+/g,' ').trim()}
+/* tách câu thành các đoạn; mỗi đoạn kết thúc bằng 1 số lượng (+ đơn vị) */
+function vSegments(s){const T=s.split(' ').filter(Boolean),segs=[];let cur=[];
+  const flush=(qty,unit)=>{if(cur.length||qty!=null)segs.push({w:cur,qty,unit});cur=[]};
+  for(let i=0;i<T.length;i++){const t=T[i];if(t==='|'){flush(null,'');continue}
+    if(/^\d+([.,]\d+)?$/.test(t)){let q=parseFloat(t.replace(',','.'));let u='';const n1=T[i+1];
+      if(n1&&n1!=='|'&&(VU[n1]||n1==='kg')){u=VU[n1]||n1;i++;if(T[i+1]==='lo'&&u==='kg')i++}
+      if(T[i+1]==='ruoi'){q+=0.5;i++}flush(q,u);continue}
+    cur.push(t)}
+  flush(null,'');return segs}
+const vTok=s=>noAcc(s).replace(/(\d+)\s*(gam|gram|gr|g)\b/g,'$1g').split(/[^a-z0-9]+/).filter(Boolean);
+const VSYN={vm:['vm','vinmart','winmart','wm'],winmart:['vm','vinmart','winmart','wm'],vinmart:['vm','vinmart','winmart','wm']};
+function vHit(w,toks,str){for(const x of (VSYN[w]||[w])){if(toks.includes(x))return true;if(x.length>=3&&str.includes(x))return true}return false}
+let _vP=null,_vPsrc=null;
+function vProdIdx(){if(_vPsrc===R.products&&_vP)return _vP;_vP=[...R.products.values()].filter(p=>p.active!==false).map(p=>{const toks=vTok(p.name+' '+p.code);return {p,toks,str:toks.join(' '),u:vUnit(p.unit||'')}});_vPsrc=R.products;return _vP}
+function vMatchProd(words,unit){const q=words.filter(w=>!/^(lay|cho|them|san|pham|mat|hang|loai|cua|la|thi|nua)$/.test(w));if(!q.length)return {list:[],q};
+  const L=vProdIdx().map(x=>{let m=0;for(const w of q)if(vHit(w,x.toks,x.str))m++;let cov=0;for(const t of x.toks)if(q.includes(t))cov++;
+    return {p:x.p,sc:m/q.length,ub:unit&&x.u===unit?1:0,cov:cov/Math.max(1,x.toks.length-1),sold:toNum(x.p.soldQty)}}).filter(x=>x.sc>0)
+   .sort((a,b)=>b.sc-a.sc||b.ub-a.ub||b.cov-a.cov||b.sold-a.sold);
+  const top=L[0],sec=L[1];const sure=!!top&&top.sc===1&&(!sec||sec.sc<1||sec.ub<top.ub||(top.cov>=0.99&&sec.cov<top.cov));
+  return {list:L.slice(0,6),q,sure,sc:top?top.sc:0}}
+function vMatchLoc(words){const q=words.filter(w=>!/^(giao|cho|den|toi|tai|dia|diem|khach|o|ve|nha)$/.test(w));if(!q.length)return {list:[],sc:0};
+  const L=[];for(const x of locIndex()){const lt=x._lt||(x._lt=x.n.split(/[^a-z0-9]+/).filter(Boolean));let m=0,ml=0;const nn=x._nn||(x._nn=noAcc(x.c.name));const nt=x._nt||(x._nt=nn.split(/[^a-z0-9]+/).filter(Boolean));
+    for(const w of q){if(vHit(w,lt,x.n)){m++;ml++}else if(vHit(w,nt,nn))m++}if(m)L.push({x,sc:m/q.length,ml,len:x.n.length})}
+  L.sort((a,b)=>b.sc-a.sc||b.ml-a.ml||a.len-b.len);const top=L[0],sec=L[1];
+  return {list:L.slice(0,6),sc:top?top.sc:0,sure:!!top&&top.sc===1&&(!sec||sec.sc<1||sec.ml<top.ml)}}
+function vParse(text){const out={loc:null,lines:[],unknown:[],note:'',paid:false};let t=String(text||'');
+  const nm=t.match(/(ghi chú|ghi chu|lưu ý|luu y)\s*[:,]?\s*(.*)$/i);if(nm){out.note=nm[2].trim();t=t.slice(0,nm.index)}
+  let s=vNorm(t);if(/\b(da|roi)\s+(thanh toan|chuyen khoan|ck|tra tien|tra roi)\b|\bthanh toan roi\b|\bchuyen khoan roi\b/.test(s)){out.paid=true;s=s.replace(/\b(da|roi)\s+(thanh toan|chuyen khoan|ck|tra tien|tra roi)\b|\bthanh toan roi\b|\bchuyen khoan roi\b/g,' | ')}
+  const segs=vSegments(s);const LK=/^(giao hang cho|giao hang den|giao hang toi|giao cho|giao den|giao toi|giao tai|giao|dia diem|khach hang|khach)$/;
+  segs.forEach((g,gi)=>{let w=g.w;
+    /* khuyến mại / đổi / trả của dòng trước */
+    const lead=w.join(' ');const last=out.lines[out.lines.length-1];
+    if(g.qty!=null&&last&&/^(khuyen mai|khuyen mai them|km|tang|tang them|bieu)$/.test(lead)){last.promo=g.qty;return}
+    if(g.qty!=null&&last&&/^(doi|doi hang)$/.test(lead)){last.swap=g.qty;return}
+    if(g.qty!=null&&last&&/^(tra|tra lai|tra hang|hang tra)$/.test(lead)){last.ret=g.qty;return}
+    let k0=0;for(let k=Math.min(4,w.length);k>0;k--)if(LK.test(w.slice(0,k).join(' '))){k0=k;break}
+    const isLoc=k0>0||(!out.loc&&gi===0);
+    if(isLoc&&!out.loc){const rest=w.slice(k0);
+      if(g.qty==null){const m=vMatchLoc(rest);if(m.list.length&&(k0||m.sc===1)){out.loc={said:rest.join(' '),...m};return}}
+      else{/* "giao vm ha dong chuoi tieu 170g 20 qua": tìm chỗ cắt giữa địa điểm và tên hàng */
+        let best=null;for(let c=1;c<rest.length;c++){const a=vMatchLoc(rest.slice(0,c)),b=vMatchProd(rest.slice(c),g.unit);const sc=a.sc+b.sc+(a.sure?.2:0)+(b.sure?.2:0);if(a.sc&&b.sc&&(!best||sc>best.sc))best={c,a,b,sc}}
+        if(best&&(k0||best.a.sc===1&&best.b.sc===1)){out.loc={said:rest.slice(0,best.c).join(' '),...best.a};out.lines.push({said:rest.slice(best.c).join(' '),qty:g.qty,unit:g.unit,promo:0,swap:0,ret:0,...best.b});return}
+        if(k0){out.unknown.push(g.w.join(' ')+' '+g.qty);return}}}
+    if(g.qty==null){if(w.length)out.unknown.push(w.join(' '));return}
+    const m=vMatchProd(w,g.unit);if(!m.list.length){out.unknown.push((w.join(' ')+' '+g.qty+' '+(g.unit||'')).trim());return}
+    out.lines.push({said:w.join(' '),qty:g.qty,unit:g.unit,promo:0,swap:0,ret:0,...m})});
+  return out}
+function voiceOrder(){const d=R.odraft||(R.odraft=newOrderDraft());const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null,on=false,P=null,base='';
+  openSheet('🎤 Đọc đơn',`<div class="tiny muted">Đọc liền 1 câu: <b>địa điểm giao</b>, rồi từng <b>mặt hàng + số lượng + đơn vị</b>. Vd: “Giao VM Hà Đông, chuối tiêu 170 gam 20 quả, nem bùi 10 gói khuyến mại 1 gói, đã chuyển khoản, ghi chú giao trước 9 giờ”.</div>
+   ${SR?'<button class="btn block pri" id="vcMic" style="font-size:18px;padding:16px">🎤 Bấm để nói</button>':'<div class="alert w">Trình duyệt này chưa cho nhận giọng nói trực tiếp. Bấm vào ô dưới rồi bấm 🎤 trên bàn phím điện thoại để đọc.</div>'}
+   <textarea id="vcT" rows="3" placeholder="Nội dung đọc sẽ hiện ở đây (có thể sửa hoặc gõ tay)"></textarea>
+   <button class="btn block" id="vcGo">Phân tích</button><div id="vcR"></div>`,b=>{
+    const T=b.querySelector('#vcT'),Rb=b.querySelector('#vcR'),mic=b.querySelector('#vcMic');
+    const show=()=>{P=vParse(T.value);const L=P.loc;
+      const locSel=L&&L.list.length?`<select id="vcLoc">${L.list.map((y,i)=>`<option value="${i}">📍 ${esc(y.x.loc||'(chưa có địa điểm)')} — ${esc(y.x.c.name)}</option>`).join('')}<option value="-1">— Không đổi khách —</option></select>`:'';
+      Rb.innerHTML=`<div class="sec">Kết quả – kiểm tra trước khi điền</div><div class="stack">
+       ${L?`<label class="f">${L.sure?'':'⚠️ '}Địa điểm giao <span class="tiny muted">(nghe: “${esc(L.said)}”)</span>${locSel||'<div class="alert w">Không tìm thấy địa điểm phù hợp – chọn tay sau.</div>'}</label>`:'<div class="tiny muted">Không nghe thấy địa điểm giao – giữ khách đang chọn.</div>'}
+       ${P.lines.map((l,i)=>`<div class="card stack" style="gap:6px"><div class="tiny muted">${l.sure?'':'⚠️ Chưa chắc – kiểm tra · '}nghe: “${esc(l.said)}”</div>
+         <select data-vp="${i}">${l.list.map(y=>`<option value="${esc(y.p.code)}">${esc(y.p.name)} (${esc(y.p.code)} · ${esc(y.p.unit||'')})</option>`).join('')}<option value="">— Bỏ dòng này —</option></select>
+         <div class="row" style="gap:8px;padding:0"><label class="f grow">SL<input data-vq="${i}" inputmode="decimal" class="num" value="${l.qty}"></label><label class="f grow">KM<input data-vk="${i}" inputmode="decimal" class="num" value="${l.promo||0}"></label></div></div>`).join('')}
+       ${P.unknown.length?`<div class="alert w">Chưa hiểu: ${P.unknown.map(x=>'“'+esc(x)+'”').join(', ')} – thêm tay nếu cần.</div>`:''}
+       ${P.paid?'<div class="tiny">✓ Đánh dấu khách <b>đã thanh toán</b></div>':''}${P.note?`<div class="tiny">Ghi chú: ${esc(P.note)}</div>`:''}
+       <button class="btn block pri" id="vcOk" ${L||P.lines.length?'':'disabled'}>Điền vào đơn</button><div class="tiny muted" style="text-align:center">Điền xong vẫn phải xem lại và bấm Gửi đơn hàng.</div></div>`;
+      const ok=Rb.querySelector('#vcOk');if(ok)ok.onclick=apply};
+    const apply=()=>{const ls=Rb.querySelector('#vcLoc');if(ls&&+ls.value>=0){const y=P.loc.list[+ls.value].x;d.cust=y.c.code;d.custName=y.c.name;d.address=y.loc||y.c.address||'';d.phone=y.c.phone||'';
+        d.lines.forEach(l=>{const dp=defaultPrice(d.cust,l.code);l.listPrice=dp.p;l.price=dp.p;l.src=dp.src})}
+      let n=0;P.lines.forEach((l,i)=>{const code=Rb.querySelector(`[data-vp="${i}"]`).value;if(!code)return;const p=findProd(code);if(!p)return;const q=toNum(Rb.querySelector(`[data-vq="${i}"]`).value),k=toNum(Rb.querySelector(`[data-vk="${i}"]`).value);if(!q&&!k)return;
+        const ex=d.lines.find(x=>x.code===p.code);if(ex){ex.qty=r3(toNum(ex.qty)+q);ex.promo=r3(toNum(ex.promo)+k);ex.swap=r3(toNum(ex.swap)+toNum(l.swap));ex.ret=r3(toNum(ex.ret)+toNum(l.ret))}
+        else{const dp=defaultPrice(d.cust,p.code);d.lines.push({code:p.code,name:p.name,unit:p.unit,qty:q,promo:k,swap:toNum(l.swap),ret:toNum(l.ret),price:dp.p,listPrice:dp.p,src:dp.src})}n++});
+      if(P.paid)d.paid=true;if(P.note)d.note=(d.note?d.note+'; ':'')+P.note;
+      if(rec&&on)try{rec.abort()}catch(e){}closeSheet();render();toast('Đã điền '+n+' mặt hàng – kiểm tra rồi bấm Gửi đơn')};
+    b.querySelector('#vcGo').onclick=show;
+    if(mic){rec=new SR();rec.lang='vi-VN';rec.interimResults=true;rec.continuous=true;rec.maxAlternatives=1;
+      rec.onresult=e=>{let fin='',tmp='';for(let i=0;i<e.results.length;i++){const r=e.results[i];if(r.isFinal)fin+=r[0].transcript+' ';else tmp+=r[0].transcript}T.value=(base+' '+fin+tmp).trim()};
+      rec.onend=()=>{on=false;mic.textContent='🎤 Bấm để nói';mic.classList.add('pri');if(T.value.trim())show()};
+      rec.onerror=e=>{on=false;mic.textContent='🎤 Bấm để nói';Rb.innerHTML=`<div class="alert r">${e.error==='not-allowed'||e.error==='service-not-allowed'?'Chưa cho phép dùng micro. Vào Cài đặt › Safari › Micro (hoặc bấm “Cho phép” khi được hỏi), hoặc bấm vào ô trên rồi dùng 🎤 của bàn phím.':e.error==='no-speech'?'Không nghe thấy tiếng nói, thử lại.':'Lỗi nhận giọng nói ('+esc(e.error)+'). Có thể dùng 🎤 của bàn phím.'}</div>`};
+      mic.onclick=()=>{if(on){try{rec.stop()}catch(e){}return}base=T.value.trim();Rb.innerHTML='';try{rec.start();on=true;mic.textContent='⏹ Đang nghe… bấm để dừng';mic.classList.remove('pri')}catch(e){Rb.innerHTML='<div class="alert r">Không bật được micro.</div>'}}}
+    else setTimeout(()=>T.focus(),50)},{onClose:()=>{if(rec&&on)try{rec.abort()}catch(e){}}})}
+
 function viewSaleNew(v){if(!R.odraft)R.odraft=newOrderDraft();const d=R.odraft;const c=d.cust?findCust(d.cust):null;
   const total=orderTotal(d);const bal=stockMap();
   v.innerHTML=`<h1 class="big">${d.id?'Sửa đơn '+esc(d.no):'Lên đơn'}</h1>
   <div class="stack">
+  <button class="btn block" id="oVoice" style="font-size:16px">🎤 Đọc đơn bằng giọng nói</button>
   <div class="group"><div class="row tap" id="oCust"><div class="grow">${c||d.custName?`<div class="t">${esc(c?c.name:d.custName)}</div><div class="s">${esc(d.address||'Chưa có địa chỉ giao')}${d.phone?' · '+esc(d.phone):''}</div>`:'<div class="t" style="color:var(--accent)">Chọn khách hàng</div><div class="s">Bấm để tìm hoặc thêm khách mới</div>'}</div><span class="chev">›</span></div></div>
   ${d.cust?`<label class="f">Địa chỉ giao hàng${(c&&c.alt)?' <span class="tiny">(bấm để chọn điểm giao khác)</span>':''}<input id="oAddr" list="dlAddr" value="${esc(d.address)}" placeholder="Địa chỉ giao"></label><datalist id="dlAddr">${[c&&c.address,c&&c.billAddr,...String((c&&c.alt)||'').split('|')].map(x=>String(x||'').trim()).filter((x,i,a)=>x&&a.indexOf(x)===i).map(x=>`<option value="${esc(x)}"></option>`).join('')}</datalist>`:''}
   <div class="sec" style="margin-bottom:0">Sản phẩm</div>
@@ -190,6 +290,7 @@ function viewSaleNew(v){if(!R.odraft)R.odraft=newOrderDraft();const d=R.odraft;c
   <button class="btn block pri" id="oSave">${d.id?'Lưu thay đổi':'Gửi đơn hàng'}</button>
   ${d.id||d.lines.length||d.cust?'<button class="btn block" id="oReset">'+(d.id?'Hủy sửa':'Làm lại từ đầu')+'</button>':''}
   </div>`;
+  $('#oVoice').onclick=()=>voiceOrder();
   $('#oCust').onclick=()=>pickCustomer((cu,addr)=>{if(!cu)return;d.cust=cu.code;d.custName=cu.name;d.address=addr||cu.address||'';d.phone=cu.phone||'';d.lines.forEach(l=>{const dp=defaultPrice(cu.code,l.code);l.listPrice=dp.p;l.price=dp.p;l.src=dp.src});render()});
   const a=$('#oAddr');if(a)a.oninput=()=>d.address=a.value;
   $('#oAdd').onclick=()=>pickProduct(d.cust,p=>{if(!p)return;const ex=d.lines.find(l=>l.code===p.code);if(ex){ex.qty=r3(toNum(ex.qty)+1)}else{const dp=defaultPrice(d.cust,p.code);d.lines.push({code:p.code,name:p.name,unit:p.unit,qty:1,promo:0,swap:0,ret:0,price:dp.p,listPrice:dp.p,src:dp.src})}render()});
