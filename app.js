@@ -121,7 +121,7 @@ async function compress(file){const url=URL.createObjectURL(file);try{const img=
   let max=1280,out='';for(let t=0;t<4;t++){const k=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));const w=Math.round(img.naturalWidth*k),h=Math.round(img.naturalHeight*k);
     const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);let q=.72;out=c.toDataURL('image/jpeg',q);while(out.length>170000&&q>.35){q-=.1;out=c.toDataURL('image/jpeg',q)}if(out.length<=170000)break;max=Math.round(max*.7)}
   return out}finally{URL.revokeObjectURL(url)}}
-async function savePhotos(list,orderId,kind){const ids=[];for(const p of list){if(p.id){ids.push(p.id);continue}const id=orderId+'-'+kind+'-'+uidShort();await R.db.doc('photos/'+id).set({data:p.data,orderId,kind,by:R.uid,at:Date.now()});R.photoCache.set(id,p.data);ids.push(id)}return ids}
+async function savePhotos(list,orderId,kind){/* tải ảnh song song */return Promise.all(list.map(async p=>{if(p.id)return p.id;const id=orderId+'-'+kind+'-'+uidShort();await R.db.doc('photos/'+id).set({data:p.data,orderId,kind,by:R.uid,at:Date.now()});R.photoCache.set(id,p.data);return id}))}
 async function loadPhoto(id){if(R.photoCache.has(id))return R.photoCache.get(id);try{const s=await R.db.doc('photos/'+id).get();const d=s.exists?s.data().data:'';R.photoCache.set(id,d);return d}catch(e){return ''}}
 function photoStrip(list,editable,key){return `<div class="photos">${list.map((p,i)=>`<div class="ph" data-ph="${esc(key)}:${i}" ${p.data?`style="background-image:url('${p.data}')"`:`data-pid="${esc(p.id)}"`} role="button" aria-label="Xem ảnh">${editable?`<button class="x" data-phx="${esc(key)}:${i}" aria-label="Xóa ảnh">×</button>`:''}</div>`).join('')}
   ${editable?`<button class="phadd" data-phadd="${esc(key)}">${ICON.cam}<span>Chụp ảnh</span></button>`:''}</div>`}
@@ -309,7 +309,7 @@ function viewSaleNew(v){if(!R.odraft)R.odraft=newOrderDraft();const d=R.odraft;c
    ${d.paid?`<div class="row" style="flex-direction:column;align-items:stretch;gap:10px"><label class="f">Số tiền đã thu<input id="oPaidAmt" inputmode="numeric" class="num" value="${esc(d.paidAmount===''?total:d.paidAmount)}"></label>${pmSeg(d.payMethod)}${pmPhotos(d.payMethod,d.payPhotos,'pay')}</div>`:''}</div>
   <label class="f">Ghi chú cho đơn<textarea id="oNote" rows="2" placeholder="VD: giao trước 9h">${esc(d.note)}</textarea></label>
   <div class="card"><div class="totalbar"><span class="muted">${d.lines.length} sản phẩm · ${fmt(sumL(d,'qty'))} SL${sumL(d,'promo')?' · KM '+fmt(sumL(d,'promo')):''}</span><span class="money">${vnd(total)}</span></div></div>
-  <div id="oMsg"></div>
+  <div id="oMsg">${d._err||''}</div>
   ${R.mode==='ship'&&!d.id?`<div class="group"><div class="toggle"><div><div style="font-weight:600">Đã giao cho khách luôn</div><div class="tiny muted">${d.delivered!==false?'Đơn lưu ở trạng thái Đã giao':'Đơn vào mục Cần giao của bạn để giao sau'}</div></div><input type="checkbox" class="sw" id="oDeliv" ${d.delivered!==false?'checked':''} aria-label="Đã giao luôn"></div></div>`:''}
   <button class="btn block pri" id="oSave">${d.id?'Lưu thay đổi':R.mode==='ship'?'Lưu đơn phát sinh':'Gửi đơn hàng'}</button>
   ${d.id||d.lines.length||d.cust?'<button class="btn block" id="oReset">'+(d.id?'Hủy sửa':'Làm lại từ đầu')+'</button>':''}
@@ -340,7 +340,7 @@ function bindLineCards(root,d,rerender,moreKey){
   $$('[data-lreset]',root).forEach(b=>b.onclick=e=>{e.preventDefault();const l=d.lines[+b.dataset.lreset];l.price=l.listPrice;rerender()});
   d.lines.forEach((l,i)=>{['qty','price','promo','swap','ret'].forEach(k=>{const e=root.querySelector(`#l${i}_${k}`);if(!e)return;e.oninput=()=>{l[k]=k==='price'?Math.round(toNum(e.value)):e.value;};e.onchange=()=>{l[k]=k==='price'?Math.round(toNum(e.value)):r3(toNum(e.value));rerender()}})});
 }
-async function saveOrder(){const d=R.odraft,msg=$('#oMsg');const err=t=>msg.innerHTML='<div class="alert r">'+t+'</div>';msg.innerHTML='';
+async function saveOrder(){const d=R.odraft,msg=$('#oMsg');d._err='';const err=t=>msg.innerHTML='<div class="alert r">'+t+'</div>';msg.innerHTML='';
   if(!d.cust)return err('Chưa chọn khách hàng.');
   const lines=d.lines.map(l=>({code:l.code,name:l.name,unit:l.unit,qty:r3(toNum(l.qty)),promo:r3(toNum(l.promo)),swap:r3(toNum(l.swap)),ret:r3(toNum(l.ret)),price:Math.round(toNum(l.price)),listPrice:l.listPrice==null?null:Math.round(toNum(l.listPrice))})).filter(l=>l.qty>0||l.promo>0||l.swap>0||l.ret>0);
   if(!lines.length)return err('Đơn chưa có sản phẩm nào có số lượng.');
@@ -348,16 +348,21 @@ async function saveOrder(){const d=R.odraft,msg=$('#oMsg');const err=t=>msg.inne
   const zero=lines.find(l=>l.qty>0&&!l.price);if(zero&&!d._zeroOk){d._zeroOk=true;return msg.innerHTML=`<div class="alert w">${esc(zero.name)} đang có đơn giá 0đ. Bấm Gửi lần nữa nếu đúng là hàng không tính tiền.</div>`}
   if(d.paid){const e2=pmCheck(d.payMethod,d.payPhotos);if(e2)return err(e2)}
   const btn=$('#oSave');btn.disabled=true;
-  try{const total=lines.reduce((s,l)=>s+lineAmt(l),0);const base={cust:d.cust,custName:d.custName,address:d.address.trim(),phone:d.phone,lines,note:d.note.trim(),total,
+  const total=lines.reduce((s,l)=>s+lineAmt(l),0);const base={cust:d.cust,custName:d.custName,address:d.address.trim(),phone:d.phone,lines,note:d.note.trim(),total,
       paid:!!d.paid,paidAmount:d.paid?Math.round(d.paidAmount===''?total:toNum(d.paidAmount)):0,paidBy:d.paid?(R.mode==='ship'?'ship':'sale'):null,payMethod:d.paid?d.payMethod:null};
-    if(d.id){const o=R.orders.find(x=>x.id===d.id);if(!o||o.status!=='new')throw{message:'Đơn đã được nhận giao, không sửa được nữa.'};
-      base.payPhotos=await savePhotos(d.payPhotos,d.id,'pay');await R.db.doc('orders/'+d.id).update(Object.assign(base,{updatedAt:Date.now(),updatedBy:R.uid}));toast('Đã lưu đơn '+o.no)}
-    else{let no=nextNo('DH',d.date,R.orders),ref;for(let k=0;k<40;k++){ref=R.db.doc('orders/'+no);const s=await ref.get();if(!s.exists)break;no=bumpNo(no)}
-      base.payPhotos=await savePhotos(d.payPhotos,no,'pay');
-      const now=Date.now(),arise=R.mode==='ship',dv=arise&&d.delivered!==false;
-      await ref.set(Object.assign(base,{no,date:d.date,saleId:R.uid,status:arise?(dv?'done':'shipping'):'new',shipId:arise?R.uid:null,outside:false,retPhotos:[],createdAt:now},arise?{arising:true,saleLines:lines,shipAt:now}:{},dv?{doneAt:now}:{}));toast((arise?'Đã lưu đơn phát sinh ':'Đã gửi đơn ')+no)}
-    const wasShip=R.mode==='ship';R.odraft=newOrderDraft();R.tab=wasShip?(d.delivered!==false||d.id?'done':'todo'):'orders';render()}
-  catch(e){btn.disabled=false;err(e.code==='invalid_argument'?'Bạn không có quyền ghi dữ liệu.':e.code==='quota_exceeded'?'Kho dữ liệu đầy, báo quản lý.':'Không lưu được: '+esc(e.message||e.code||'lỗi'))}}
+  if(d.id){const o=R.orders.find(x=>x.id===d.id);if(!o||o.status!=='new'){btn.disabled=false;return err('Đơn đã được nhận giao, không sửa được nữa.')}}
+  /* GỬI NỀN: màn hình chuyển ngay, đơn hiện ngay trong danh sách; máy chủ ghi phía sau. Lỗi mạng → trả lại đơn nháp để bấm Gửi lại. */
+  const mode=R.mode,wasShip=mode==='ship',arise=wasShip&&!d.id,dv=arise&&d.delivered!==false;
+  const jobs=[];const pre=(list,oid)=>list.map(p=>{if(p.id)return p.id;const id=oid+'-pay-'+uidShort();jobs.push(()=>R.db.doc('photos/'+id).set({data:p.data,orderId:oid,kind:'pay',by:R.uid,at:Date.now()}).then(()=>R.photoCache.set(id,p.data)));return id});
+  R.odraft=newOrderDraft();R.tab=wasShip?(dv||d.id?'done':'todo'):'orders';render();toast(d.id?'Đang lưu đơn…':'Đang gửi đơn…');
+  (async()=>{try{
+    if(d.id){base.payPhotos=pre(d.payPhotos,d.id);await Promise.all(jobs.map(f=>f()));await R.db.doc('orders/'+d.id).update(Object.assign(base,{updatedAt:Date.now(),updatedBy:R.uid}));toast('✓ Đã lưu đơn '+(d.no||''))}
+    else{let no=nextNo('DH',d.date,R.orders);base.payPhotos=pre(d.payPhotos,no);const now=Date.now();
+      const mk=async()=>{for(let k=0;k<40;k++){while(R.orders.some(o=>o.id===no))no=bumpNo(no);
+          try{await R.db.doc('orders/'+no).create(Object.assign({},base,{no,date:d.date,saleId:R.uid,status:arise?(dv?'done':'shipping'):'new',shipId:arise?R.uid:null,outside:false,retPhotos:[],createdAt:now},arise?{arising:true,saleLines:lines,shipAt:now}:{},dv?{doneAt:now}:{}));return}
+          catch(e){if(e.code!=='exists')throw e;no=bumpNo(no)}}throw{message:'không cấp được số đơn'}};
+      await Promise.all([mk(),...jobs.map(f=>f())]);toast((arise?'✓ Đã lưu đơn phát sinh ':'✓ Đã gửi đơn ')+no)}
+  }catch(e){R.odraft=d;R.mode=mode;R.tab='new';render();d._err='<div class="alert r">'+(e.code==='invalid_argument'?'Bạn không có quyền ghi dữ liệu.':e.code==='quota_exceeded'?'Kho dữ liệu đầy, báo quản lý.':'Chưa gửi được (mạng yếu?): '+esc(e.message||e.code||'lỗi')+'. Đơn vẫn còn đây – bấm Gửi lại.')+'</div>';render();toast('⚠ Chưa gửi được đơn')}})()}
 
 /* ================= DANH SÁCH ĐƠN (dùng chung) ================= */
 function orderCard(o,opt){opt=opt||{};const items=(o.lines||[]).map(l=>esc(l.name)+' ×'+fmt(l.qty)).join(', ');
