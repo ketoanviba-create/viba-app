@@ -66,7 +66,7 @@ function findProd(code){code=String(code||'').trim();if(!code)return null;for(co
 function findCust(code){if(!code)return null;return R.custByCode.get(code)||null}
 function custPL(c){return c&&Array.isArray(c.pl)?c.pl:[]}
 function rebuildCustomers(){const m=new Map(),bc=new Map();const packs=[...R.custPacks.entries()].sort((a,b)=>a[0].localeCompare(b[0]));for(const [,arr] of packs)for(const c of arr||[])if(c&&c.code){m.set(idFor(c.code),c)}for(const [id,c] of R.custInd)m.set(id,c);for(const c of m.values())bc.set(c.code,c);R.customers=m;R.custByCode=bc}
-function sortedProducts(){return [...R.products.values()].sort((a,b)=>a.code.localeCompare(b.code,'vi'))}
+function sortedProducts(){return [...R.products.values()].sort((a,b)=>(toNum(b.soldQty)-toNum(a.soldQty))||a.code.localeCompare(b.code,'vi'))}/* bán chạy nhất (SL bán 3 tháng gần nhất từ MISA, trừ trả lại) lên đầu */
 function lastPrice(cust,code){let best=null;for(const o of R.orders){if(o.cust!==cust||o.status==='cancel')continue;for(const l of o.lines||[])if(l.code===code&&toNum(l.price)>0&&(!best||o.date>best.d))best={d:o.date,p:toNum(l.price)}}return best?best.p:null}
 function defaultPrice(cust,code){const pr=R.prices.get(cust);if(pr&&pr.items&&pr.items[code]!=null)return {p:toNum(pr.items[code]),src:'Bảng giá khách'};
   {const cc=findCust(cust);const gs=[...new Set([...((cc&&cc.groups)||[]),...custPL(cc)])];for(const g of gs){const gp=R.prices.get('G:'+g);if(gp&&gp.items&&gp.items[code]!=null)return {p:toNum(gp.items[code]),src:'Giá nhóm '+g.replace(/^PL\s*/i,'')}}}
