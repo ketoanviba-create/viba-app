@@ -176,88 +176,103 @@ function newOrderDraft(){return {id:null,cust:'',custName:'',address:'',phone:''
 /* ===== ĐỌC ĐƠN BẰNG GIỌNG NÓI =====
    Sale đọc 1 câu, vd: "Giao VM Hà Đông, chuối tiêu 170 gam 20 quả, nem bùi 10 gói khuyến mại 1 gói, đã chuyển khoản, ghi chú giao trước 9 giờ"
    → app tách địa điểm giao + mặt hàng + số lượng, cho xem lại, bấm "Điền vào đơn". KHÔNG tự gửi đơn. */
-const VU={kg:'kg',ki:'kg',kilo:'kg',ky:'kg',can:'kg',goi:'goi',hop:'hop',qua:'qua',trai:'qua',khay:'khay',thung:'thung',tui:'tui',bich:'tui',chai:'chai',lo:'lo',hu:'hu',nai:'nai',buong:'nai',bo:'bo',cai:'cai',chiec:'cai',kien:'kien',bao:'bao',cu:'cu',me:'me',bat:'bat',cay:'cay',lon:'lon',set:'set',vi:'vi'};
-const vUnit=u=>{const t=noAcc(u).replace(/[^a-z0-9]/g,'');return VU[t]||t};
-const VNUM={khong:0,linh:0,le:0,mot:1,hai:2,ba:3,bon:4,tu:4,nam:5,lam:5,nham:5,sau:6,bay:7,tam:8,chin:9};
-function vWordsToNum(ws){/* "hai muoi lam" → 25, "muoi" → 10, "mot tram linh nam" → 105 */let tot=0,h=0,p=null,aft=false,ok=false;
-  for(const w of ws){ok=true;if(w in VNUM){if(aft){h+=VNUM[w];aft=false;p=null}else p=VNUM[w]}
-    else if(w==='muoi'||w==='chuc'){h+=(p==null?1:p)*10;p=null;aft=true}
-    else if(w==='tram'){h+=(p==null?1:p)*100;p=null;aft=false}
-    else if(w==='nghin'||w==='ngan'){tot+=((h+(p||0))||1)*1000;h=0;p=null;aft=false}else return null}
-  return ok?tot+h+(p||0):null}
-function vNorm(text){let s=' '+noAcc(text)+' ';
+/* ---- bộ phân tích câu đọc đơn (v2): giữ DẤU để phân biệt bơ/bổ/bó, năm/nam; hiểu cả "10 gói bơ" lẫn "bơ 10 gói" ---- */
+const vLow=s=>String(s??'').normalize('NFC').toLowerCase();
+const vHasAcc=s=>/[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/.test(vLow(s));
+/* đơn vị (dạng có dấu) → mã đơn vị chuẩn */
+const VU={kg:'kg',ký:'kg',kí:'kg',ki:'kg',ky:'kg',kilo:'kg',cân:'kg',gói:'goi',goi:'goi',hộp:'hop',hop:'hop',quả:'qua',qua:'qua',trái:'qua',khay:'khay',thùng:'thung',thung:'thung',túi:'tui',tui:'tui',bịch:'tui',chai:'chai',lọ:'lo',hũ:'hu',nải:'nai',buồng:'nai',bó:'bo',cái:'cai',chiếc:'cai',kiện:'kien',bao:'bao',củ:'cu',mẹt:'me',bát:'bat',cây:'cay',lon:'lon',set:'set',vỉ:'vi',hủ:'hu',miếng:'mieng',cốc:'coc',ly:'coc'};
+const vUnit=u=>{const t=vLow(u).replace(/[^\p{L}\p{N}]/gu,'');return VU[t]||VU[noAcc(t)]||noAcc(t)};
+const VNUM={không:0,linh:0,lẻ:0,một:1,mốt:1,hai:2,ba:3,bốn:4,tư:4,năm:5,lăm:5,nhăm:5,sáu:6,bảy:7,bẩy:7,tám:8,chín:9};
+const VNUMX={mười:'m',mươi:'m',chục:'m',trăm:'t',nghìn:'n',ngàn:'n'};
+function vWordsToNum(ws){let tot=0,h=0,p=null,aft=false;
+  for(const w of ws){if(w in VNUM){if(aft){h+=VNUM[w];aft=false;p=null}else p=VNUM[w]}
+    else if(VNUMX[w]==='m'){h+=(p==null?1:p)*10;p=null;aft=true}
+    else if(VNUMX[w]==='t'){h+=(p==null?1:p)*100;p=null;aft=false}
+    else if(VNUMX[w]==='n'){tot+=((h+(p||0))||1)*1000;h=0;p=null;aft=false}else return null}
+  return tot+h+(p||0)}
+const isNumW=w=>w in VNUM||w in VNUMX;
+/* chữ → token; quy cách "170 gam" → "170g" */
+function vTokens(text){let s=' '+vLow(text)+' ';
   s=s.replace(/[,;!?\n]+/g,' | ').replace(/\.(?!\d)/g,' | ');
-  s=s.replace(/(\d)\s*(ki lo gam|kilogam|kilogram|ki lo|kilo|ky|kg)\b/g,'$1 kg ').replace(/(\d+)\s*(gam|gram|gr|g)\b/g,'$1g').replace(/(\d+)\s*(mi li lit|mililit|ml)\b/g,'$1ml');
-  s=s.replace(/\bve em\b|\bvi em\b|\bvin mart\b|\bwin mart\b/g,'vm');
-  /* chữ số đọc bằng lời ngay trước đơn vị: "hai muoi qua" → "20 qua" */
-  const UN=Object.keys(VU).join('|');s=s.replace(new RegExp('\\b((?:(?:khong|linh|le|mot|hai|ba|bon|tu|nam|lam|nham|sau|bay|tam|chin|muoi|chuc|tram|nghin|ngan)\\s+)+)('+UN+')\\b','g'),(m,ws,u)=>{const n=vWordsToNum(ws.trim().split(/\s+/));return n==null?m:n+' '+u});
-  s=s.replace(/\s+va\s+|\s+them\s+|\s+voi\s+/g,' | ');
-  return s.replace(/\s+/g,' ').trim()}
-/* tách câu thành các đoạn; mỗi đoạn kết thúc bằng 1 số lượng (+ đơn vị) */
-function vSegments(s){const T=s.split(' ').filter(Boolean),segs=[];let cur=[];
-  const flush=(qty,unit)=>{if(cur.length||qty!=null)segs.push({w:cur,qty,unit});cur=[]};
-  for(let i=0;i<T.length;i++){const t=T[i];if(t==='|'){flush(null,'');continue}
-    if(/^\d+([.,]\d+)?$/.test(t)){let q=parseFloat(t.replace(',','.'));let u='';const n1=T[i+1];
-      if(n1&&n1!=='|'&&(VU[n1]||n1==='kg')){u=VU[n1]||n1;i++;if(T[i+1]==='lo'&&u==='kg')i++}
-      if(T[i+1]==='ruoi'){q+=0.5;i++}flush(q,u);continue}
-    cur.push(t)}
-  flush(null,'');return segs}
-const vTok=s=>noAcc(s).replace(/(\d+)\s*(gam|gram|gr|g)\b/g,'$1g').split(/[^a-z0-9]+/).filter(Boolean);
-const VSYN={vm:['vm','vinmart','winmart','wm'],winmart:['vm','vinmart','winmart','wm'],vinmart:['vm','vinmart','winmart','wm']};
-function vHit(w,toks,str){for(const x of (VSYN[w]||[w])){if(toks.includes(x))return true;if(x.length>=3&&str.includes(x))return true}return false}
+  s=s.replace(/(\d+)\s*(gam|gram|gờ ram|gr|g)(?=[\s|])/g,'$1g').replace(/(\d+)\s*(mi li lít|mililít|ml)(?=[\s|])/g,'$1ml');
+  s=s.replace(/\b(ki lô gam|ki lô|kilôgam|kilogram|kilô|kí lô|ký lô)\b/g,'kg');
+  s=s.replace(/\b(vê em|vi em|vin mart|win mart|vinmart|winmart)\b/g,'vm');
+  return s.split(/\s+/).filter(Boolean).map(t=>t==='|'?t:t.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}.,]+$/gu,'')).filter(Boolean)}
+/* so khớp 1 từ nói với tên: đúng dấu = 1; khác dấu chỉ chấp nhận với từ ≥3 chữ hoặc khi câu gõ không dấu */
+function vWordHit(w,acc,flat,flatStr,noAccMode){if(acc.includes(w))return 1;const f=noAcc(w);
+  if(noAccMode||f.length>=3||/\d/.test(f)){if(flat.includes(f))return noAccMode?1:.8;if(f.length>=4&&flatStr.includes(f))return .5}return 0}
 let _vP=null,_vPsrc=null;
-function vProdIdx(){if(_vPsrc===R.products&&_vP)return _vP;_vP=[...R.products.values()].filter(p=>p.active!==false).map(p=>{const toks=vTok(p.name+' '+p.code);return {p,toks,str:toks.join(' '),u:vUnit(p.unit||'')}});_vPsrc=R.products;return _vP}
-function vMatchProd(words,unit){const q=words.filter(w=>!/^(lay|cho|them|san|pham|mat|hang|loai|cua|la|thi|nua)$/.test(w));if(!q.length)return {list:[],q};
-  const L=vProdIdx().map(x=>{let m=0;for(const w of q)if(vHit(w,x.toks,x.str))m++;let cov=0;for(const t of x.toks)if(q.includes(t))cov++;
-    return {p:x.p,sc:m/q.length,ub:unit&&x.u===unit?1:0,cov:cov/Math.max(1,x.toks.length-1),sold:toNum(x.p.soldQty)}}).filter(x=>x.sc>0)
-   .sort((a,b)=>b.sc-a.sc||b.ub-a.ub||b.cov-a.cov||b.sold-a.sold);
-  const top=L[0],sec=L[1];const sure=!!top&&top.sc===1&&(!sec||sec.sc<1||sec.ub<top.ub||(top.cov>=0.99&&sec.cov<top.cov));
+function vProdIdx(){if(_vPsrc===R.products&&_vP)return _vP;_vP=[...R.products.values()].filter(p=>p.active!==false).map(p=>{const src=vLow(p.name).replace(/(\d+)\s*(gam|gram|gr|g)\b/g,'$1g')+' '+vLow(p.code);const acc=src.split(/[^\p{L}\p{N}]+/u).filter(Boolean);const flat=acc.map(noAcc);return {p,acc,flat,str:flat.join(' '),u:vUnit(p.unit||'')}});_vPsrc=R.products;return _vP}
+const V_FILL=/^(lấy|cho|thêm|sản|phẩm|mặt|hàng|loại|của|là|thì|nữa|với|và|em|anh|chị|ơi|nhé|nha|ạ|à)$/;
+function vMatchProd(words,unit,noAccMode){const q=words.filter(w=>!V_FILL.test(w));if(!q.length)return {list:[],q,sc:0};
+  const L=vProdIdx().map(x=>{let m=0;for(const w of q)m+=vWordHit(w,x.acc,x.flat,x.str,noAccMode);let cov=0;for(const t of x.flat)if(q.some(w=>noAcc(w)===t))cov++;
+    return {p:x.p,sc:m/q.length,ub:unit&&x.u===unit?1:0,cov:cov/Math.max(1,x.flat.length-1),sold:toNum(x.p.soldQty)}}).filter(x=>x.sc>=.5)
+   .sort((a,b)=>b.sc-a.sc||b.ub-a.ub||(b.cov>=.99)-(a.cov>=.99)||b.sold-a.sold||b.cov-a.cov);
+  const top=L[0],sec=L[1];const sure=!!top&&top.sc>=.99&&(!sec||sec.sc<top.sc-.01||sec.ub<top.ub||(top.cov>=.99&&sec.cov<top.cov));
   return {list:L.slice(0,6),q,sure,sc:top?top.sc:0}}
-function vMatchLoc(words){const q=words.filter(w=>!/^(giao|cho|den|toi|tai|dia|diem|khach|o|ve|nha)$/.test(w));if(!q.length)return {list:[],sc:0};
-  const L=[];for(const x of locIndex()){const lt=x._lt||(x._lt=x.n.split(/[^a-z0-9]+/).filter(Boolean));let m=0,ml=0;const nn=x._nn||(x._nn=noAcc(x.c.name));const nt=x._nt||(x._nt=nn.split(/[^a-z0-9]+/).filter(Boolean));
-    for(const w of q){if(vHit(w,lt,x.n)){m++;ml++}else if(vHit(w,nt,nn))m++}if(m)L.push({x,sc:m/q.length,ml,len:x.n.length})}
-  L.sort((a,b)=>b.sc-a.sc||b.ml-a.ml||a.len-b.len);const top=L[0],sec=L[1];
-  return {list:L.slice(0,6),sc:top?top.sc:0,sure:!!top&&top.sc===1&&(!sec||sec.sc<1||sec.ml<top.ml)}}
+/* địa điểm giao: chỉ so với tên ĐỊA ĐIỂM (không so tên khách) */
+const VSYN={vm:['vm','vinmart','winmart','wm','vmplus']};
+const V_LFILL=/^(plus|cộng|giao|cho|đến|den|tới|toi|tại|tai|địa|dia|điểm|diem|khách|khach|ở|o|về|nhà|siêu|thị|cửa|hàng|chi|nhánh)$/;
+function vMatchLoc(words){const qa=words.filter(w=>!V_LFILL.test(w));const q=qa.map(noAcc);if(!q.length)return {list:[],sc:0};
+  const L=[];for(const x of locIndex()){if(!x.loc)continue;const lt=x._lt||(x._lt=x.n.split(/[^a-z0-9]+/).filter(Boolean));let m=0;
+    for(let i=0;i<q.length;i++){const w=q[i];if(qa[i]&&isNumW(qa[i])){const la=x._la||(x._la=vLow(x.loc).split(/[^\p{L}\p{N}]+/u));if(la.includes(qa[i]))m++;continue}const ws=VSYN[w]||[w];if(ws.some(y=>lt.includes(y)||(y.length>=4&&x.n.includes(y))))m++}
+    if(m)L.push({x,sc:m/q.length,len:x.n.length})}
+  L.sort((a,b)=>b.sc-a.sc||a.len-b.len);const top=L[0],sec=L[1];
+  return {list:L.slice(0,6),sc:top?top.sc:0,sure:!!top&&top.sc===1&&(!sec||sec.sc<1)}}
+const V_LK=['giao hàng cho','giao hàng đến','giao hàng tới','giao hàng tại','giao cho','giao đến','giao tới','giao tại','giao','địa điểm','điểm giao','khách hàng','khách','cửa hàng','siêu thị'];
 function vParse(text){const out={loc:null,lines:[],unknown:[],note:'',paid:false};let t=String(text||'');
   const nm=t.match(/(ghi chú|ghi chu|lưu ý|luu y)\s*[:,]?\s*(.*)$/i);if(nm){out.note=nm[2].trim();t=t.slice(0,nm.index)}
-  let s=vNorm(t);if(/\b(da|roi)\s+(thanh toan|chuyen khoan|ck|tra tien|tra roi)\b|\bthanh toan roi\b|\bchuyen khoan roi\b/.test(s)){out.paid=true;s=s.replace(/\b(da|roi)\s+(thanh toan|chuyen khoan|ck|tra tien|tra roi)\b|\bthanh toan roi\b|\bchuyen khoan roi\b/g,' | ')}
-  const segs=vSegments(s);const LK=/^(giao hang cho|giao hang den|giao hang toi|giao cho|giao den|giao toi|giao tai|giao|dia diem|khach hang|khach)$/;
-  segs.forEach((g,gi)=>{let w=g.w;
-    /* khuyến mại / đổi / trả của dòng trước */
-    const lead=w.join(' ');const last=out.lines[out.lines.length-1];
-    if(g.qty!=null&&last&&/^(khuyen mai|khuyen mai them|km|tang|tang them|bieu)$/.test(lead)){last.promo=g.qty;return}
-    if(g.qty!=null&&last&&/^(doi|doi hang)$/.test(lead)){last.swap=g.qty;return}
-    if(g.qty!=null&&last&&/^(tra|tra lai|tra hang|hang tra)$/.test(lead)){last.ret=g.qty;return}
-    let k0=0;for(let k=Math.min(4,w.length);k>0;k--)if(LK.test(w.slice(0,k).join(' '))){k0=k;break}
-    const isLoc=k0>0||(!out.loc&&gi===0);
-    if(isLoc&&!out.loc){const rest=w.slice(k0);
-      if(g.qty==null){const m=vMatchLoc(rest);if(m.list.length&&(k0||m.sc===1)){out.loc={said:rest.join(' '),...m};return}}
-      else{/* "giao vm ha dong chuoi tieu 170g 20 qua": tìm chỗ cắt giữa địa điểm và tên hàng */
-        let best=null;for(let c=1;c<rest.length;c++){const a=vMatchLoc(rest.slice(0,c)),b=vMatchProd(rest.slice(c),g.unit);const sc=a.sc+b.sc+(a.sure?.2:0)+(b.sure?.2:0);if(a.sc&&b.sc&&(!best||sc>best.sc))best={c,a,b,sc}}
-        if(best&&(k0||best.a.sc===1&&best.b.sc===1)){out.loc={said:rest.slice(0,best.c).join(' '),...best.a};out.lines.push({said:rest.slice(best.c).join(' '),qty:g.qty,unit:g.unit,promo:0,swap:0,ret:0,...best.b});return}
-        if(k0){out.unknown.push(g.w.join(' ')+' '+g.qty);return}}}
-    if(g.qty==null){if(w.length)out.unknown.push(w.join(' '));return}
-    const m=vMatchProd(w,g.unit);if(!m.list.length){out.unknown.push((w.join(' ')+' '+g.qty+' '+(g.unit||'')).trim());return}
-    out.lines.push({said:w.join(' '),qty:g.qty,unit:g.unit,promo:0,swap:0,ret:0,...m})});
+  const PAID=/(^|[\s,.])(đã|da)\s+(thanh toán|thanh toan|chuyển khoản|chuyen khoan|ck|trả tiền|tra tien)(\s+rồi)?(?=$|[\s,.])|(^|[\s,.])(thanh toán|chuyển khoản) rồi(?=$|[\s,.])/i;
+  if(PAID.test(t)){out.paid=true;t=t.replace(new RegExp(PAID.source,'gi'),' , ')}
+  const noAccMode=!vHasAcc(t);let T=vTokens(t);
+  /* 1) ĐỊA ĐIỂM: sau từ khoá "giao/khách/…" hoặc ở đầu câu; lấy đoạn dài nhất khớp đủ mọi từ với 1 địa điểm */
+  const starts=[];for(let i=0;i<T.length;i++){for(const k of V_LK){const kw=k.split(' ');if(kw.every((x,j)=>T[i+j]===x)){starts.push({s:i+kw.length,k:i,kw:true});break}}}
+  if(!starts.some(x=>x.k===0))starts.push({s:0,k:0,kw:false});
+  let best=null;for(const st of starts){for(let e=st.s+1;e<=Math.min(T.length,st.s+8);e++){const seg=T.slice(st.s,e);if(seg.some(w=>w==='|'||/^\d+([.,]\d+)?$/.test(w)))break;
+      const m=vMatchLoc(seg);if(m.sc<1)continue;const words=seg.filter(w=>!V_LFILL.test(w)).length;const sc=words*10+(m.sure?5:0)+(st.kw?3:0)-m.list.length*.1;if(!best||sc>best.sc)best={st,e,m,sc,seg}}}
+  if(best&&(best.st.kw||best.seg.filter(w=>!V_LFILL.test(w)).length>=2)){out.loc={said:best.seg.join(' '),...best.m};T=T.slice(0,best.st.k).concat(['|'],T.slice(best.e))}
+  else{const k=starts.find(x=>x.kw);if(k){let e=k.s;while(e<T.length&&T[e]!=='|'&&!/^\d+([.,]\d+)?$/.test(T[e])&&!isNumW(T[e]))e++;const seg=T.slice(k.s,e);if(seg.length){const m=vMatchLoc(seg);out.loc={said:seg.join(' '),...m};T=T.slice(0,k.k).concat(['|'],T.slice(e))}}}
+  /* 2) số đọc bằng chữ → số ("năm" ≠ "nam") */
+  const T2=[];for(let i=0;i<T.length;){if(isNumW(T[i])){let j=i;while(j<T.length&&isNumW(T[j]))j++;const n=vWordsToNum(T.slice(i,j));if(n!=null){T2.push(String(n));i=j;continue}}T2.push(T[i]);i++}
+  /* 3) khuyến mại / đổi / trả N → gắn vào dòng trước */
+  const isN=w=>/^\d+([.,]\d+)?$/.test(w),num=w=>parseFloat(w.replace(',','.'));
+  const KW=[['khuyến mại','promo'],['khuyến mãi','promo'],['tặng thêm','promo'],['tặng','promo'],['km','promo'],['biếu','promo'],['đổi hàng','swap'],['đổi','swap'],['trả lại','ret'],['hàng trả','ret'],['trả','ret']];
+  const items=[];let chunk=[];const chunks=[];for(const w of T2){if(w==='|'){chunks.push(chunk);chunk=[]}else chunk.push(w)}chunks.push(chunk);
+  const kwAt=(C,i)=>{for(const [k,f] of KW){const kk=k.split(' ');if(kk.every((x,j)=>C[i+j]===x)&&isN(C[i+kk.length]||''))return {f,n:kk.length}}return null};
+  for(const C of chunks){if(!C.length)continue;let mode=null,cur=null;const push=it=>{if(it)items.push(it)};
+    for(let i=0;i<C.length;i++){const w=C[i];const kw=kwAt(C,i);
+      if(kw){const j=i+kw.n;const tgt=(mode==='qf'&&cur&&cur.w.length)?cur:(items[items.length-1]||cur);if(tgt){tgt[kw.f]=num(C[j]);i=j;if(C[i+1]&&VU[C[i+1]])i++;continue}}
+      if(isN(w)){let q=num(w),u='';if(C[i+1]&&VU[C[i+1]]){u=VU[C[i+1]];i++}if(C[i+1]==='rưỡi'||C[i+1]==='ruoi'){q+=.5;i++}
+        if(mode!=='qf'&&cur&&cur.w.length&&cur.qty==null){cur.qty=q;cur.unit=u;push(cur);cur=null;mode='nf';
+          /* sau 1 dòng "tên + số", nếu ngay sau lại là số → phần còn lại đọc kiểu "số + tên" */
+          if(isN(C[i+1]||''))mode='qf';continue}
+        if(mode==='qf'&&cur)push(cur);cur={w:[],qty:q,unit:u};mode='qf';continue}
+      if(!cur)cur={w:[],qty:null,unit:''};cur.w.push(w)}
+    if(cur)push(cur)}
+  for(const it of items){if(it.qty==null||!it.w.length){if(it.w.length||it.qty!=null)out.unknown.push((it.w.join(' ')+(it.qty!=null?' '+it.qty:'')).trim());continue}
+    const m=vMatchProd(it.w,it.unit,noAccMode);if(!m.list.length){out.unknown.push((it.qty+' '+(it.unit||'')+' '+it.w.join(' ')).replace(/\s+/g,' ').trim());continue}
+    out.lines.push({said:(it.qty+' '+(it.unit?it.unit+' ':'')+it.w.join(' ')),qty:it.qty,unit:it.unit,promo:it.promo||0,swap:it.swap||0,ret:it.ret||0,...m})}
   return out}
-function voiceOrder(){const d=R.odraft||(R.odraft=newOrderDraft());const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null,on=false,P=null,base='';
-  openSheet('🎤 Đọc đơn',`<div class="tiny muted">Đọc liền 1 câu: <b>địa điểm giao</b>, rồi từng <b>mặt hàng + số lượng + đơn vị</b>. Vd: “Giao VM Hà Đông, chuối tiêu 170 gam 20 quả, nem bùi 10 gói khuyến mại 1 gói, đã chuyển khoản, ghi chú giao trước 9 giờ”.</div>
+
+function voiceOrder(){const d=R.odraft||(R.odraft=newOrderDraft());const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null,on=false,P=null,base='',locC=[];const locOpts=()=>locC.map((x,i)=>`<option value="${i}">📍 ${esc(x.loc||'(chưa có địa điểm)')} — ${esc(x.c.name)}</option>`).join('')+'<option value="-1">— Không đổi khách —</option>';
+  openSheet('🎤 Đọc đơn',`<div class="tiny muted">Đọc <b>địa điểm giao</b> trước, rồi từng mặt hàng, ví dụ: “Giao VM Hà Đông, 10 gói bơ, 5 gói xoài, 20 quả chuối tiêu 170 gam, nem bùi 10 gói khuyến mại 1 gói, đã chuyển khoản, ghi chú giao trước 9 giờ”. Đọc “số + đơn vị + tên” hay “tên + số + đơn vị” đều được; nói rõ quy cách (300 gam, 1 ký…) nếu cùng loại có nhiều gói.</div>
    ${SR?'<button class="btn block pri" id="vcMic" style="font-size:18px;padding:16px">🎤 Bấm để nói</button>':'<div class="alert w">Trình duyệt này chưa cho nhận giọng nói trực tiếp. Bấm vào ô dưới rồi bấm 🎤 trên bàn phím điện thoại để đọc.</div>'}
    <textarea id="vcT" rows="3" placeholder="Nội dung đọc sẽ hiện ở đây (có thể sửa hoặc gõ tay)"></textarea>
    <button class="btn block" id="vcGo">Phân tích</button><div id="vcR"></div>`,b=>{
     const T=b.querySelector('#vcT'),Rb=b.querySelector('#vcR'),mic=b.querySelector('#vcMic');
     const show=()=>{P=vParse(T.value);const L=P.loc;
-      const locSel=L&&L.list.length?`<select id="vcLoc">${L.list.map((y,i)=>`<option value="${i}">📍 ${esc(y.x.loc||'(chưa có địa điểm)')} — ${esc(y.x.c.name)}</option>`).join('')}<option value="-1">— Không đổi khách —</option></select>`:'';
+      locC=L?L.list.map(y=>y.x):[];const locSel=`<select id="vcLoc">${locOpts()}</select><input id="vcLocQ" placeholder="🔍 Gõ tìm địa điểm giao khác…" autocomplete="off" style="margin-top:6px">`;
       Rb.innerHTML=`<div class="sec">Kết quả – kiểm tra trước khi điền</div><div class="stack">
-       ${L?`<label class="f">${L.sure?'':'⚠️ '}Địa điểm giao <span class="tiny muted">(nghe: “${esc(L.said)}”)</span>${locSel||'<div class="alert w">Không tìm thấy địa điểm phù hợp – chọn tay sau.</div>'}</label>`:'<div class="tiny muted">Không nghe thấy địa điểm giao – giữ khách đang chọn.</div>'}
-       ${P.lines.map((l,i)=>`<div class="card stack" style="gap:6px"><div class="tiny muted">${l.sure?'':'⚠️ Chưa chắc – kiểm tra · '}nghe: “${esc(l.said)}”</div>
+       <label class="f">${L?(L.sure?'':'⚠️ ')+'Địa điểm giao <span class="tiny muted">(nghe: “'+esc(L.said)+'”)</span>':'Địa điểm giao <span class="tiny muted">(không nghe thấy – giữ khách đang chọn, hoặc gõ tìm)</span>'}${locSel}</label>${L&&!L.list.length?'<div class="alert w">Không tìm thấy địa điểm “'+esc(L.said)+'” – gõ tìm ở ô trên.</div>':''}
+       ${P.lines.map((l,i)=>`<div class="card stack" style="gap:6px"><div class="tiny muted">${l.sure?'':'⚠️ Chưa chắc – kiểm tra · '}nghe: “${esc(l.said)}”${l.ret||l.swap?' · <b>'+(l.swap?'đổi '+l.swap+' ':'')+(l.ret?'trả '+l.ret:'')+'</b>':''}</div>
          <select data-vp="${i}">${l.list.map(y=>`<option value="${esc(y.p.code)}">${esc(y.p.name)} (${esc(y.p.code)} · ${esc(y.p.unit||'')})</option>`).join('')}<option value="">— Bỏ dòng này —</option></select>
          <div class="row" style="gap:8px;padding:0"><label class="f grow">SL<input data-vq="${i}" inputmode="decimal" class="num" value="${l.qty}"></label><label class="f grow">KM<input data-vk="${i}" inputmode="decimal" class="num" value="${l.promo||0}"></label></div></div>`).join('')}
        ${P.unknown.length?`<div class="alert w">Chưa hiểu: ${P.unknown.map(x=>'“'+esc(x)+'”').join(', ')} – thêm tay nếu cần.</div>`:''}
        ${P.paid?'<div class="tiny">✓ Đánh dấu khách <b>đã thanh toán</b></div>':''}${P.note?`<div class="tiny">Ghi chú: ${esc(P.note)}</div>`:''}
        <button class="btn block pri" id="vcOk" ${L||P.lines.length?'':'disabled'}>Điền vào đơn</button><div class="tiny muted" style="text-align:center">Điền xong vẫn phải xem lại và bấm Gửi đơn hàng.</div></div>`;
+      const lq=Rb.querySelector('#vcLoc'),lqi=Rb.querySelector('#vcLocQ');let lT;if(lqi)lqi.oninput=()=>{clearTimeout(lT);lT=setTimeout(()=>{const nq=noAcc(lqi.value);if(!nq)return;locC=locIndex().filter(x=>x.loc&&wMatch(x.n,nq)).slice(0,30);lq.innerHTML=locOpts();const okb=Rb.querySelector('#vcOk');if(okb)okb.disabled=false},200)};
       const ok=Rb.querySelector('#vcOk');if(ok)ok.onclick=apply};
-    const apply=()=>{const ls=Rb.querySelector('#vcLoc');if(ls&&+ls.value>=0){const y=P.loc.list[+ls.value].x;d.cust=y.c.code;d.custName=y.c.name;d.address=y.loc||y.c.address||'';d.phone=y.c.phone||'';
+    const apply=()=>{const ls=Rb.querySelector('#vcLoc');if(ls&&+ls.value>=0&&locC[+ls.value]){const y=locC[+ls.value];d.cust=y.c.code;d.custName=y.c.name;d.address=y.loc||y.c.address||'';d.phone=y.c.phone||'';
         d.lines.forEach(l=>{const dp=defaultPrice(d.cust,l.code);l.listPrice=dp.p;l.price=dp.p;l.src=dp.src})}
       let n=0;P.lines.forEach((l,i)=>{const code=Rb.querySelector(`[data-vp="${i}"]`).value;if(!code)return;const p=findProd(code);if(!p)return;const q=toNum(Rb.querySelector(`[data-vq="${i}"]`).value),k=toNum(Rb.querySelector(`[data-vk="${i}"]`).value);if(!q&&!k)return;
         const ex=d.lines.find(x=>x.code===p.code);if(ex){ex.qty=r3(toNum(ex.qty)+q);ex.promo=r3(toNum(ex.promo)+k);ex.swap=r3(toNum(ex.swap)+toNum(l.swap));ex.ret=r3(toNum(ex.ret)+toNum(l.ret))}
