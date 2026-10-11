@@ -59,7 +59,7 @@ const R={db:null,user:null,dl:null,uid:null,isOwner:false,checked:false,
   ui:{q:'',ordQ:'',ordStatus:'',catTab:'products',catQ:'',stockQ:'',vType:'',vQ:''}};
 window.__R=R;
 const ST=()=>Object.assign({company:'VIBA FOOD',address:'',taxCode:'',dept:'',whName:'Kho chính',whCode:'KHO',whPlace:'',keeper:'',chiefAcc:'',director:'',
-  circular:'(Kèm theo Thông tư số 99/2025/TT-BTC ngày 27/10/2025 của Bộ trưởng Bộ Tài chính)',lockDate:'',salePct:2,shipFee:20000,shipFeeOut:30000,shipFeeFar:50000,shipFarCodes:'07.LB, 16.GL',shipCC:300000,shipCCOff:100000,shipKg:1350,shipPct:3.6,shipSwapStd:5.5,shipSwapPrice:18000},R.settings);
+  circular:'(Kèm theo Thông tư số 99/2025/TT-BTC ngày 27/10/2025 của Bộ trưởng Bộ Tài chính)',lockDate:'',salePct:2,shipFee:20000,shipFeeOut:30000,shipFeeFar:50000,shipFarCodes:'07.LB, 16.GL',saleBase:6000000,saleAllow:2500000,saleStd:26,saleComm:2.4,coLoc:'',shipCC:300000,shipCCOff:100000,shipKg:1350,shipPct:3.6,shipSwapStd:5.5,shipSwapPrice:18000},R.settings);
 const ROLE_NAME={admin:'Quản lý',sale:'Bán hàng',ship:'Giao hàng',kho:'Thủ kho'};
 function myRole(){if(R.isOwner)return'admin';const s=R.staff.get(R.uid);return s&&s.active!==false?s.role:null}
 function staffName(id){if(!id)return'—';const s=R.staff.get(id);return (s&&s.name)||R.names[id]||(id===R.uid?'Bạn':'Nhân viên')}
@@ -574,14 +574,13 @@ function viewSaleReport(v,uid){const [f,t]=periodRange();const all=ordersIn(f,t)
   if(!all){v.innerHTML='<h1 class="big">Báo cáo</h1>'+periodBar()+'<div class="empty">Đang tải dữ liệu…</div>';bindPeriod();return}
   const L=all.filter(o=>o.saleId===uid);const s=stats(L);const st=R.staff.get(uid);const p=st&&st.pct!=null&&st.pct!==''?toNum(st.pct):toNum(ST().salePct);
   const prod=new Map();L.filter(o=>o.status!=='cancel').forEach(o=>o.lines.forEach(l=>{const r=prod.get(l.code)||{name:l.name,unit:l.unit,qty:0,promo:0,ret:0,swap:0,amt:0};r.qty+=toNum(l.qty);r.promo+=giftQ(l);r.ret+=toNum(l.ret);r.swap+=toNum(l.swap);r.amt+=lineAmt(l);prod.set(l.code,r)}));
-  v.innerHTML=`<h1 class="big">Báo cáo bán hàng</h1><div class="stack">${periodBar()}
+  v.innerHTML=`<h1 class="big">Báo cáo bán hàng</h1><div class="stack">${uid===R.uid?attendBlock(uid):''}${periodBar()}
    <div class="kpis"><div class="kpi g"><div class="l">Tổng doanh số</div><div class="v">${vnd(s.revenue)}</div><div class="h">đã trừ hàng trả</div></div>
    <div class="kpi"><div class="l">Số đơn hàng</div><div class="v">${s.orders}</div><div class="h">${s.done} đã giao${s.cancel?' · '+s.cancel+' hủy':''}</div></div>
    <div class="kpi"><div class="l">Tổng số lượng</div><div class="v">${fmt(s.qty)}</div><div class="h">Tặng ${fmt(s.promo)}</div></div>
    <div class="kpi ${s.ret+s.swap?'w':''}"><div class="l">Tỷ lệ đổi trả</div><div class="v">${retRate(s)}</div><div class="h">đổi ${fmt(s.swap)} · trả ${fmt(s.ret)}</div></div>
-   <div class="kpi b"><div class="l">Thu nhập sale</div><div class="v">${vnd(s.revenue*p/100)}</div><div class="h">${fmt(p)}% doanh số</div></div>
    <div class="kpi ${s.unpaid?'r':''}"><div class="l">Khách còn nợ</div><div class="v">${vnd(s.unpaid)}</div><div class="h">đã thu ${vnd(s.paid)}</div></div></div>
-   <div class="sec">Theo sản phẩm</div>${prodTable(prod)}</div>`;bindPeriod()}
+   <div class="sec">Theo sản phẩm</div>${prodTable(prod)}${salePayBlock(uid)}</div>`;bindPeriod();bindPayMonth();bindAttend()}
 function prodTable(prod){const rows=[...prod.entries()].sort((a,b)=>b[1].amt-a[1].amt);
   return rows.length?`<div class="tw"><table><thead><tr><th>Sản phẩm</th><th class="n">SL</th><th class="n">Tặng</th><th class="n">Đổi</th><th class="n">Trả</th><th class="n">Doanh số</th></tr></thead><tbody>${rows.map(([c,r])=>`<tr><td>${esc(r.name)}<div class="tiny muted">${esc(c)} · ${esc(r.unit)}</div></td><td class="n">${fmt(r.qty)}</td><td class="n">${fmt0(r.promo)}</td><td class="n">${fmt0(r.swap)}</td><td class="n">${fmt0(r.ret)}</td><td class="n">${vnd(r.amt)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Chưa có đơn trong kỳ này.</div>'}
 function viewShipDone(v){const [f,t]=periodRange();const all=ordersIn(f,t);
@@ -661,6 +660,72 @@ function bindPayAdmin(){bindPayMonth();const b=$('#payXls');if(!b)return;b.oncli
   P.forEach(p=>rows.push([staffName(p.uid),p.worked,p.n,p.off,p.cc,p.kg,p.hhKg,p.pre,p.hhPct,p.chKg,p.swKg,Math.round(p.rate*10000)/100+'%',p.bonus,p.total,p.outN,p.outF,p.outFee]));
   rows.push([],['Thông số: chuyên cần '+S.shipCC+'đ, trừ '+S.shipCCOff+'đ/ngày nghỉ; HH chuối, dứa quả '+S.shipKg+'đ/kg; HH SP khác '+S.shipPct+'% giá trước KM, trước thuế; tỷ lệ đổi chuối chuẩn '+S.shipSwapStd+'%, giá '+S.shipSwapPrice+'đ/kg; ship ngoài '+S.shipFeeOut+'đ nội thành, '+S.shipFeeFar+'đ ngoại thành ('+S.shipFarCodes+'), trả ngay, không cộng lương tháng']);
   xlsxFile('Luong_ship_'+ym+'.xlsx',[{name:'Luong ship',rows,cols:[22,10,10,10,14,14,14,18,14,12,12,12,14,14,12,12,14]}])}}
+
+/* ================= CHẤM CÔNG + LƯƠNG SALE (v29) =================
+   Mỗi ngày 1 ảnh chụp từ camera + vị trí GPS bắt buộc → 1 công (attend/{uid}_{ngày}). Quản lý có thể bỏ công (void).
+   Lương cứng = saleBase × công / saleStd; phụ cấp = saleAllow × công / saleStd (vượt chuẩn trả thêm).
+   Hoa hồng = saleComm% × doanh số đơn sale lên đã giao trong tháng (theo ngày giao), giá sau KM, trước thuế, trừ hàng trả. */
+const attOf=(uid,ym)=>(R.attend||[]).filter(a=>a.uid===uid&&String(a.date||'').slice(0,7)===ym);
+function geoNow(){return new Promise((ok,no)=>{if(!navigator.geolocation)return no({code:'nogeo'});navigator.geolocation.getCurrentPosition(p=>ok(p.coords),e=>no(e),{enableHighAccuracy:true,timeout:20000,maximumAge:0})})}
+function camPhoto(){return new Promise(res=>{const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.setAttribute('capture','environment');inp.style.display='none';document.body.appendChild(inp);
+  inp.onchange=async()=>{const f=inp.files[0];inp.remove();if(!f)return res(null);try{res(await compress(f))}catch(e){toast('Không đọc được ảnh này');res(null)}};inp.click()})}
+function kmDist(a,b){const R6=6371,r=x=>x*Math.PI/180;const dl=r(b[0]-a[0]),dn=r(b[1]-a[1]);const h=Math.sin(dl/2)**2+Math.cos(r(a[0]))*Math.cos(r(b[0]))*Math.sin(dn/2)**2;return 2*R6*Math.asin(Math.sqrt(h))}
+const coLoc=()=>{const m=String(ST().coLoc||'').match(/(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)/);return m?[+m[1],+m[2]]:null};
+async function doAttend(){const place=R.ui.attPlace||'cty';let c;
+  toast('Đang lấy vị trí…');try{c=await geoNow()}catch(e){toast(e&&e.code===1?'Bạn chưa cho phép vị trí. Bật quyền vị trí cho trình duyệt/app rồi chụp lại.':'Không lấy được vị trí. Bật GPS và thử lại.');return}
+  const d=await camPhoto();if(!d)return;const day=today(),id=R.uid+'_'+day,pid='att-'+id+'-'+uidShort();
+  try{toast('Đang gửi chấm công…');await R.db.doc('photos/'+pid).set({data:d,kind:'attend',by:R.uid,at:Date.now()});R.photoCache.set(pid,d);
+    await R.db.doc('attend/'+id).set({uid:R.uid,date:day,at:Date.now(),place,lat:+c.latitude.toFixed(6),lng:+c.longitude.toFixed(6),acc:Math.round(c.accuracy||0),photo:pid,void:false});toast('✓ Đã chấm công');render()}
+  catch(e){toast('Chưa gửi được chấm công ('+(e.code||'lỗi mạng')+'), thử lại.')}}
+function attendBlock(uid){const day=today();const a=(R.attend||[]).find(x=>x.uid===uid&&x.date===day);const pl=R.ui.attPlace||'cty';
+  return `<div class="sec" style="margin-top:0">Chấm công hôm nay</div><div class="card stack" style="gap:10px"><div style="font-weight:700">${wdName(day)}, ${dmy(day)}</div>
+   ${a&&!a.void?`<div style="display:flex;gap:12px;align-items:center"><div class="ph" data-attph="${esc(a.photo)}" data-pid="${esc(a.photo)}" style="width:76px;height:76px;border-radius:12px;flex:none;background-size:cover;background-position:center" role="button" aria-label="Xem ảnh"></div><div><div style="font-weight:700;color:#1e9a5c">✓ Đã chấm công</div><div class="tiny muted" style="margin-top:4px">${new Date(a.at).toTimeString().slice(0,5)} · ${a.place==='tuyen'?'Trên tuyến':'Tại công ty'}<br>📍 ${a.lat}, ${a.lng} (±${a.acc} m) · <a href="https://www.google.com/maps/search/?api=1&query=${a.lat},${a.lng}" target="_blank" rel="noopener" style="color:var(--accent)">Bản đồ</a></div></div></div>
+    <button class="btn sm" id="attRe" style="align-self:flex-start">Chụp lại</button>`:
+   `${a&&a.void?'<div class="alert w">Ảnh chấm công hôm nay đã bị quản lý bỏ công'+(a.voidNote?': '+esc(a.voidNote):'')+'. Chụp lại nếu cần.</div>':''}<div class="seg"><button data-attpl="cty" class="${pl==='cty'?'on':''}">🏢 Tại công ty</button><button data-attpl="tuyen" class="${pl==='tuyen'?'on':''}">🛣️ Trên tuyến</button></div>
+    <button class="btn block pri" id="attGo" style="font-size:17px">📷 Chụp ảnh chấm công</button>
+    <div class="tiny muted">Bắt buộc bật vị trí (GPS). App mở camera để chụp ảnh mới, tự ghi giờ chụp và vị trí.</div>`}</div>`}
+function bindAttend(){$$('[data-attpl]').forEach(b=>b.onclick=()=>{R.ui.attPlace=b.dataset.attpl;render()});const g=$('#attGo');if(g)g.onclick=doAttend;const r=$('#attRe');if(r)r.onclick=doAttend;
+  $$('[data-attph]').forEach(el=>el.onclick=async()=>{const d=await loadPhoto(el.dataset.attph);if(d)showImg(d)});hydratePhotos(document)}
+function saleOrdersDone(ym){const [f,t]=ymRange(ym);const pf=isoOf(new Date(+f.slice(0,4),+f.slice(5,7)-1,-30));const all=ordersIn(pf<windowStart()&&f>=windowStart()?windowStart():pf,t);if(!all)return null;
+  return all.filter(o=>o.status==='done'&&(d=>d>=f&&d<=t)(o.doneAt?isoOf(new Date(o.doneAt)):o.date))}
+function salePay(uid,ym,L){const S=ST();const A=attOf(uid,ym);const cong=A.filter(a=>!a.void).length;const std=toNum(S.saleStd)||26;
+  let rev=0;for(const o of L){if(o.saleId!==uid)continue;const ck=custKind(o);for(const l of o.lines||[]){const a=lineAmt(l);if(!a)continue;const v=l.g?vatOf(l.name,ck.co):0;rev+=typeof v==='number'?a/(1+v):a}}
+  const base=Math.round(toNum(S.saleBase)*cong/std),allow=Math.round(toNum(S.saleAllow)*cong/std),comm=Math.round(rev*toNum(S.saleComm)/100);
+  return{uid,ym,cong,std,A,rev:Math.round(rev),base,allow,comm,total:base+allow+comm}}
+function salePayBlock(uid){const ym=payYm();const L=saleOrdersDone(ym);const head=`<div class="sec">Lương tháng ${ym.slice(5)}/${ym.slice(0,4)}</div>${payMonthBar()}`;
+  if(!L)return head+'<div class="empty">Đang tải…</div>';const s=salePay(uid,ym,L),S=ST();const [f,,n]=ymRange(ym);const pc=x=>String(x).replace('.',',');
+  const row=(a,b,x)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line)"><div><div style="font-weight:600">${a}</div>${x?`<div class="tiny muted" style="margin-top:2px">${x}</div>`:''}</div><div style="font-weight:700;white-space:nowrap">${b}</div></div>`;
+  const by=new Map(s.A.map(a=>[a.date,a]));const w0=(new Date(+f.slice(0,4),+f.slice(5,7)-1,1).getDay()+6)%7;let cal='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:12px;margin-top:8px">'+['T2','T3','T4','T5','T6','T7','CN'].map(d=>`<div class="muted">${d}</div>`).join('')+'<div></div>'.repeat(w0);
+  for(let d=1;d<=n;d++){const a=by.get(f.slice(0,8)+pad(d));cal+=`<div style="padding:6px 0;border-radius:8px;${a?(a.void?'background:rgba(230,150,30,.18);color:#b36b00;font-weight:700;text-decoration:line-through':'background:rgba(30,150,90,.15);color:#1e9a5c'):'opacity:.45'}">${d}</div>`}cal+='</div>';
+  const voids=s.A.filter(a=>a.void);
+  return head+`<div class="card"><div class="totalbar"><span class="muted">Tổng thu nhập tháng</span><span class="money">${vnd(s.total)}</span></div></div>
+   <div class="card"><div style="font-weight:700">📷 Ngày công: ${s.cong} công (chuẩn ${s.std})</div><div class="tiny muted">Xanh = có ảnh chấm công · Cam gạch = quản lý bỏ công · Mờ = không chấm</div>${cal}</div>
+   <div class="card">${row('Lương cứng',vnd(s.base),`${fmt(toNum(S.saleBase))} × ${s.cong} / ${s.std} công`)}${row('Phụ cấp',vnd(s.allow),`${fmt(toNum(S.saleAllow))} × ${s.cong} / ${s.std} công`)}
+    ${row('Hoa hồng',vnd(s.comm),`${pc(S.saleComm)}% × doanh số ${vnd(s.rev)}<br>(đơn đã giao trong tháng, giá sau khuyến mại, trước thuế, trừ hàng khách trả)`)}
+    <div style="display:flex;justify-content:space-between;padding:12px 0 2px;border-top:2px solid var(--line)"><b>Tổng</b><b>${vnd(s.total)}</b></div></div>
+   ${voids.length?`<div class="tiny muted">${voids.map(a=>`Ngày ${dmy(a.date).slice(0,5)}: quản lý bỏ công${a.voidNote?' – “'+esc(a.voidNote)+'”':''}.`).join('<br>')}</div>`:''}`}
+function saleIds(){const ids=new Set([...R.staff.entries()].filter(([u,x])=>x&&x.role==='sale'&&x.active!==false).map(([u])=>u));(R.attend||[]).forEach(a=>ids.add(a.uid));return [...ids]}
+function attAdmin(){const ym=payYm();const sales=saleIds();if(!sales.length)return '';const u=R.ui.attSale&&sales.includes(R.ui.attSale)?R.ui.attSale:sales[0];
+  const A=attOf(u,ym).sort((a,b)=>a.date<b.date?-1:1);const co=coLoc();const sel=A.find(a=>a.id===R.ui.attSel);
+  return `<div class="sec">Chấm công sale</div><div style="display:flex;gap:8px"><select id="attSaleSel" style="flex:1">${sales.map(x=>`<option value="${esc(x)}" ${x===u?'selected':''}>${esc(staffName(x))}</option>`).join('')}</select></div>
+   <div class="tiny muted">${A.filter(a=>!a.void).length} công tháng ${ym.slice(5)}/${ym.slice(0,4)} · bấm ảnh để xem chi tiết, bỏ công</div>
+   ${A.length?`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">${A.map(a=>`<div style="text-align:center" data-attsel="${esc(a.id)}" role="button"><div class="ph" data-pid="${esc(a.photo)}" style="width:100%;aspect-ratio:1;border-radius:10px;background-size:cover;background-position:center;${a.void?'opacity:.35':''}"></div><div class="tiny" style="font-weight:600;margin-top:3px;${a.void?'text-decoration:line-through':''}">${dmy(a.date).slice(0,5)}</div><div class="tiny muted">${new Date(a.at).toTimeString().slice(0,5)} · ${a.place==='tuyen'?'Tuyến':'CT'}</div></div>`).join('')}</div>`:'<div class="empty">Chưa có ảnh chấm công trong tháng.</div>'}
+   ${sel?`<div class="card"><div style="display:flex;gap:12px"><div class="ph" data-pid="${esc(sel.photo)}" data-attph="${esc(sel.photo)}" role="button" style="width:110px;height:110px;flex:none;border-radius:12px;background-size:cover;background-position:center"></div><div class="stack" style="gap:6px"><div style="font-weight:700">${dmy(sel.date)} · ${new Date(sel.at).toTimeString().slice(0,5)}</div><div class="tiny muted">Khai: ${sel.place==='tuyen'?'Trên tuyến':'Tại công ty'}<br>📍 ${sel.lat}, ${sel.lng} (±${sel.acc} m)${co?' · cách công ty '+fmt(Math.round(kmDist(co,[sel.lat,sel.lng])*10)/10)+' km':''} · <a href="https://www.google.com/maps/search/?api=1&query=${sel.lat},${sel.lng}" target="_blank" rel="noopener" style="color:var(--accent)">Bản đồ</a>${sel.void?'<br><b style="color:#b36b00">Đã bỏ công'+(sel.voidNote?': '+esc(sel.voidNote):'')+'</b>':''}</div>
+    ${sel.void?'<button class="btn sm" id="attUnvoid">Tính lại công ngày này</button>':'<input id="attNote" placeholder="Lý do bỏ công (nếu có)"><button class="btn sm danger" id="attVoid">Bỏ công ngày này</button>'}</div></div></div>`:''}`}
+function salePayAdmin(){const ym=payYm();const L=saleOrdersDone(ym);const head=`<div class="sec">Lương sale tháng ${ym.slice(5)}/${ym.slice(0,4)}</div>`;if(!L)return head+'<div class="empty">Đang tải…</div>';
+  const P=saleIds().map(u=>salePay(u,ym,L)).sort((a,b)=>b.total-a.total);if(!P.length)return head+'<div class="empty">Chưa có tài khoản sale.</div>';
+  return head+`<div class="tw"><table><thead><tr><th>Sale</th><th class="n">Công</th><th class="n">Lương cứng</th><th class="n">Phụ cấp</th><th class="n">Doanh số</th><th class="n">Hoa hồng</th><th class="n">Tổng</th></tr></thead><tbody>${P.map(p=>`<tr><td>${esc(staffName(p.uid))}</td><td class="n">${p.cong}</td><td class="n">${fmt0(p.base)}</td><td class="n">${fmt0(p.allow)}</td><td class="n">${fmt0(p.rev)}</td><td class="n">${fmt0(p.comm)}</td><td class="n"><b>${fmt0(p.total)}</b></td></tr>`).join('')}</tbody></table></div>
+   <button class="btn" id="salePayXls">Xuất Excel bảng lương sale</button>`}
+function bindSaleAdmin(){const s=$('#attSaleSel');if(s)s.onchange=()=>{R.ui.attSale=s.value;R.ui.attSel=null;render()};
+  $$('[data-attsel]').forEach(el=>el.onclick=()=>{R.ui.attSel=R.ui.attSel===el.dataset.attsel?null:el.dataset.attsel;render()});
+  $$('[data-attph]').forEach(el=>el.onclick=async e=>{e.stopPropagation();const d=await loadPhoto(el.dataset.attph);if(d)showImg(d)});
+  const v=$('#attVoid');if(v)v.onclick=async()=>{const n=($('#attNote')||{}).value||'';try{await R.db.doc('attend/'+R.ui.attSel).update({void:true,voidBy:R.uid,voidAt:Date.now(),voidNote:n.trim()});toast('Đã bỏ công')}catch(e){toast('Không lưu được')}};
+  const uv=$('#attUnvoid');if(uv)uv.onclick=async()=>{try{await R.db.doc('attend/'+R.ui.attSel).update({void:false,voidNote:''});toast('Đã tính lại công')}catch(e){toast('Không lưu được')}};
+  const x=$('#salePayXls');if(x)x.onclick=()=>{const ym=payYm();const L=saleOrdersDone(ym)||[];const S=ST();const P=saleIds().map(u=>salePay(u,ym,L));
+    const rows=[['Sale','Công','Công chuẩn','Lương cứng','Phụ cấp','Doanh số (sau KM, trước thuế)','Hoa hồng','Tổng']];P.forEach(p=>rows.push([staffName(p.uid),p.cong,p.std,p.base,p.allow,p.rev,p.comm,p.total]));
+    rows.push([],['Thông số: lương cứng '+S.saleBase+'đ, phụ cấp '+S.saleAllow+'đ / '+S.saleStd+' công; hoa hồng '+S.saleComm+'% doanh số đơn đã giao (sau KM, trước thuế, trừ hàng trả)']);
+    const det=[['Sale','Ngày','Giờ','Nơi','Vĩ độ','Kinh độ','Sai số (m)','Bỏ công','Lý do']];saleIds().forEach(u=>attOf(u,ym).sort((a,b)=>a.date<b.date?-1:1).forEach(a=>det.push([staffName(u),a.date,new Date(a.at).toTimeString().slice(0,5),a.place==='tuyen'?'Trên tuyến':'Tại công ty',a.lat,a.lng,a.acc,a.void?'Có':'',a.voidNote||''])));
+    xlsxFile('Luong_sale_'+ym+'.xlsx',[{name:'Luong sale',rows,cols:[24,8,10,14,14,18,14,14]},{name:'Cham cong',rows:det,cols:[24,12,8,12,11,11,10,8,30]}])}}
 function shipStats(L){const s=stats(L);const S=ST();s.income=s.normal*toNum(S.shipFee)+s.outside*toNum(S.shipFeeOut);s.incomeOut=s.outside*toNum(S.shipFeeOut);s.incomeMonth=s.normal*toNum(S.shipFee);return s}
 function viewShipReport(v,uid){const [f,t]=periodRange();const all=ordersIn(f,t);
   if(!all){v.innerHTML='<h1 class="big">Báo cáo</h1>'+periodBar()+'<div class="empty">Đang tải…</div>';bindPeriod();return}
@@ -848,8 +913,8 @@ function viewDash(v){const [f,t]=periodRange();const all=ordersIn(f,t);
    <div class="tiny muted">Giao theo đơn = SL bán + khuyến mại + hàng đổi của các đơn đã giao trong kỳ. Lệch khác 0 nghĩa là chưa lập phiếu xuất, hoặc phiếu xuất khác với số thực giao.</div>
    <button class="btn" id="dXls">Xuất Excel chi tiết đơn hàng trong kỳ</button>
    <button class="btn" id="dMisa">Xuất file nhập MISA (đơn đã giao trong kỳ)</button>
-   ${payAdmin()}</div>`;
-  bindPeriod();$('#dXls').onclick=()=>exportOrders(all,f,t);$('#dMisa').onclick=()=>exportMisaSale(all,f,t);bindPayAdmin()}
+   ${payAdmin()}${attAdmin()}${salePayAdmin()}</div>`;
+  bindPeriod();$('#dXls').onclick=()=>exportOrders(all,f,t);$('#dMisa').onclick=()=>exportMisaSale(all,f,t);bindPayAdmin();bindSaleAdmin();hydratePhotos(document)}
 /* ===== XUẤT FILE NHẬP MISA (đơn Đã giao) – mẫu "Nhập bán hàng hóa từ Excel" của MISA AMIS, tiêu đề dòng 1 =====
    Số CT: chưa thu → bh… ; tiền mặt → ct… ; chuyển khoản → ntn… (+ số đơn app, VD DH2610-004 → bh2610004)
    KM (tặng thêm hàng) trừ thẳng vào đơn giá; hàng đổi (xuất bù hỏng) → dòng mã hỗ trợ/đổi trả 0đ, TK 5112
@@ -1003,7 +1068,7 @@ function templateXls(T){if(T==='products')xlsxFile('Mau_san_pham.xlsx',[{name:'S
 function viewSettings(v){const s=ST(),ro=!R.isOwner;const F=(k,l,t)=>`<label class="f">${l}<input id="s_${k}" ${t?'type="'+t+'"':''} value="${esc(s[k]??'')}" ${ro?'readonly':''} ${t==='number'?'class="num"':''}></label>`;
   v.innerHTML=`<h1 class="big">Cài đặt</h1><div class="stack">${ro?'<div class="alert w">Chỉ chủ tài khoản sửa được cài đặt.</div>':''}
    <div class="sec" style="margin-top:0">Tuyến giao</div><div id="rtEd" class="stack"></div>
-   <div class="sec">Lương & hoa hồng</div><div class="card"><div class="fgrid">${F('salePct','% hoa hồng sale (mặc định)','number')}</div></div>
+   <div class="sec">Lương & hoa hồng</div><div class="card"><div class="fgrid">${F('saleBase','Lương cứng sale (đ/tháng)','number')}${F('saleAllow','Phụ cấp sale (đ/tháng)','number')}${F('saleStd','Công chuẩn (công/tháng)','number')}${F('saleComm','Hoa hồng sale (% doanh số)','number')}${F('coLoc','Vị trí công ty (vĩ độ, kinh độ)')}</div><div class="tiny muted" style="margin-top:8px">Mỗi ngày sale chụp 1 ảnh chấm công kèm vị trí = 1 công. Đi quá công chuẩn trả theo công thực tế. Hoa hồng tính trên đơn đã giao, giá sau khuyến mại, trước thuế, trừ hàng khách trả.</div></div>
    <div class="sec">Lương ship</div><div class="card"><div class="fgrid">${F('shipCC','Thưởng chuyên cần (đ/tháng)','number')}${F('shipCCOff','Trừ mỗi ngày nghỉ (đ)','number')}${F('shipKg','Hoa hồng chuối, dứa quả (đ/kg)','number')}${F('shipPct','Hoa hồng SP khác (% doanh số trước thuế)','number')}${F('shipSwapStd','Tỷ lệ đổi chuối công ty cho phép (%)','number')}${F('shipSwapPrice','Giá tính thưởng đổi trả (đ/kg)','number')}${F('shipFeeOut','Công đơn ship ngoài nội thành (đ/đơn, trả ngay)','number')}${F('shipFeeFar','Công đơn ship ngoài ngoại thành (đ/đơn, trả ngay)','number')}${F('shipFarCodes','Mã khu vực ngoại thành')}</div><div class="tiny muted" style="margin-top:8px">Ngày công = ngày có đơn giao thành công. Hoa hồng tính trên hàng bán (gồm hàng khách trả) + đổi + tặng, theo giá trước khuyến mại, trước thuế. Chuối gói/quả quy kg theo trọng lượng trên tên (gói 600g = 0,6 kg); dứa quả tính theo kg. Ngoại thành nhận theo mã đầu địa chỉ giao, VD (07.LB) Long Biên, (16.GL) Gia Lâm.</div></div>
    <div class="sec">Thông tin in phiếu</div><div class="card"><div class="fgrid">${F('company','Tên công ty')}${F('address','Địa chỉ')}${F('taxCode','Mã số thuế')}${F('dept','Bộ phận')}${F('whName','Tên kho')}${F('whCode','Mã kho (MISA)')}${F('whPlace','Địa điểm kho')}${F('keeper','Thủ kho')}${F('chiefAcc','Kế toán trưởng')}${F('director','Giám đốc')}</div>
    <div style="margin-top:12px">${F('circular','Dòng ghi chú mẫu chứng từ')}</div></div>
@@ -1011,7 +1076,7 @@ function viewSettings(v){const s=ST(),ro=!R.isOwner;const F=(k,l,t)=>`<label cla
    ${ro?'':'<button class="btn block pri" id="sSave">Lưu cài đặt</button>'}
    <div class="tiny muted">Dữ liệu: ${R.products.size} sản phẩm · ${R.customers.size} khách · ${R.orders.length} đơn (3 tháng) · ${R.vouchers.length} phiếu kho.</div></div>`;
   routeEditor($('#rtEd'),ro);
-  const b=$('#sSave');if(b)b.onclick=async()=>{const NUMK=['salePct','shipFee','shipFeeOut','shipFeeFar','shipCC','shipCCOff','shipKg','shipPct','shipSwapStd','shipSwapPrice'];const keys=['salePct','shipFee','shipFeeOut','shipFeeFar','shipFarCodes','shipCC','shipCCOff','shipKg','shipPct','shipSwapStd','shipSwapPrice','company','address','taxCode','dept','whName','whCode','whPlace','keeper','chiefAcc','director','circular','lockDate'];const d={};
+  const b=$('#sSave');if(b)b.onclick=async()=>{const NUMK=['saleBase','saleAllow','saleStd','saleComm','salePct','shipFee','shipFeeOut','shipFeeFar','shipCC','shipCCOff','shipKg','shipPct','shipSwapStd','shipSwapPrice'];const keys=['saleBase','saleAllow','saleStd','saleComm','coLoc','salePct','shipFee','shipFeeOut','shipFeeFar','shipFarCodes','shipCC','shipCCOff','shipKg','shipPct','shipSwapStd','shipSwapPrice','company','address','taxCode','dept','whName','whCode','whPlace','keeper','chiefAcc','director','circular','lockDate'];const d={};
     keys.forEach(k=>{const el=$('#s_'+k);const v=el?el.value.trim():String(s[k]??'');d[k]=NUMK.includes(k)?toNum(v):v});try{await R.db.doc('config/main').set(d);R.settings=d;toast('Đã lưu cài đặt')}catch(e){toast('Không lưu được')}}}
 
 function routeEditor(box,ro){const L=R.ui.rtEdit||(R.ui.rtEdit=JSON.parse(JSON.stringify(RT())));const ships=[...R.staff.entries()].filter(([i,s])=>s.role==='ship'&&s.active!==false);
@@ -1097,6 +1162,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   sub('config',s=>{const d=s.docs.find(x=>x.id==='custGroups');R.cgroups=d?d.data():null;const v=s.docs.find(x=>x.id==='vatRates');R.vat=v?v.data():null});
   sub('config',s=>{const rt=s.docs.find(x=>x.id==='routes');const nr=rt?rt.data():null;if(JSON.stringify(nr)!==JSON.stringify(R.routes)){R.routes=nr;R.ui.rtSel=null}const d=s.docs.find(x=>x.id==='prodAlias');const it=(d&&d.data()||{}).items||{};R.palias=Object.fromEntries(Object.entries(it).map(([k,v])=>[k,(Array.isArray(v)?v:String(v||'').split(/[;|\n]/)).map(x=>String(x).trim()).filter(Boolean)]))});
   sub('requests',s=>{R.requests=new Map(s.docs.map(d=>[d.id,d.data()]))});
+  sub('attend',s=>{R.attend=s.docs.map(d=>Object.assign({},d.data(),{id:d.id}))});
   sub('products',s=>{R.allProducts=s.docs.map(d=>d.data()).filter(p=>p&&p.code);R.products=new Map(s.docs.map(d=>[d.id,d.data()]).filter(x=>x[1]&&x[1].code&&/^(HH|TP)/i.test(String(x[1].code).trim())&&!PROD_HIDE.test(' '+noAcc(x[1].name).replace(/[^a-z0-9]+/g,' ')+' ')))});/* chỉ dùng mã hàng hoá HH và thành phẩm TP */
   sub('customers',s=>{R.custInd=new Map(s.docs.map(d=>[d.id,d.data()]).filter(x=>x[1]&&x[1].code));rebuildCustomers()});
   sub('custpack',s=>{R.custPacks=new Map(s.docs.map(d=>[d.id,(d.data()||{}).items||[]]));rebuildCustomers()});
