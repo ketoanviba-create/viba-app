@@ -59,7 +59,7 @@ const R={db:null,user:null,dl:null,uid:null,isOwner:false,checked:false,
   ui:{q:'',ordQ:'',ordStatus:'',catTab:'products',catQ:'',stockQ:'',vType:'',vQ:''}};
 window.__R=R;
 const ST=()=>Object.assign({company:'VIBA FOOD',address:'',taxCode:'',dept:'',whName:'Kho chính',whCode:'KHO',whPlace:'',keeper:'',chiefAcc:'',director:'',
-  circular:'(Kèm theo Thông tư số 99/2025/TT-BTC ngày 27/10/2025 của Bộ trưởng Bộ Tài chính)',lockDate:'',salePct:2,shipFee:20000,shipFeeOut:30000,shipCC:300000,shipCCOff:100000,shipKg:1350,shipPct:3.6,shipSwapStd:5.5,shipSwapPrice:18000},R.settings);
+  circular:'(Kèm theo Thông tư số 99/2025/TT-BTC ngày 27/10/2025 của Bộ trưởng Bộ Tài chính)',lockDate:'',salePct:2,shipFee:20000,shipFeeOut:30000,shipFeeFar:50000,shipFarCodes:'07.LB, 16.GL',shipCC:300000,shipCCOff:100000,shipKg:1350,shipPct:3.6,shipSwapStd:5.5,shipSwapPrice:18000},R.settings);
 const ROLE_NAME={admin:'Quản lý',sale:'Bán hàng',ship:'Giao hàng',kho:'Thủ kho'};
 function myRole(){if(R.isOwner)return'admin';const s=R.staff.get(R.uid);return s&&s.active!==false?s.role:null}
 function staffName(id){if(!id)return'—';const s=R.staff.get(id);return (s&&s.name)||R.names[id]||(id===R.uid?'Bạn':'Nhân viên')}
@@ -602,22 +602,40 @@ const payYm=()=>R.ui.payYm||today().slice(0,7);
 function payOrders(ym){const [f,t]=ymRange(ym);const pf=isoOf(new Date(+f.slice(0,4),+f.slice(5,7)-1,-30));const all=ordersIn(pf<windowStart()&&f>=windowStart()?windowStart():pf,t);if(!all)return null;
   return all.filter(o=>o.status==='done'&&o.shipId&&o.doneAt&&(d=>d>=f&&d<=t)(isoOf(new Date(o.doneAt))))}
 function shipPay(uid,ym,L){const S=ST(),[f,t,n]=ymRange(ym);const td=today();const upto=t<td?n:(f>td?0:+td.slice(8,10));
-  const days=new Set(),kgRows=new Map();let kg=0,chKg=0,swKg=0,pre=0,noKg=[];
+  const days=new Set(),kgRows=new Map();let kg=0,kgS=0,kgW=0,kgG=0,chKg=0,swKg=0,pre=0,preS=0,preW=0,preG=0,noKg=[],outN=0,outF=0;
+  const far=String(S.shipFarCodes||'').split(/[,;\s]+/).map(x=>noAcc(x)).filter(Boolean);
   for(const o of L){if(o.shipId!==uid)continue;days.add(isoOf(new Date(o.doneAt)));const ck=custKind(o);
-    for(const l of o.lines||[]){const net=Math.max(0,toNum(l.qty)-toNum(l.ret));const pk=payKg(l);
-      if(pk){if(!pk.k&&net){noKg.push(l.name);continue}const q=net*pk.k,sw=toNum(l.swap)*pk.k;kg+=q;if(pk.ch){chKg+=q;swKg+=sw}
-        const r=kgRows.get(l.code)||{name:l.name,unit:l.unit,qty:0,kg:0,sw:0,ch:pk.ch};r.qty+=net;r.kg+=q;r.sw+=pk.ch?sw:0;kgRows.set(l.code,r)}
-      else{const a=lineAmt(l);if(!a)continue;let v=l.g?vatOf(l.name,ck.co):0;pre+=typeof v==='number'?a/(1+v):a}}}
+    if(o.outside){const m=noAcc(o.address||'').match(/^\(([^)]*)\)/);const code=m?m[1].replace(/\s*-.*$/,'').trim():'';if(far.some(x=>code===x))outF++;else outN++}
+    for(const l of o.lines||[]){const q0=toNum(l.qty),rt=toNum(l.ret),sw0=toNum(l.swap),gq=giftQ(l);const net=Math.max(0,q0-rt);const base=q0+sw0+gq;if(!base)continue;const pk=payKg(l);
+      if(pk){if(!pk.k){noKg.push(l.name);continue}kg+=base*pk.k;kgS+=q0*pk.k;kgW+=sw0*pk.k;kgG+=gq*pk.k;if(pk.ch){chKg+=net*pk.k;swKg+=sw0*pk.k}
+        const r=kgRows.get(l.code)||{name:l.name,qty:0,kg:0,sw:0,ch:pk.ch};r.qty+=base;r.kg+=base*pk.k;r.sw+=pk.ch?sw0*pk.k:0;kgRows.set(l.code,r)}
+      else{let up,gross;if(toNum(l.price)){up=unitNet(l);gross=!!l.g}else{up=toNum(defaultPrice(o.cust,l.code).p);gross=true}if(!up)continue;
+        const v=gross?vatOf(l.name,ck.co):0;const u=typeof v==='number'?up/(1+v):up;pre+=base*u;preS+=q0*u;preW+=sw0*u;preG+=gq*u}}}
   const worked=[...days].filter(d=>d>=f&&d<=t).length;const off=Math.max(0,upto-[...days].filter(d=>+d.slice(8,10)<=upto).length);
   const cc=Math.max(0,toNum(S.shipCC)-off*toNum(S.shipCCOff));const hhKg=Math.round(kg*toNum(S.shipKg));const hhPct=Math.round(pre*toNum(S.shipPct)/100);
   const rate=chKg?swKg/chKg:0,std=toNum(S.shipSwapStd)/100;const bonus=chKg&&rate<std?Math.round((std-rate)*chKg*toNum(S.shipSwapPrice)):0;
-  return{uid,ym,n,upto,days,worked,off,cc,kg:r3(kg),chKg:r3(chKg),swKg:r3(swKg),rate,pre:Math.round(pre),hhKg,hhPct,bonus,total:cc+hhKg+hhPct+bonus,kgRows,noKg:[...new Set(noKg)]}}
+  const outFee=outN*toNum(S.shipFeeOut)+outF*toNum(S.shipFeeFar);
+  return{uid,ym,n,upto,days,worked,off,cc,kg:r3(kg),kgS:r3(kgS),kgW:r3(kgW),kgG:r3(kgG),chKg:r3(chKg),swKg:r3(swKg),rate,pre:Math.round(pre),preS:Math.round(preS),preW:Math.round(preW),preG:Math.round(preG),hhKg,hhPct,bonus,total:cc+hhKg+hhPct+bonus,outN,outF,outFee,kgRows,noKg:[...new Set(noKg)]}}
 const pctS=x=>(Math.round(x*10000)/100).toLocaleString('vi-VN')+'%';
 function payMonthBar(){const ym=payYm(),d=new Date(),c=isoOf(d).slice(0,7),p=isoOf(new Date(d.getFullYear(),d.getMonth()-1,1)).slice(0,7);
   return `<div class="seg"><button data-pym="${c}" class="${ym===c?'on':''}">Tháng này</button><button data-pym="${p}" class="${ym===p?'on':''}">Tháng trước</button></div><input type="month" id="pymIn" value="${ym}" max="${c}">`}
 function bindPayMonth(){$$('[data-pym]').forEach(b=>b.onclick=()=>{R.ui.payYm=b.dataset.pym;render()});const i=$('#pymIn');if(i)i.onchange=()=>{if(i.value){R.ui.payYm=i.value;render()}}}
+/* tổng hợp giao trong ngày của 1 ship (theo ngày xác nhận đã giao) */
+function dayBlock(uid){const d=R.ui.dayRep||today();const L=R.orders.filter(o=>o.status==='done'&&o.shipId===uid&&o.doneAt&&isoOf(new Date(o.doneAt))===d);
+  const m=new Map();L.forEach(o=>(o.lines||[]).forEach(l=>{const r=m.get(l.code)||{name:l.name,unit:l.unit,q:0,g:0,w:0,r:0};r.q+=toNum(l.qty);r.g+=giftQ(l);r.w+=toNum(l.swap);r.r+=toNum(l.ret);m.set(l.code,r)}));
+  const rows=[...m.values()].sort((a,b)=>(b.q+b.g+b.w)-(a.q+a.g+a.w));const dd=new Date(d+'T00:00:00');
+  return `<div class="sec">Tổng hợp giao trong ngày</div><div style="display:flex;gap:8px;align-items:center"><button class="btn sm" data-dstep="-1" aria-label="Ngày trước">‹</button><input type="date" id="dayIn" value="${d}" max="${today()}" style="flex:1"><button class="btn sm" data-dstep="1" aria-label="Ngày sau" ${d>=today()?'disabled':''}>›</button></div>
+   <div class="tiny muted">${wdName(d)}, ${dmy(d)} · ${L.length} đơn đã giao${L.filter(o=>o.outside).length?' · '+L.filter(o=>o.outside).length+' đơn ship ngoài':''}</div>
+   ${rows.length?`<div class="tw"><table><thead><tr><th>Sản phẩm</th><th class="n">SL bán</th><th class="n">Tặng</th><th class="n">Đổi</th><th class="n">Trả</th><th class="n">Tổng xuất</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}<div class="tiny muted">${esc(r.unit||'')}</div></td><td class="n">${fmt(r3(r.q))}</td><td class="n">${fmt0(r3(r.g))}</td><td class="n">${fmt0(r3(r.w))}</td><td class="n">${fmt0(r3(r.r))}</td><td class="n"><b>${fmt(r3(r.q+r.g+r.w))}</b></td></tr>`).join('')}</tbody></table></div>
+   <div class="tiny muted">Tổng xuất = SL bán + tặng + đổi (hàng khách trả lại ghi riêng ở cột Trả).</div><button class="btn" id="dayXls">Xuất Excel tổng hợp ngày</button>`:'<div class="empty">Không có đơn giao trong ngày này.</div>'}`}
+function bindDay(uid){const i=$('#dayIn');if(!i)return;i.onchange=()=>{if(i.value){R.ui.dayRep=i.value;render()}};
+  $$('[data-dstep]').forEach(b=>b.onclick=()=>{const d=R.ui.dayRep||today();const nd=isoAdd(d,+b.dataset.dstep);if(nd<=today()){R.ui.dayRep=nd;render()}});
+  const x=$('#dayXls');if(x)x.onclick=()=>{const d=R.ui.dayRep||today();const L=R.orders.filter(o=>o.status==='done'&&o.shipId===uid&&o.doneAt&&isoOf(new Date(o.doneAt))===d);const m=new Map();
+    L.forEach(o=>(o.lines||[]).forEach(l=>{const r=m.get(l.code)||[l.code,l.name,l.unit,0,0,0,0];r[3]+=toNum(l.qty);r[4]+=giftQ(l);r[5]+=toNum(l.swap);r[6]+=toNum(l.ret);m.set(l.code,r)}));
+    const rows=[['Mã','Sản phẩm','ĐVT','SL bán','Tặng','Đổi','Trả','Tổng xuất']].concat([...m.values()].map(r=>r.concat([r[3]+r[4]+r[5]])));
+    xlsxFile('Tong_hop_giao_'+staffName(uid).replace(/\s+/g,'_')+'_'+d+'.xlsx',[{name:'Tong hop ngay',rows,cols:[10,34,7,10,8,8,8,10]}])}}
 function payBlock(uid){const ym=payYm();const L=payOrders(ym);const head=`<div class="sec">Lương tháng ${ym.slice(5)}/${ym.slice(0,4)}</div>${payMonthBar()}`;
-  if(!L)return head+'<div class="empty">Đang tải…</div>';const s=shipPay(uid,ym,L),S=ST();const [f]=ymRange(ym);
+  if(!L)return head+'<div class="empty">Đang tải…</div>';const s=shipPay(uid,ym,L),S=ST();const [f]=ymRange(ym);const pc=x=>String(x).replace('.',',');
   const row=(a,b,x)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line)"><div><div style="font-weight:600">${a}</div>${x?`<div class="tiny muted" style="margin-top:2px">${x}</div>`:''}</div><div style="font-weight:700;white-space:nowrap">${b}</div></div>`;
   const w0=(new Date(+f.slice(0,4),+f.slice(5,7)-1,1).getDay()+6)%7;let cal='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:12px;margin-top:8px">'+['T2','T3','T4','T5','T6','T7','CN'].map(d=>`<div class="muted">${d}</div>`).join('')+'<div></div>'.repeat(w0);
   for(let d=1;d<=s.n;d++){const iso=f.slice(0,8)+pad(d);const w=s.days.has(iso),fut=d>s.upto;cal+=`<div style="padding:6px 0;border-radius:8px;${w?'background:rgba(30,150,90,.15);color:#1e9a5c':fut?'opacity:.4':'background:rgba(220,60,60,.15);color:#d64545;font-weight:700'}">${d}</div>`}cal+='</div>';
@@ -625,23 +643,24 @@ function payBlock(uid){const ym=payYm();const L=payOrders(ym);const head=`<div c
   return head+`<div class="card"><div class="totalbar"><span class="muted">Tổng thu nhập tháng${s.upto<s.n?' (tạm tính)':''}</span><span class="money">${vnd(s.total)}</span></div></div>
    <div class="card"><div style="font-weight:700">📅 Ngày công: ${s.worked}/${s.n} ngày</div><div class="tiny muted">Xanh = có đơn giao thành công · Đỏ = nghỉ${s.upto<s.n?' · mờ = chưa tới':''}</div>${cal}</div>
    <div class="card">${row('Thưởng chuyên cần',vnd(s.cc),`${fmt(toNum(S.shipCC))} − nghỉ ${s.off} ngày × ${fmt(toNum(S.shipCCOff))}`)}
-    ${row('Hoa hồng chuối, dứa quả',vnd(s.hhKg),`${fmt(s.kg)} kg × ${fmt(toNum(S.shipKg))}đ`)}
-    ${row('Hoa hồng sản phẩm khác',vnd(s.hhPct),`${String(S.shipPct).replace('.',',')}% × doanh số trước thuế ${vnd(s.pre)}`)}
-    ${row('Thưởng đổi trả chuối',vnd(s.bonus),s.chKg?`Tỷ lệ đổi chuối ${pctS(s.rate)} (${fmt(s.swKg)} kg / ${fmt(s.chKg)} kg) ${s.rate<toNum(S.shipSwapStd)/100?'&lt;':'≥'} ${String(S.shipSwapStd).replace('.',',')}%${s.bonus?`<br>(${String(S.shipSwapStd).replace('.',',')}% − ${pctS(s.rate)}) × ${fmt(s.chKg)} kg × ${fmt(toNum(S.shipSwapPrice))}đ`:' → không có thưởng'}`:'Chưa giao chuối')}
-    <div style="display:flex;justify-content:space-between;padding:12px 0 2px;border-top:2px solid var(--line)"><b>Tổng</b><b>${vnd(s.total)}</b></div></div>
+    ${row('Hoa hồng chuối, dứa quả',vnd(s.hhKg),`${fmt(s.kg)} kg × ${fmt(toNum(S.shipKg))}đ<br>= bán ${fmt(s.kgS)} + đổi ${fmt(s.kgW)} + tặng ${fmt(s.kgG)} kg`)}
+    ${row('Hoa hồng sản phẩm khác',vnd(s.hhPct),`${pc(S.shipPct)}% × ${vnd(s.pre)} (giá trước thuế)<br>= bán ${fmt(s.preS)} + đổi ${fmt(s.preW)} + tặng ${fmt(s.preG)}`)}
+    ${row('Thưởng đổi trả chuối',vnd(s.bonus),s.chKg?`Tỷ lệ đổi chuối ${pctS(s.rate)} (${fmt(s.swKg)} / ${fmt(s.chKg)} kg) ${s.rate<toNum(S.shipSwapStd)/100?'&lt;':'≥'} ${pc(S.shipSwapStd)}%${s.bonus?`<br>(${pc(S.shipSwapStd)}% − ${pctS(s.rate)}) × ${fmt(s.chKg)} kg × ${fmt(toNum(S.shipSwapPrice))}đ`:' → không có thưởng'}`:'Chưa giao chuối')}
+    <div style="display:flex;justify-content:space-between;padding:12px 0 2px;border-top:2px solid var(--line)"><b>Tổng lương tháng</b><b>${vnd(s.total)}</b></div></div>
+   <div class="card">${row('Công đơn ship ngoài (trả ngay)',vnd(s.outFee),s.outN+s.outF?`${s.outN} đơn nội thành × ${fmt(toNum(S.shipFeeOut))}${s.outF?` + ${s.outF} đơn ngoại thành × ${fmt(toNum(S.shipFeeFar))}`:''}`:'Chưa có đơn ship ngoài')}<div class="tiny muted">Đã trả ngay khi giao, không cộng vào lương tháng.</div></div>
    ${s.noKg.length?`<div class="alert w">Chưa quy được kg (tên không ghi trọng lượng): ${s.noKg.map(esc).join(', ')}</div>`:''}
-   ${rows.length?`<div class="card"><div style="font-weight:700;margin-bottom:6px">Chi tiết chuối, dứa quả giao</div><div class="tw"><table><thead><tr><th>Sản phẩm</th><th class="n">SL giao</th><th class="n">kg</th><th class="n">Đổi (kg)</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}</td><td class="n">${fmt(r3(r.qty))}</td><td class="n">${fmt(r3(r.kg))}</td><td class="n">${r.ch?fmt0(r3(r.sw)):'—'}</td></tr>`).join('')}<tr><td><b>Cộng</b></td><td></td><td class="n"><b>${fmt(s.kg)}</b></td><td class="n"><b>${fmt0(s.swKg)}</b></td></tr></tbody></table></div><div class="tiny muted" style="margin-top:6px">SL giao = số bán trừ hàng khách trả. Tỷ lệ đổi chỉ tính trên chuối.</div></div>`:''}`}
+   ${rows.length?`<div class="card"><div style="font-weight:700;margin-bottom:6px">Chi tiết chuối, dứa quả giao</div><div class="tw"><table><thead><tr><th>Sản phẩm</th><th class="n">SL tính công</th><th class="n">kg</th><th class="n">Đổi (kg)</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}</td><td class="n">${fmt(r3(r.qty))}</td><td class="n">${fmt(r3(r.kg))}</td><td class="n">${r.ch?fmt0(r3(r.sw)):'—'}</td></tr>`).join('')}<tr><td><b>Cộng</b></td><td></td><td class="n"><b>${fmt(s.kg)}</b></td><td class="n"><b>${fmt0(s.swKg)}</b></td></tr></tbody></table></div><div class="tiny muted" style="margin-top:6px">SL tính công = SL bán (gồm cả hàng khách trả) + đổi + tặng. Tỷ lệ đổi chỉ tính trên chuối, chia cho kg chuối bán (đã trừ hàng trả).</div></div>`:''}`}
 function shipIds(L){const ids=new Set([...R.staff.entries()].filter(([u,x])=>x&&x.role==='ship'&&x.active!==false).map(([u])=>u));L.forEach(o=>ids.add(o.shipId));return [...ids]}
 function payAdmin(){const ym=payYm();const L=payOrders(ym);const head=`<div class="sec">Lương ship tháng ${ym.slice(5)}/${ym.slice(0,4)}</div>${payMonthBar()}`;
   if(!L)return head+'<div class="empty">Đang tải…</div>';const P=shipIds(L).map(u=>shipPay(u,ym,L)).sort((a,b)=>b.total-a.total);
   if(!P.length)return head+'<div class="empty">Chưa có tài khoản ship.</div>';
-  return head+`<div class="tw"><table><thead><tr><th>Ship</th><th class="n">Công</th><th class="n">Chuyên cần</th><th class="n">HH chuối, dứa</th><th class="n">HH SP khác</th><th class="n">Thưởng đổi trả</th><th class="n">Tổng</th></tr></thead><tbody>${P.map(p=>`<tr><td>${esc(staffName(p.uid))}</td><td class="n">${p.worked}/${p.n}</td><td class="n">${fmt0(p.cc)}</td><td class="n">${fmt0(p.hhKg)}</td><td class="n">${fmt0(p.hhPct)}</td><td class="n">${fmt0(p.bonus)}</td><td class="n"><b>${fmt0(p.total)}</b></td></tr>`).join('')}</tbody></table></div>
+  return head+`<div class="tw"><table><thead><tr><th>Ship</th><th class="n">Công</th><th class="n">Chuyên cần</th><th class="n">HH chuối, dứa</th><th class="n">HH SP khác</th><th class="n">Thưởng đổi trả</th><th class="n">Tổng lương</th><th class="n">Ship ngoài (trả ngay)</th></tr></thead><tbody>${P.map(p=>`<tr><td>${esc(staffName(p.uid))}</td><td class="n">${p.worked}/${p.n}</td><td class="n">${fmt0(p.cc)}</td><td class="n">${fmt0(p.hhKg)}</td><td class="n">${fmt0(p.hhPct)}</td><td class="n">${fmt0(p.bonus)}</td><td class="n"><b>${fmt0(p.total)}</b></td><td class="n">${fmt0(p.outFee)}</td></tr>`).join('')}</tbody></table></div>
    <button class="btn" id="payXls">Xuất Excel bảng lương ship</button>`}
 function bindPayAdmin(){bindPayMonth();const b=$('#payXls');if(!b)return;b.onclick=()=>{const ym=payYm();const L=payOrders(ym)||[];const S=ST();const P=shipIds(L).map(u=>shipPay(u,ym,L));
-  const rows=[['Ship','Ngày công','Số ngày tháng','Ngày nghỉ','Thưởng chuyên cần','Kg chuối + dứa quả','HH chuối, dứa (đ)','Doanh số trước thuế SP khác','HH SP khác (đ)','Kg chuối giao','Kg chuối đổi','Tỷ lệ đổi chuối','Thưởng đổi trả (đ)','Tổng (đ)']];
-  P.forEach(p=>rows.push([staffName(p.uid),p.worked,p.n,p.off,p.cc,p.kg,p.hhKg,p.pre,p.hhPct,p.chKg,p.swKg,Math.round(p.rate*10000)/100+'%',p.bonus,p.total]));
-  rows.push([],['Thông số: chuyên cần '+S.shipCC+'đ, trừ '+S.shipCCOff+'đ/ngày nghỉ; HH chuối, dứa quả '+S.shipKg+'đ/kg; HH SP khác '+S.shipPct+'% doanh số trước thuế; tỷ lệ đổi chuối chuẩn '+S.shipSwapStd+'%, giá '+S.shipSwapPrice+'đ/kg']);
-  xlsxFile('Luong_ship_'+ym+'.xlsx',[{name:'Luong ship',rows,cols:[22,10,10,10,14,14,14,18,14,12,12,12,14,14]}])}}
+  const rows=[['Ship','Ngày công','Số ngày tháng','Ngày nghỉ','Thưởng chuyên cần','Kg tính công (bán+đổi+tặng)','HH chuối, dứa (đ)','Giá trị trước thuế SP khác (bán+đổi+tặng)','HH SP khác (đ)','Kg chuối bán','Kg chuối đổi','Tỷ lệ đổi chuối','Thưởng đổi trả (đ)','Tổng lương tháng (đ)','Đơn ship ngoài nội thành','Đơn ship ngoài ngoại thành','Công ship ngoài – trả ngay (đ)']];
+  P.forEach(p=>rows.push([staffName(p.uid),p.worked,p.n,p.off,p.cc,p.kg,p.hhKg,p.pre,p.hhPct,p.chKg,p.swKg,Math.round(p.rate*10000)/100+'%',p.bonus,p.total,p.outN,p.outF,p.outFee]));
+  rows.push([],['Thông số: chuyên cần '+S.shipCC+'đ, trừ '+S.shipCCOff+'đ/ngày nghỉ; HH chuối, dứa quả '+S.shipKg+'đ/kg; HH SP khác '+S.shipPct+'% giá trước thuế; tỷ lệ đổi chuối chuẩn '+S.shipSwapStd+'%, giá '+S.shipSwapPrice+'đ/kg; ship ngoài '+S.shipFeeOut+'đ nội thành, '+S.shipFeeFar+'đ ngoại thành ('+S.shipFarCodes+'), trả ngay, không cộng lương tháng']);
+  xlsxFile('Luong_ship_'+ym+'.xlsx',[{name:'Luong ship',rows,cols:[22,10,10,10,14,14,14,18,14,12,12,12,14,14,12,12,14]}])}}
 function shipStats(L){const s=stats(L);const S=ST();s.income=s.normal*toNum(S.shipFee)+s.outside*toNum(S.shipFeeOut);s.incomeOut=s.outside*toNum(S.shipFeeOut);s.incomeMonth=s.normal*toNum(S.shipFee);return s}
 function viewShipReport(v,uid){const [f,t]=periodRange();const all=ordersIn(f,t);
   if(!all){v.innerHTML='<h1 class="big">Báo cáo</h1>'+periodBar()+'<div class="empty">Đang tải…</div>';bindPeriod();return}
@@ -652,7 +671,7 @@ function viewShipReport(v,uid){const [f,t]=periodRange();const all=ordersIn(f,t)
    <div class="kpi ${s.ret+s.swap?'w':''}"><div class="l">Tỷ lệ đổi trả</div><div class="v">${retRate(s)}</div><div class="h">đổi ${fmt(s.swap)} · trả ${fmt(s.ret)}</div></div>
    <div class="kpi b"><div class="l">Tiền hàng đã thu</div><div class="v">${vnd(s.collected)}</div><div class="h">ship thu khi giao</div></div>
 </div>
-   ${payBlock(uid)}</div>`;bindPeriod();bindPayMonth()}
+   ${dayBlock(uid)}${payBlock(uid)}</div>`;bindPeriod();bindPayMonth();bindDay(uid)}
 
 /* ================= KHO ================= */
 function stockMap(asOf,excludeId){const m=new Map();for(const p of R.products.values())m.set(p.code,toNum(p.openingQty));
@@ -985,14 +1004,14 @@ function viewSettings(v){const s=ST(),ro=!R.isOwner;const F=(k,l,t)=>`<label cla
   v.innerHTML=`<h1 class="big">Cài đặt</h1><div class="stack">${ro?'<div class="alert w">Chỉ chủ tài khoản sửa được cài đặt.</div>':''}
    <div class="sec" style="margin-top:0">Tuyến giao</div><div id="rtEd" class="stack"></div>
    <div class="sec">Lương & hoa hồng</div><div class="card"><div class="fgrid">${F('salePct','% hoa hồng sale (mặc định)','number')}</div></div>
-   <div class="sec">Lương ship</div><div class="card"><div class="fgrid">${F('shipCC','Thưởng chuyên cần (đ/tháng)','number')}${F('shipCCOff','Trừ mỗi ngày nghỉ (đ)','number')}${F('shipKg','Hoa hồng chuối, dứa quả (đ/kg)','number')}${F('shipPct','Hoa hồng SP khác (% doanh số trước thuế)','number')}${F('shipSwapStd','Tỷ lệ đổi chuối công ty cho phép (%)','number')}${F('shipSwapPrice','Giá tính thưởng đổi trả (đ/kg)','number')}</div><div class="tiny muted" style="margin-top:8px">Ngày công = ngày có đơn giao thành công. Chuối gói/quả quy kg theo trọng lượng trên tên (gói 600g = 0,6 kg); dứa quả tính theo kg.</div></div>
+   <div class="sec">Lương ship</div><div class="card"><div class="fgrid">${F('shipCC','Thưởng chuyên cần (đ/tháng)','number')}${F('shipCCOff','Trừ mỗi ngày nghỉ (đ)','number')}${F('shipKg','Hoa hồng chuối, dứa quả (đ/kg)','number')}${F('shipPct','Hoa hồng SP khác (% doanh số trước thuế)','number')}${F('shipSwapStd','Tỷ lệ đổi chuối công ty cho phép (%)','number')}${F('shipSwapPrice','Giá tính thưởng đổi trả (đ/kg)','number')}${F('shipFeeOut','Công đơn ship ngoài nội thành (đ/đơn, trả ngay)','number')}${F('shipFeeFar','Công đơn ship ngoài ngoại thành (đ/đơn, trả ngay)','number')}${F('shipFarCodes','Mã khu vực ngoại thành')}</div><div class="tiny muted" style="margin-top:8px">Ngày công = ngày có đơn giao thành công. Hoa hồng tính trên hàng bán (gồm hàng khách trả) + đổi + tặng, theo giá trước thuế. Chuối gói/quả quy kg theo trọng lượng trên tên (gói 600g = 0,6 kg); dứa quả tính theo kg. Ngoại thành nhận theo mã đầu địa chỉ giao, VD (07.LB) Long Biên, (16.GL) Gia Lâm.</div></div>
    <div class="sec">Thông tin in phiếu</div><div class="card"><div class="fgrid">${F('company','Tên công ty')}${F('address','Địa chỉ')}${F('taxCode','Mã số thuế')}${F('dept','Bộ phận')}${F('whName','Tên kho')}${F('whCode','Mã kho (MISA)')}${F('whPlace','Địa điểm kho')}${F('keeper','Thủ kho')}${F('chiefAcc','Kế toán trưởng')}${F('director','Giám đốc')}</div>
    <div style="margin-top:12px">${F('circular','Dòng ghi chú mẫu chứng từ')}</div></div>
    <div class="sec">Khóa sổ</div><div class="card">${F('lockDate','Khóa sổ đến hết ngày','date')}<div class="tiny muted" style="margin-top:6px">Phiếu kho có ngày trong kỳ khóa không lập, sửa, xóa được.</div></div>
    ${ro?'':'<button class="btn block pri" id="sSave">Lưu cài đặt</button>'}
    <div class="tiny muted">Dữ liệu: ${R.products.size} sản phẩm · ${R.customers.size} khách · ${R.orders.length} đơn (3 tháng) · ${R.vouchers.length} phiếu kho.</div></div>`;
   routeEditor($('#rtEd'),ro);
-  const b=$('#sSave');if(b)b.onclick=async()=>{const NUMK=['salePct','shipFee','shipFeeOut','shipCC','shipCCOff','shipKg','shipPct','shipSwapStd','shipSwapPrice'];const keys=['salePct','shipFee','shipFeeOut','shipCC','shipCCOff','shipKg','shipPct','shipSwapStd','shipSwapPrice','company','address','taxCode','dept','whName','whCode','whPlace','keeper','chiefAcc','director','circular','lockDate'];const d={};
+  const b=$('#sSave');if(b)b.onclick=async()=>{const NUMK=['salePct','shipFee','shipFeeOut','shipFeeFar','shipCC','shipCCOff','shipKg','shipPct','shipSwapStd','shipSwapPrice'];const keys=['salePct','shipFee','shipFeeOut','shipFeeFar','shipFarCodes','shipCC','shipCCOff','shipKg','shipPct','shipSwapStd','shipSwapPrice','company','address','taxCode','dept','whName','whCode','whPlace','keeper','chiefAcc','director','circular','lockDate'];const d={};
     keys.forEach(k=>{const el=$('#s_'+k);const v=el?el.value.trim():String(s[k]??'');d[k]=NUMK.includes(k)?toNum(v):v});try{await R.db.doc('config/main').set(d);R.settings=d;toast('Đã lưu cài đặt')}catch(e){toast('Không lưu được')}}}
 
 function routeEditor(box,ro){const L=R.ui.rtEdit||(R.ui.rtEdit=JSON.parse(JSON.stringify(RT())));const ships=[...R.staff.entries()].filter(([i,s])=>s.role==='ship'&&s.active!==false);
