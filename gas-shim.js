@@ -3,15 +3,17 @@
 "use strict";
 const TK='viba.token';
 const ls={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}},del:k=>{try{localStorage.removeItem(k)}catch(e){}}};
-let token=ls.get(TK),me=null;
+const ss={get:k=>{try{return sessionStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{sessionStorage.setItem(k,v)}catch(e){}},del:k=>{try{sessionStorage.removeItem(k)}catch(e){}}};
+const delTok=()=>{ls.del(TK);ss.del(TK)};
+let token=ls.get(TK)||ss.get(TK),me=null;
 /* Google đôi khi trả 404 ở bước chuyển hướng (script.googleusercontent.com/macros/echo) dù máy chủ đã chạy xong: thử lại tối đa 4 lần */
 async function fetchApi(op,a){let last;for(let i=0;i<4;i++){try{const r=await fetch(window.VIBA_API,{method:'POST',credentials:'omit',cache:'no-store',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({api:1,tok:token,op,a:a||{}})});const t=await r.text();if(r.ok&&t.charAt(0)==='{'){const o=JSON.parse(t);
       if(i>0&&op==='signup'&&/đã có tài khoản/.test(o.error||''))return fetchApi('login',a); /* lần trước đã tạo xong nhưng mất phản hồi */
       return o}last=new Error('HTTP '+r.status)}catch(e){last=e}await new Promise(r=>setTimeout(r,600*(i+1)))}
   throw Object.assign(new Error(navigator.onLine===false?'Mất kết nối mạng':'Máy chủ dữ liệu chưa phản hồi, thử lại sau ít phút'),{code:'unavailable',cause:last})}
-function call(op,a){if(window.VIBA_API)return fetchApi(op,a).then(o=>{if(o.ok)return o.r;if(/^AUTH:/.test(o.error||'')){ls.del(TK);location.reload();return new Promise(()=>{})}throw Object.assign(new Error(o.error),{code:o.code||'unavailable'})});
+function call(op,a){if(window.VIBA_API)return fetchApi(op,a).then(o=>{if(o.ok)return o.r;if(/^AUTH:/.test(o.error||'')){delTok();location.reload();return new Promise(()=>{})}throw Object.assign(new Error(o.error),{code:o.code||'unavailable'})});
   return new Promise((res,rej)=>{google.script.run.withSuccessHandler(s=>{let o;try{o=JSON.parse(s)}catch(e){return rej(Object.assign(new Error('Phản hồi lỗi'),{code:'unavailable'}))}
-    if(o.ok)return res(o.r);if(/^AUTH:/.test(o.error||'')){ls.del(TK);location.reload();return}rej(Object.assign(new Error(o.error),{code:o.code||'unavailable'}))})
+    if(o.ok)return res(o.r);if(/^AUTH:/.test(o.error||'')){delTok();location.reload();return}rej(Object.assign(new Error(o.error),{code:o.code||'unavailable'}))})
   .withFailureHandler(e=>rej(Object.assign(new Error(String(e&&e.message||e)),{code:'unavailable'}))).api(token,op,a||{})})}
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -70,22 +72,42 @@ const downloads={save:async({filename,data})=>{const blob=data instanceof Blob?d
   return {status:'saved'}}};
 
 /* ---------- đăng nhập ---------- */
-function loginUI(){return new Promise(resolve=>{const box=document.createElement('div');box.id='loginBox';
-  box.innerHTML=`<div class="lg-card"><img class="lg-logo" src="logo2.png" alt="VIBA FOOD"><h1 class="big" style="margin:4px 0 2px">${esc(document.title)}</h1><div class="muted small">Đăng nhập bằng email công ty cấp cho bạn.</div>
-   <div class="seg" style="margin:14px 0"><button data-m="in" class="on">Đăng nhập</button><button data-m="up">Tạo tài khoản</button></div>
-   <div class="stack"><label class="f" id="lgNameW" hidden>Họ và tên<input id="lgName" autocomplete="name"></label>
-   <label class="f">Email<input id="lgEmail" type="email" autocomplete="username" inputmode="email"></label>
-   <label class="f">Mật khẩu<input id="lgPass" type="password" autocomplete="current-password"></label>
-   <div id="lgMsg"></div><button class="btn block pri" id="lgGo">Đăng nhập</button><div class="tiny muted">Quên mật khẩu: nhờ quản lý đặt lại.</div></div></div>`;
-  document.body.appendChild(box);let mode='in';const $=s=>box.querySelector(s);const msg=(t,c)=>$('#lgMsg').innerHTML=t?`<div class="alert ${c||'r'}">${esc(t)}</div>`:'';
-  box.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{mode=b.dataset.m;box.querySelectorAll('[data-m]').forEach(x=>x.classList.toggle('on',x===b));$('#lgNameW').hidden=mode!=='up';$('#lgGo').textContent=mode==='up'?'Tạo tài khoản':'Đăng nhập';msg('')});
-  $('#lgGo').onclick=async()=>{const email=$('#lgEmail').value.trim(),password=$('#lgPass').value,name=$('#lgName').value.trim();if(!email||!password)return msg('Nhập email và mật khẩu.');if(mode==='up'&&!name)return msg('Nhập họ và tên.');
-    $('#lgGo').disabled=true;try{const r=await call(mode==='up'?'signup':'login',{email,password,name});token=r.token;ls.set(TK,token);box.remove();resolve()}catch(e){$('#lgGo').disabled=false;msg(e.message)}};
-  $('#lgPass').onkeydown=e=>{if(e.key==='Enter')$('#lgGo').click()}})}
+/* v31: đăng nhập bằng số điện thoại (hoặc email cho quản lý). SĐT gửi lên máy chủ dạng <sđt>@sdt.viba */
+const normPhone=v=>{let d=String(v||'').replace(/\D/g,'');if(d.startsWith('84')&&d.length===11)d='0'+d.slice(2);return d};
+const toLogin=v=>{v=String(v||'').trim();if(v.includes('@'))return v.toLowerCase();const d=normPhone(v);return d?d+'@sdt.viba':''};
+function loginUI(){return new Promise(resolve=>{const box=document.createElement('div');box.id='loginBox';document.body.appendChild(box);let mode='in';const $=s=>box.querySelector(s);
+  const head=`<img class="lg-logo" src="logo2.png" alt="VIBA FOOD"><h1 class="big" style="margin:4px 0 2px">${esc(document.title)}</h1>`;
+  const msg=(t,c)=>$('#lgMsg').innerHTML=t?`<div class="alert ${c||'r'}">${esc(t)}</div>`:'';
+  const keep=(t,rem)=>{token=t;delTok();(rem?ls:ss).set(TK,t)};
+  const draw=()=>{if(mode==='in'){box.innerHTML=`<div class="lg-card">${head}<div class="muted small">Đăng nhập bằng số điện thoại công ty đã đăng ký cho bạn.</div>
+    <form class="stack" style="margin-top:14px" onsubmit="return false"><label class="f">Số điện thoại<input id="lgId" type="text" inputmode="tel" autocomplete="username" placeholder="VD: 0964343226"></label>
+    <label class="f">Mật khẩu<input id="lgPass" type="password" autocomplete="current-password"></label>
+    <label style="display:flex;gap:8px;align-items:center;font-size:15px"><input type="checkbox" id="lgRem" checked style="width:20px;height:20px;min-height:0;flex:none"> Ghi nhớ đăng nhập trên máy này</label>
+    <div id="lgMsg"></div><button class="btn block pri" id="lgGo" type="submit">Đăng nhập</button>
+    <button class="btn block" id="lgNew" type="button">Lần đầu dùng app? Tạo mật khẩu</button>
+    <div class="tiny muted">Quên mật khẩu: nhờ quản lý cấp mật khẩu tạm. Quản lý vẫn đăng nhập bằng email như cũ.</div></form></div>`;
+    $('#lgNew').onclick=()=>{mode='up';draw()};
+    $('#lgGo').onclick=async()=>{const email=toLogin($('#lgId').value),password=$('#lgPass').value;if(!email||!password)return msg('Nhập số điện thoại và mật khẩu.');
+      $('#lgGo').disabled=true;try{const r=await call('login',{email,password});keep(r.token,$('#lgRem').checked);box.remove();resolve()}catch(e){$('#lgGo').disabled=false;msg(e.message)}};
+    $('#lgPass').onkeydown=e=>{if(e.key==='Enter')$('#lgGo').click()}}
+   else{box.innerHTML=`<div class="lg-card">${head}<div class="muted small">Lần đầu đăng nhập – nhập đầy đủ thông tin.</div>
+    <form class="stack" style="margin-top:14px" onsubmit="return false"><label class="f">Họ và tên<input id="lgName" autocomplete="name" placeholder="Đúng họ tên quản lý đã đăng ký"></label>
+    <label class="f">Số điện thoại<input id="lgId" type="text" inputmode="tel" autocomplete="username"></label>
+    <label class="f">Tạo mật khẩu (ít nhất 6 ký tự)<input id="lgPass" type="password" autocomplete="new-password"></label>
+    <label class="f">Nhập lại mật khẩu<input id="lgPass2" type="password" autocomplete="new-password"></label>
+    <div id="lgMsg"></div><button class="btn block pri" id="lgGo" type="submit">Tạo mật khẩu và vào app</button>
+    <button class="btn block" id="lgBack" type="button">← Quay lại đăng nhập</button>
+    <div class="tiny muted">Số điện thoại không có trong danh sách của quản lý sẽ không tạo được tài khoản.</div></form></div>`;
+    $('#lgBack').onclick=()=>{mode='in';draw()};
+    $('#lgGo').onclick=async()=>{const name=$('#lgName').value.trim().replace(/\s+/g,' '),p=normPhone($('#lgId').value),pw=$('#lgPass').value;
+      if(!name)return msg('Nhập họ và tên.');if(!/^0\d{9}$/.test(p))return msg('Số điện thoại phải có 10 số, bắt đầu bằng 0.');if(pw.length<6)return msg('Mật khẩu ít nhất 6 ký tự.');if(pw!==$('#lgPass2').value)return msg('Hai lần nhập mật khẩu không giống nhau.');
+      $('#lgGo').disabled=true;try{const r=await call('signup',{email:p+'@sdt.viba',password:pw,name});keep(r.token,true);msg('Xin chào '+r.name+'! Đang vào app…','g');setTimeout(()=>{box.remove();resolve()},700)}
+      catch(e){$('#lgGo').disabled=false;msg(/đã có tài khoản/.test(e.message)?'Số này đã tạo mật khẩu rồi – quay lại Đăng nhập. Quên mật khẩu thì nhờ quản lý cấp mật khẩu tạm.':e.message)}}}};
+  draw()})}
 if(window.VIBA_API&&!/^https:\/\/script\.google\.com\//.test(window.VIBA_API))window.VIBA_API='';
-const ready=(async()=>{if(!window.VIBA_API&&!(window.google&&google.script)){document.body.insertAdjacentHTML('afterbegin','<div class="alert w" style="margin:16px">App chưa được nối với máy chủ dữ liệu Google Drive. Quản lý cần triển khai Code.gs và cập nhật config.js.</div>');throw new Error('noapi')}if(!token)await loginUI();try{me=await call('me')}catch(e){ls.del(TK);token=null;await loginUI();me=await call('me')}
+const ready=(async()=>{if(!window.VIBA_API&&!(window.google&&google.script)){document.body.insertAdjacentHTML('afterbegin','<div class="alert w" style="margin:16px">App chưa được nối với máy chủ dữ liệu Google Drive. Quản lý cần triển khai Code.gs và cập nhật config.js.</div>');throw new Error('noapi')}if(!token)await loginUI();try{me=await call('me')}catch(e){delTok();token=null;await loginUI();me=await call('me')}
   const p=null;startSync();await firstLoad;const pr=store.get('profiles/'+me.uid);me.name=pr&&pr.name})();
-window.vibaLogout=()=>{ls.del(TK);location.reload()};
+window.vibaLogout=()=>{delTok();location.reload()};
 window.vibaAdmin={resetPassword:uid=>call('resetPassword',{uid})};
 window.vibaChangePw=()=>{if(document.getElementById('loginBox'))return;const box=document.createElement('div');box.id='loginBox';
   box.innerHTML=`<div class="lg-card"><img class="lg-logo" src="logo2.png" alt="VIBA FOOD"><h1 class="big" style="margin:4px 0 10px">Đổi mật khẩu</h1>

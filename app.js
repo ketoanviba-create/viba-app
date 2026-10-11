@@ -1038,8 +1038,8 @@ function editStaff(id){const s=R.staff.get(id)||{role:'sale',name:'',pct:'',acti
     const rs=b.querySelector('#es_reset');if(rs)rs.onclick=()=>{const box=b.querySelector('#es_pwBox');
       box.innerHTML=`<div class="alert w">Mật khẩu cũ của ${esc(staffName(id))} sẽ không dùng được nữa.</div><button class="btn block pri" id="es_resetOk">Xác nhận cấp mật khẩu mới</button>`;
       box.querySelector('#es_resetOk').onclick=async()=>{box.innerHTML='<div class="empty">Đang tạo mật khẩu…</div>';
-        try{const r=await window.vibaAdmin.resetPassword(id);box.innerHTML=`<div class="card stack"><div class="tiny muted">Gửi cho nhân viên để đăng nhập:</div><div>Email: <b>${esc(r.email)}</b></div><div>Mật khẩu mới: <b style="font-size:22px;letter-spacing:2px" class="num">${esc(r.password)}</b></div><button class="btn sm" id="es_copy">Sao chép</button><div class="tiny muted">Nhân viên nên tự đổi mật khẩu sau khi đăng nhập (nút Đổi MK cạnh Đăng xuất).</div></div>`;
-          const cp=box.querySelector('#es_copy');cp.onclick=()=>{const t='Email: '+r.email+'\nMật khẩu: '+r.password;try{navigator.clipboard.writeText(t).then(()=>toast('Đã sao chép'),()=>{})}catch(e){}}}
+        try{const r=await window.vibaAdmin.resetPassword(id);box.innerHTML=`<div class="card stack"><div class="tiny muted">Gửi cho nhân viên để đăng nhập:</div><div>${loginLabel(r.email)}</div><div>Mật khẩu mới: <b style="font-size:22px;letter-spacing:2px" class="num">${esc(r.password)}</b></div><button class="btn sm" id="es_copy">Sao chép</button><div class="tiny muted">Nhân viên nên tự đổi mật khẩu sau khi đăng nhập (nút Đổi MK cạnh Đăng xuất).</div></div>`;
+          const cp=box.querySelector('#es_copy');cp.onclick=()=>{const t=(/@sdt\.viba$/.test(r.email)?'Số điện thoại: '+r.email.split('@')[0]:'Email: '+r.email)+'\nMật khẩu: '+r.password;try{navigator.clipboard.writeText(t).then(()=>toast('Đã sao chép'),()=>{})}catch(e){}}}
         catch(e){box.innerHTML=`<div class="alert r">Không cấp được: ${esc(e.message||'')}</div>`}}};
     if(sv)sv.onclick=async()=>{
     const d={role:$('#es_role').value,name:$('#es_name').value.trim(),pct:$('#es_pct').value===''?null:toNum($('#es_pct').value),active:$('#es_act').checked,updatedAt:Date.now()};
@@ -1088,9 +1088,43 @@ function templateXls(T){if(T==='products')xlsxFile('Mau_san_pham.xlsx',[{name:'S
   else xlsxFile('Mau_bang_gia.xlsx',[{name:'Bang gia',rows:[['Mã khách hàng hoặc Nhóm khách','Mã hàng','Đơn giá'],['PL Nhóm khách sỉ','VD-01',42000],['KH-VD','VD-01',41000]]}])}
 
 /* ================= CÀI ĐẶT ================= */
+
+/* ================= v31: NHÂN VIÊN DÙNG APP (đăng nhập bằng SĐT) =================
+   config/staffPre = {list:[{name,phone,role:'sale'|'ship'|'kho',email,active}]}. Máy chủ chỉ cho tạo tài khoản <sđt>@sdt.viba nếu SĐT có trong danh sách và tự gán staff/{uid}. */
+const PRE_ROLE={ship:'Giao hàng',sale:'Bán hàng',kho:'Thủ kho',admin:'Quản lý'};
+const normPhone=v=>{let d=String(v||'').replace(/\D/g,'');if(d.startsWith('84')&&d.length===11)d='0'+d.slice(2);return d};
+const fmtPhone=p=>String(p||'').replace(/^(\d{4})(\d{3})(\d+)$/,'$1 $2 $3');
+const loginLabel=e=>{const m=String(e||'').match(/^(\d+)@sdt\.viba$/);return m?'Số điện thoại: <b>'+esc(fmtPhone(m[1]))+'</b>':'Email: <b>'+esc(e)+'</b>'};
+function preList(){return ((R.staffPre&&R.staffPre.list)||[]).slice()}
+function preActive(p){const f=[...R.staff.entries()].find(([u,s])=>s&&normPhone(s.phone)===normPhone(p));return f?f[0]:null}
+function staffPreEditor(box,ro){const draw=()=>{const L=preList();
+  box.innerHTML=`<div class="tiny muted">Danh sách số điện thoại được phép dùng app. Nhân viên đăng nhập lần đầu bằng số điện thoại → tự tạo mật khẩu → app tự gán đúng quyền.</div>
+   ${L.length?`<div class="tw"><table><thead><tr><th>Họ tên</th><th>SĐT</th><th>App</th><th>Trạng thái</th></tr></thead><tbody>${L.map((x,i)=>{const u=preActive(x.phone);return `<tr data-sp="${i}" style="cursor:pointer"><td>${esc(x.name)}</td><td class="num">${esc(fmtPhone(x.phone))}</td><td>${esc(PRE_ROLE[x.role]||x.role)}</td><td>${x.active===false?'<span class="chip r">Đã khóa</span>':u?'<span class="chip g">Đã kích hoạt</span>':'<span class="chip">Chưa đăng nhập</span>'}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Chưa có nhân viên nào.</div>'}
+   ${ro?'':'<button class="btn" id="spAdd">+ Thêm nhân viên</button><div class="tiny muted">Bấm một dòng để sửa tên, SĐT, quyền app, khóa hoặc cấp mật khẩu tạm.</div>'}`;
+  if(ro)return;box.querySelector('#spAdd').onclick=()=>edit(-1);box.querySelectorAll('[data-sp]').forEach(r=>r.onclick=()=>edit(+r.dataset.sp))};
+ const save=async L=>{await R.db.doc('config/staffPre').set({list:L,updatedAt:Date.now()});R.staffPre={list:L}};
+ const edit=i=>{const L=preList();const x=i>=0?Object.assign({},L[i]):{name:'',phone:'',role:'sale',active:true};const uid=i>=0?preActive(x.phone):null;
+  openSheet(i>=0?'Sửa nhân viên':'Thêm nhân viên',`<div class="stack"><label class="f">Họ và tên<input id="sp_n" value="${esc(x.name)}"></label>
+   <label class="f">Số điện thoại<input id="sp_p" type="tel" inputmode="tel" value="${esc(x.phone)}" ${uid?'readonly':''}></label>${uid?'<div class="tiny muted">Đã kích hoạt nên không đổi được số. Muốn đổi số: khóa dòng này và thêm dòng mới.</div>':''}
+   <label class="f">Dùng app<select id="sp_r">${Object.entries(PRE_ROLE).map(([k,l])=>`<option value="${k}" ${x.role===k?'selected':''}>${l}</option>`).join('')}</select></label>
+   <label class="f">Gmail (không bắt buộc)<input id="sp_e" value="${esc(x.email||'')}"></label>
+   <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="sp_a" ${x.active!==false?'checked':''} style="width:20px;height:20px;min-height:0"> Cho phép dùng app</label>
+   <div id="sp_m"></div><button class="btn block pri" id="sp_s">Lưu</button>
+   ${uid?'<button class="btn block" id="sp_pw">Cấp mật khẩu tạm</button><div id="sp_pwb"></div>':''}${i>=0&&!uid?'<button class="btn block danger" id="sp_d">Xóa khỏi danh sách</button>':''}</div>`,b=>{
+   const m=t=>b.querySelector('#sp_m').innerHTML=t?`<div class="alert r">${esc(t)}</div>`:'';
+   b.querySelector('#sp_s').onclick=async()=>{const n=b.querySelector('#sp_n').value.trim().replace(/\s+/g,' '),p=normPhone(b.querySelector('#sp_p').value);
+     if(!n)return m('Nhập họ và tên.');if(!/^0\d{9}$/.test(p))return m('Số điện thoại phải có 10 số, bắt đầu bằng 0.');
+     if(L.some((y,j)=>j!==i&&normPhone(y.phone)===p))return m('Số '+fmtPhone(p)+' đã có trong danh sách.');
+     const nx={name:n,phone:p,role:b.querySelector('#sp_r').value,email:b.querySelector('#sp_e').value.trim(),active:b.querySelector('#sp_a').checked};if(i>=0)L[i]=nx;else L.push(nx);
+     try{await save(L);if(uid){const st=R.staff.get(uid)||{};await R.db.doc('staff/'+uid).set(Object.assign({},st,{name:n,role:nx.role,phone:p,active:nx.active}))}closeSheet();toast('Đã lưu');draw()}catch(e){m('Không lưu được: '+(e.message||e.code||''))}};
+   const d=b.querySelector('#sp_d');if(d)d.onclick=async()=>{L.splice(i,1);try{await save(L);closeSheet();draw()}catch(e){m('Không xóa được')}};
+   const pw=b.querySelector('#sp_pw');if(pw)pw.onclick=async()=>{const pb=b.querySelector('#sp_pwb');pb.innerHTML='<div class="empty">Đang tạo mật khẩu…</div>';
+     try{const r=await window.vibaAdmin.resetPassword(uid);pb.innerHTML=`<div class="card stack"><div class="tiny muted">Gửi cho nhân viên để đăng nhập:</div><div>${loginLabel(r.email)}</div><div>Mật khẩu tạm: <b style="font-size:22px;letter-spacing:2px" class="num">${esc(r.password)}</b></div><div class="tiny muted">Nhân viên nên tự đổi mật khẩu sau khi đăng nhập (nút Đổi MK).</div></div>`}catch(e){pb.innerHTML=`<div class="alert r">Không cấp được: ${esc(e.message||'')}</div>`}}})};
+ draw()}
 function viewSettings(v){const s=ST(),ro=!R.isOwner;const F=(k,l,t)=>`<label class="f">${l}<input id="s_${k}" ${t?'type="'+t+'"':''} value="${esc(s[k]??'')}" ${ro?'readonly':''} ${t==='number'?'class="num"':''}></label>`;
   v.innerHTML=`<h1 class="big">Cài đặt</h1><div class="stack">${ro?'<div class="alert w">Chỉ chủ tài khoản sửa được cài đặt.</div>':''}
-   <div class="sec" style="margin-top:0">Tuyến giao</div><div id="rtEd" class="stack"></div>
+   <div class="sec" style="margin-top:0">Nhân viên dùng app</div><div id="spEd" class="stack"></div>
+   <div class="sec">Tuyến giao</div><div id="rtEd" class="stack"></div>
    <div class="sec">Lương & hoa hồng</div><div class="card"><div class="fgrid">${F('saleBase','Lương cứng sale (đ/tháng)','number')}${F('saleAllow','Phụ cấp sale (đ/tháng)','number')}${F('saleStd','Công chuẩn (công/tháng)','number')}${F('saleComm','Hoa hồng sale (% doanh số)','number')}${F('coLoc','Vị trí công ty (vĩ độ, kinh độ)')}</div><div class="tiny muted" style="margin-top:8px">Mỗi ngày sale chụp 1 ảnh chấm công kèm vị trí = 1 công. Đi quá công chuẩn trả theo công thực tế. Hoa hồng tính trên đơn đã giao, giá sau khuyến mại, trước thuế, trừ hàng khách trả.</div></div>
    <div class="sec">Lương ship</div><div class="card"><div class="fgrid">${F('shipCC','Thưởng chuyên cần (đ/tháng)','number')}${F('shipCCOff','Trừ mỗi ngày nghỉ (đ)','number')}${F('shipKg','Hoa hồng chuối, dứa quả (đ/kg)','number')}${F('shipPct','Hoa hồng SP khác (% doanh số trước thuế)','number')}${F('shipSwapStd','Tỷ lệ đổi chuối công ty cho phép (%)','number')}${F('shipSwapPrice','Giá tính thưởng đổi trả (đ/kg)','number')}${F('shipFeeOut','Công đơn ship ngoài nội thành (đ/đơn, trả ngay)','number')}${F('shipFeeFar','Công đơn ship ngoài ngoại thành (đ/đơn, trả ngay)','number')}${F('shipFarCodes','Mã khu vực ngoại thành')}</div><div class="tiny muted" style="margin-top:8px">Ngày công = ngày có đơn giao thành công. Hoa hồng tính trên hàng bán (gồm hàng khách trả) + đổi + tặng, theo giá trước khuyến mại, trước thuế. Chuối gói/quả quy kg theo trọng lượng trên tên (gói 600g = 0,6 kg); dứa quả tính theo kg. Ngoại thành nhận theo mã đầu địa chỉ giao, VD (07.LB) Long Biên, (16.GL) Gia Lâm.</div></div>
    <div class="sec">Thông tin in phiếu</div><div class="card"><div class="fgrid">${F('company','Tên công ty')}${F('address','Địa chỉ')}${F('taxCode','Mã số thuế')}${F('dept','Bộ phận')}${F('whName','Tên kho')}${F('whCode','Mã kho (MISA)')}${F('whPlace','Địa điểm kho')}${F('keeper','Thủ kho')}${F('chiefAcc','Kế toán trưởng')}${F('director','Giám đốc')}</div>
@@ -1098,7 +1132,7 @@ function viewSettings(v){const s=ST(),ro=!R.isOwner;const F=(k,l,t)=>`<label cla
    <div class="sec">Khóa sổ</div><div class="card">${F('lockDate','Khóa sổ đến hết ngày','date')}<div class="tiny muted" style="margin-top:6px">Phiếu kho có ngày trong kỳ khóa không lập, sửa, xóa được.</div></div>
    ${ro?'':'<button class="btn block pri" id="sSave">Lưu cài đặt</button>'}
    <div class="tiny muted">Dữ liệu: ${R.products.size} sản phẩm · ${R.customers.size} khách · ${R.orders.length} đơn (3 tháng) · ${R.vouchers.length} phiếu kho.</div></div>`;
-  routeEditor($('#rtEd'),ro);
+  staffPreEditor($('#spEd'),ro);routeEditor($('#rtEd'),ro);
   const b=$('#sSave');if(b)b.onclick=async()=>{const NUMK=['saleBase','saleAllow','saleStd','saleComm','salePct','shipFee','shipFeeOut','shipFeeFar','shipCC','shipCCOff','shipKg','shipPct','shipSwapStd','shipSwapPrice'];const keys=['saleBase','saleAllow','saleStd','saleComm','coLoc','salePct','shipFee','shipFeeOut','shipFeeFar','shipFarCodes','shipCC','shipCCOff','shipKg','shipPct','shipSwapStd','shipSwapPrice','company','address','taxCode','dept','whName','whCode','whPlace','keeper','chiefAcc','director','circular','lockDate'];const d={};
     keys.forEach(k=>{const el=$('#s_'+k);const v=el?el.value.trim():String(s[k]??'');d[k]=NUMK.includes(k)?toNum(v):v});try{await R.db.doc('config/main').set(d);R.settings=d;toast('Đã lưu cài đặt')}catch(e){toast('Không lưu được')}}}
 
@@ -1182,7 +1216,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   const hm=window.APP_MODE||(location.hash||'').replace('#','');if(['sale','ship','kho','admin'].includes(hm)){R.mode=hm;R.tab=null}
   const sub=(coll,fn)=>db.collection(coll).onSnapshot(s=>{fn(s);soon();resolveNames()},e=>toast('Mất kết nối '+coll+' ('+e.code+')'));
   sub('staff',s=>{R.staff=new Map(s.docs.map(d=>[d.id,d.data()]))});
-  sub('config',s=>{const d=s.docs.find(x=>x.id==='custGroups');R.cgroups=d?d.data():null;const v=s.docs.find(x=>x.id==='vatRates');R.vat=v?v.data():null});
+  sub('config',s=>{const d=s.docs.find(x=>x.id==='custGroups');R.cgroups=d?d.data():null;const sp=s.docs.find(x=>x.id==='staffPre');R.staffPre=sp?sp.data():null;const v=s.docs.find(x=>x.id==='vatRates');R.vat=v?v.data():null});
   sub('config',s=>{const rt=s.docs.find(x=>x.id==='routes');const nr=rt?rt.data():null;if(JSON.stringify(nr)!==JSON.stringify(R.routes)){R.routes=nr;R.ui.rtSel=null}const d=s.docs.find(x=>x.id==='prodAlias');const it=(d&&d.data()||{}).items||{};R.palias=Object.fromEntries(Object.entries(it).map(([k,v])=>[k,(Array.isArray(v)?v:String(v||'').split(/[;|\n]/)).map(x=>String(x).trim()).filter(Boolean)]))});
   sub('requests',s=>{R.requests=new Map(s.docs.map(d=>[d.id,d.data()]))});
   sub('attend',s=>{R.attend=s.docs.map(d=>Object.assign({},d.data(),{id:d.id}))});
