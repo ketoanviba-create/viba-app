@@ -833,10 +833,12 @@ function viewSettings(v){const s=ST(),ro=!R.isOwner;const F=(k,l,t)=>`<label cla
     keys.forEach(k=>{const v=$('#s_'+k).value.trim();d[k]=['salePct','shipFee','shipFeeOut'].includes(k)?toNum(v):v});try{await R.db.doc('config/main').set(d);R.settings=d;toast('Đã lưu cài đặt')}catch(e){toast('Không lưu được')}}}
 
 function routeEditor(box,ro){const L=R.ui.rtEdit||(R.ui.rtEdit=JSON.parse(JSON.stringify(RT())));const ships=[...R.staff.entries()].filter(([i,s])=>s.role==='ship'&&s.active!==false);
+  L.forEach(r=>{if(!r.ship&&r.shipHint){const f=ships.find(([i,s])=>noAcc(s.name||staffName(i))===noAcc(r.shipHint));if(f)r.ship=f[0]}});
   const draw=()=>{box.innerHTML=`<div class="tiny muted">App tự xếp đơn vào tuyến theo mã đầu địa điểm giao, ví dụ “(09.BTL)…”. Khách tỉnh “(20.TỈNH)” xếp theo cột Tuyến giao của danh mục khách (${Object.keys(tinhMap()).length} địa điểm đã gán).</div>
    ${L.map((r,i)=>`<div class="card stack" style="gap:8px"><label class="f">Tên tuyến<input data-rn="${i}" value="${esc(r.name||'')}" ${ro?'readonly':''}></label>
     <label class="f">Mã tuyến (cách nhau bởi dấu phẩy)<input data-rc="${i}" value="${esc((r.codes||[]).join(', '))}" placeholder="VD: 09.BTL, 10.TH" ${ro?'readonly':''}></label>
     <label class="f">Tài khoản ship<select data-rsh="${i}" ${ro?'disabled':''}><option value="">— Chưa gán —</option>${ships.map(([id,s])=>`<option value="${esc(id)}" ${r.ship===id?'selected':''}>${esc(s.name||staffName(id))}</option>`).join('')}</select></label>
+    ${r.shipHint&&!r.ship?`<div class="tiny" style="color:var(--warn)">Theo bảng tuyến: <b>${esc(r.shipHint)}</b> – chưa có tài khoản ship này. Ship tạo tài khoản, Quản lý duyệt vai trò Giao hàng rồi chọn ở đây.</div>`:''}
     ${ro?'':`<button class="btn sm" data-rdel="${i}" style="align-self:flex-start">Xóa tuyến</button>`}</div>`).join('')||'<div class="empty">Chưa có tuyến giao.</div>'}
    ${ro?'':'<button class="btn block" id="rtAdd">+ Thêm tuyến</button><button class="btn block pri" id="rtSave">Lưu tuyến giao</button>'}`;
    const sync=()=>{$$('[data-rn]',box).forEach(x=>L[+x.dataset.rn].name=x.value.trim());$$('[data-rc]',box).forEach(x=>L[+x.dataset.rc].codes=x.value.split(/[,;·]+/).map(y=>y.trim()).filter(Boolean));$$('[data-rsh]',box).forEach(x=>L[+x.dataset.rsh].ship=x.value)};
