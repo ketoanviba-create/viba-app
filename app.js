@@ -183,7 +183,71 @@ function pickProduct(cust,onPick){let q='';const bal=stockMap();const draw=b=>{c
   openSheet('Chọn sản phẩm',`<input id="ppQ" placeholder="Tìm tên hoặc mã sản phẩm" autocomplete="off"><div class="group pick" id="ppList"></div>`,b=>{draw(b);const i=b.querySelector('#ppQ');i.oninput=()=>{q=i.value;draw(b)};setTimeout(()=>i.focus(),50)})}
 
 /* thêm / sửa khách */
-function editCustomer(c,after,preName){const isNew=!c;c=c||{code:'',name:preName||'',address:'',phone:'',area:''};
+/* ================= KHÁCH HÀNG MỚI – tạo mã theo quy tắc (file "TẠO MÃ KHÁCH MỚI") =================
+   Đầu mã: Công nợ → KH ; Thanh toán luôn + khách tỉnh → NLT ; Thanh toán luôn Hà Nội → TTL
+   Có hóa đơn: đầu mã + MST ; Không hóa đơn: đầu mã + năm + tháng + STT (2 số), Tên khách = địa điểm giao */
+const KH_PL=['PL Nhóm CVS','PL Nhóm Horeca','PL Nhóm khách coffee','PL Nhóm khách lẻ','PL Nhóm khách sỉ','PL Nhóm khách tỉnh','PL Nhóm kho','PL Nhóm NPP','PL Nhóm siêu thị','PL Nhóm suất ăn','PL Nhóm xuất khẩu'];
+const KH_RT=[['01.HK','Hoàn Kiếm'],['02.ĐĐ','Đống Đa'],['03.BĐ','Ba Đình'],['04.HBT','Hai Bà Trưng'],['05.HM','Hoàng Mai'],['06.TX','Thanh Xuân'],['07.LB','Long Biên'],['08.NTL','Nam Từ Liêm'],['09.BTL','Bắc Từ Liêm'],['10.TH','Tây Hồ'],['11.CG 2','Cầu Giấy 2'],['12.HĐ','Hà Đông'],['13.HĐ','Hoài Đức'],['14.TT','Thanh Trì'],['16.GL','Gia Lâm'],['19.Time','Times City'],['20.TỈNH','Khách tỉnh']];
+const CG_GENERIC=new Set(['chi','cho','the','tam','khach','nhom','gia','cong','viba','mini','home','fresh','green','smart','food','mart','coffee','ho','hop','ky','nong']);
+function autoGroup(text){const L=((R.cgroups||{}).list)||[];const t=' '+noAcc(text).replace(/[^a-z0-9+]+/g,' ')+' ';const tw=t.trim().split(/[^a-z0-9]+/).filter(Boolean);let best=null,amb=false;
+  if(/ (vm|vinmart|winmart|wm|vm\+) /.test(t)||/ vm\+/.test(t)){const g=L.find(g=>noAcc(g.name)==='vinmart');if(g)return g}
+  for(const g of L){const n=noAcc(g.name.replace(/^\d+\.\s*/,''));if(/^pl /.test(n)||/^(nhom|khach|gia|kh0|cong ty|ct )/.test(n))continue;const nc=n.replace(/[^a-z0-9]/g,'');const first=(n.split(/[^a-z0-9]+/).filter(Boolean)[0])||'';
+    let sc=0;if(nc.length>=5&&tw.some((w,i)=>{if(w.length<2||(i>0&&tw[i-1].length<2))return false;let c='';for(let j=i;j<tw.length&&c.length<nc.length;j++)c+=tw[j];return c===nc}))sc=100+nc.length;else if(nc.length>=4&&t.includes(' '+n+' '))sc=90+nc.length;else if(first.length>=4&&!CG_GENERIC.has(first)&&t.includes(' '+first+' '))sc=first.length;
+    if(!sc)continue;if(!best||sc>best.sc){amb=best&&best.sc===sc&&sc<90;best={g,sc}}else if(sc===best.sc&&sc<90)amb=true}
+  return best&&!amb?best.g:null}
+function nextCustNo(prefix,ym){const re=new RegExp('^'+prefix+ym+'(\\d{2,})$','i');let mx=0;for(const c of R.customers.values()){const m=String(c.code||'').match(re);if(m)mx=Math.max(mx,+m[1])}return prefix+ym+String(mx+1).padStart(2,'0')}
+function newCustomer(after,preName){const S={pl:'',pay:'tt',rt:'',inv:false,mst:'',name:'',bill:'',email:'',loc:preName||'',phone:'',grp:undefined,mstMsg:'',busy:false};
+  const prefix=()=>S.pay==='cn'?'KH':(S.rt==='20.TỈNH'?'NLT':'TTL');const ym=()=>{const d=today();return d.slice(0,4)+d.slice(5,7)};
+  const locFull=()=>{const l=S.loc.trim();if(!l)return'';if(/^\s*\(\s*\d{2}\./.test(l)||!S.rt)return l;return '('+S.rt+') '+l};
+  const code=()=>S.inv?(S.mst.trim()?prefix()+S.mst.trim().replace(/\s+/g,''):''):nextCustNo(prefix(),ym());
+  const auto=()=>S.grp===undefined?autoGroup((S.inv?S.name+' ':'')+S.loc):S.grp;
+  const draw=b=>{const g=auto(),c=code(),ex=c&&findCust(c);
+    b.innerHTML=`<div class="stack">
+     <div class="sec" style="margin:0">1. Phân loại khách</div>
+     <div class="card stack" style="gap:10px">
+      <label class="f"><span>Nhóm khách hàng (nhóm giá MISA) <span style="color:var(--bad)">*</span></span><select id="nc_pl"><option value="">— Chọn nhóm —</option>${KH_PL.map(x=>`<option ${S.pl===x?'selected':''}>${x}</option>`).join('')}</select></label>
+      <div><div class="tiny muted" style="margin-bottom:6px">Nhóm chuỗi (app tự nhận theo tên khách / địa điểm giao)</div>${g?`<span class="chip b" style="font-size:14px;padding:6px 12px">${esc(g.name)} <span id="nc_grpx" style="margin-left:6px;cursor:pointer">✕</span></span>`:`<span class="tiny muted">${S.grp===null?'Đã bỏ nhóm chuỗi':'Chưa nhận ra chuỗi nào'}</span>${S.grp===null?' <a href="#" id="nc_grpr" class="tiny">Tự nhận lại</a>':''}`}</div>
+      <div><div class="tiny muted" style="margin-bottom:6px">Loại thanh toán <span style="color:var(--bad)">*</span></div><div class="seg"><button data-pay="tt" class="${S.pay==='tt'?'on':''}">Thanh toán luôn</button><button data-pay="cn" class="${S.pay==='cn'?'on':''}">Công nợ</button></div></div>
+      <label class="f"><span>Tuyến / khu vực giao <span style="color:var(--bad)">*</span></span><select id="nc_rt"><option value="">— Chọn tuyến —</option>${KH_RT.map(([k,n])=>`<option value="${esc(k)}" ${S.rt===k?'selected':''}>${esc(k)} – ${esc(n)}</option>`).join('')}</select></label>
+     </div>
+     <div class="sec" style="margin:0">2. Thông tin xuất hóa đơn</div>
+     <div class="card stack" style="gap:10px">
+      <div class="toggle" style="padding:0"><div><div style="font-weight:600">Khách lấy hóa đơn</div><div class="tiny muted">${S.inv?'Gõ MST rồi bấm Lấy thông tin – app tự điền Tên, Địa chỉ':'Không xuất hóa đơn: Tên khách = Địa điểm giao hàng'}</div></div><input type="checkbox" class="sw" id="nc_inv" ${S.inv?'checked':''}></div>
+      ${S.inv?`<label class="f"><span>Mã số thuế <span style="color:var(--bad)">*</span></span><div style="display:flex;gap:8px"><input id="nc_mst" value="${esc(S.mst)}" inputmode="numeric" style="flex:1" placeholder="VD: 0109801255"><button class="btn sm" id="nc_lookup" ${S.busy?'disabled':''}>${S.busy?'Đang lấy…':'Lấy thông tin'}</button></div></label>${S.mstMsg}
+      <label class="f"><span>Tên khách hàng (theo hóa đơn) <span style="color:var(--bad)">*</span></span><input id="nc_name" value="${esc(S.name)}"></label>
+      <label class="f"><span>Địa chỉ (theo hóa đơn) <span style="color:var(--bad)">*</span></span><textarea id="nc_bill" rows="2">${esc(S.bill)}</textarea></label>
+      <label class="f">Email nhận hóa đơn<input id="nc_email" value="${esc(S.email)}" inputmode="email"></label>`:''}
+     </div>
+     <div class="sec" style="margin:0">3. Giao hàng</div>
+     <div class="card stack" style="gap:10px">
+      <label class="f"><span>Địa điểm giao hàng <span style="color:var(--bad)">*</span></span><textarea id="nc_loc" rows="2" placeholder="VD: Easy Mart tòa Diamond, Xuân La">${esc(S.loc)}</textarea></label>
+      <div class="tiny muted" style="margin-top:-6px">${S.rt?'Lưu thành: <b>'+esc(locFull()||'('+S.rt+') …')+'</b>':'Chọn tuyến để app thêm mã tuyến ở đầu.'}</div>
+      <label class="f">Số điện thoại<input id="nc_phone" value="${esc(S.phone)}" inputmode="tel"></label>
+     </div>
+     <div style="background:var(--blue-soft,#e7f0fa);border:1.5px solid #1b6aa5;border-radius:12px;padding:12px 14px"><div class="tiny muted">Mã khách hàng (app tự tạo)</div><div style="font-size:24px;font-weight:800;color:#1b6aa5;letter-spacing:.5px">${esc(c||'—')}</div>
+      <div class="tiny" style="margin-top:4px">${S.pay==='cn'?'Khách công nợ → đầu mã <b>KH</b>':S.rt==='20.TỈNH'?'Khách tỉnh, thanh toán luôn → đầu mã <b>NLT</b>':'Khách Hà Nội, thanh toán luôn → đầu mã <b>TTL</b>'}${S.inv?' + MST':' + năm '+ym().slice(0,4)+' + tháng '+ym().slice(4)+' + STT'}</div>
+      ${!S.inv&&locFull()?`<div class="tiny muted" style="margin-top:4px">Tên khách hàng: <b style="color:var(--fg)">${esc(locFull())}</b></div>`:''}
+      ${ex?`<div class="alert r" style="margin-top:8px">Mã ${esc(c)} đã có: ${esc(ex.name)}. Khách này đã có trong danh mục – đóng lại và chọn khách có sẵn.</div>`:''}</div>
+     <div id="nc_msg"></div><button class="btn block pri" id="nc_save">Lưu khách hàng</button></div>`;
+    const v=id=>b.querySelector('#'+id);const keep=(id,k)=>{const x=v(id);if(x)x.oninput=()=>{S[k]=x.value;if(k==='loc'||k==='name'){clearTimeout(S._t);S._t=setTimeout(()=>{const p=document.activeElement&&document.activeElement.id,ss=document.activeElement&&document.activeElement.selectionStart;draw(b);const n=p&&v(p);if(n){n.focus();try{n.setSelectionRange(ss,ss)}catch(e){}}},500)}}};
+    keep('nc_mst','mst');keep('nc_name','name');keep('nc_bill','bill');keep('nc_email','email');keep('nc_loc','loc');keep('nc_phone','phone');
+    v('nc_pl').onchange=e=>{S.pl=e.target.value;draw(b)};v('nc_rt').onchange=e=>{S.rt=e.target.value;if(S.rt==='20.TỈNH'&&!S.pl)S.pl='PL Nhóm khách tỉnh';draw(b)};
+    $$('[data-pay]',b).forEach(x=>x.onclick=()=>{S.pay=x.dataset.pay;draw(b)});v('nc_inv').onchange=e=>{S.inv=e.target.checked;draw(b)};
+    const gx=v('nc_grpx');if(gx)gx.onclick=()=>{S.grp=null;draw(b)};const gr=v('nc_grpr');if(gr)gr.onclick=e=>{e.preventDefault();S.grp=undefined;draw(b)};
+    const lk=v('nc_lookup');if(lk)lk.onclick=async()=>{const m=S.mst.trim().replace(/\s+/g,'');if(!/^\d{10}(-\d{3})?$/.test(m)){S.mstMsg='<div class="alert r">MST phải có 10 số (chi nhánh: 10 số-3 số).</div>';return draw(b)}
+      S.busy=true;draw(b);try{const r=await fetch('https://api.vietqr.io/v2/business/'+encodeURIComponent(m)).then(r=>r.json());
+        if(r&&r.code==='00'&&r.data){S.name=r.data.name||'';S.bill=r.data.address||'';S.mst=m;S.mstMsg=`<div class="alert g" style="margin:0">✓ Đã tự điền từ dữ liệu Tổng cục Thuế · <b>${esc(r.data.status||'')}</b><br><a href="https://masothue.com/Search/?q=${encodeURIComponent(m)}&type=auto" target="_blank" rel="noopener">Xem trên masothue.com ↗</a></div>`;if(!/hoạt động/i.test(r.data.status||''))S.mstMsg=S.mstMsg.replace('alert g','alert w')}
+        else S.mstMsg='<div class="alert w">Không tìm thấy MST này – kiểm tra lại hoặc nhập tay Tên, Địa chỉ.</div>'}catch(e){S.mstMsg='<div class="alert w">Chưa lấy được thông tin (mạng?) – nhập tay Tên, Địa chỉ.</div>'}
+      S.busy=false;draw(b)};
+    v('nc_save').onclick=async()=>{const err=t=>v('nc_msg').innerHTML='<div class="alert r">'+t+'</div>';
+      if(!S.pl)return err('Chọn nhóm khách hàng.');if(!S.rt)return err('Chọn tuyến / khu vực giao.');if(!S.loc.trim())return err('Nhập địa điểm giao hàng.');
+      if(S.inv&&(!/^\d{10}(-\d{3})?$/.test(S.mst.trim())||!S.name.trim()||!S.bill.trim()))return err('Khách lấy hóa đơn cần đủ MST (10 số), Tên và Địa chỉ.');
+      const cd=code();if(findCust(cd))return err('Mã '+esc(cd)+' đã có trong danh mục.');const g=auto();
+      const d={code:cd,name:S.inv?S.name.trim():locFull(),address:locFull(),billAddr:S.inv?S.bill.trim():'',taxCode:S.inv?S.mst.trim():'',email:S.inv?S.email.trim():'',phone:S.phone.trim(),area:S.rt,
+        pl:[S.pl],groups:g?[g.name]:[],payType:S.pay==='cn'?'Công nợ':'Thanh toán luôn',isNew:true,createdAt:Date.now(),createdBy:R.uid,updatedAt:Date.now(),updatedBy:R.uid};
+      v('nc_save').disabled=true;try{await R.db.doc('customers/'+idFor(cd)).set(d);R.custInd.set(idFor(cd),d);rebuildCustomers();toast('Đã tạo khách '+cd);closeSheet();after&&after(d);render()}catch(e){v('nc_save').disabled=false;err('Không lưu được ('+esc(e.code||'lỗi')+').')}}};
+  openSheet('Khách hàng mới','',draw)}
+function editCustomer(c,after,preName){if(!c)return newCustomer(after,preName);const isNew=!c;c=c||{code:'',name:preName||'',address:'',phone:'',area:''};
   openSheet(isNew?'Khách hàng mới':'Sửa khách hàng',`<label class="f">Tên khách hàng *<input id="ec_name" value="${esc(c.name)}"></label>
    <label class="f">Địa chỉ giao hàng<textarea id="ec_addr" rows="2">${esc(c.address||'')}</textarea></label>
    <div class="fgrid"><label class="f">Số điện thoại<input id="ec_phone" inputmode="tel" value="${esc(c.phone||'')}"></label><label class="f">Khu vực / tuyến<input id="ec_area" value="${esc(c.area||'')}"></label>
@@ -912,6 +976,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   const hm=window.APP_MODE||(location.hash||'').replace('#','');if(['sale','ship','kho','admin'].includes(hm)){R.mode=hm;R.tab=null}
   const sub=(coll,fn)=>db.collection(coll).onSnapshot(s=>{fn(s);soon();resolveNames()},e=>toast('Mất kết nối '+coll+' ('+e.code+')'));
   sub('staff',s=>{R.staff=new Map(s.docs.map(d=>[d.id,d.data()]))});
+  sub('config',s=>{const d=s.docs.find(x=>x.id==='custGroups');R.cgroups=d?d.data():null});
   sub('config',s=>{const rt=s.docs.find(x=>x.id==='routes');const nr=rt?rt.data():null;if(JSON.stringify(nr)!==JSON.stringify(R.routes)){R.routes=nr;R.ui.rtSel=null}const d=s.docs.find(x=>x.id==='prodAlias');const it=(d&&d.data()||{}).items||{};R.palias=Object.fromEntries(Object.entries(it).map(([k,v])=>[k,(Array.isArray(v)?v:String(v||'').split(/[;|\n]/)).map(x=>String(x).trim()).filter(Boolean)]))});
   sub('requests',s=>{R.requests=new Map(s.docs.map(d=>[d.id,d.data()]))});
   sub('products',s=>{R.products=new Map(s.docs.map(d=>[d.id,d.data()]).filter(x=>x[1]&&x[1].code&&/^(HH|TP)/i.test(String(x[1].code).trim())&&!PROD_HIDE.test(' '+noAcc(x[1].name).replace(/[^a-z0-9]+/g,' ')+' ')))});/* chỉ dùng mã hàng hoá HH và thành phẩm TP */
