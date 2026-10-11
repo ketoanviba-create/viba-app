@@ -1,5 +1,5 @@
 window.__UIF=window.__UIF||[];
-/* VIBA – lớp giao diện v33: icon màu cho các mục */
+/* VIBA – lớp giao diện v34: icon màu cho các mục */
 (()=>{
 const S=(p,w)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w||1.9}" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 const I={
@@ -129,7 +129,7 @@ h1.big{font-size:24px!important;margin:6px 0 10px!important;display:flex;align-i
 .ux-bar button{background:#1b6aa5;color:#fff;border:0;border-radius:12px;font:inherit;font-weight:800;font-size:16px;padding:13px 18px}
 body.ux-hasbar #view{padding-bottom:80px}
 body:has(#view input:focus,#view textarea:focus) .ux-bar{display:none}
-#oVoice{background:linear-gradient(180deg,#2d8ad0,#1b6aa5)!important;color:#fff!important;font-weight:800!important;min-height:58px}
+#oVoice,#vVoice{background:linear-gradient(180deg,#2d8ad0,#1b6aa5)!important;color:#fff!important;font-weight:800!important;min-height:58px}
 /* 8. Bảng rộng thành thẻ */
 .ux-cards{display:flex;flex-direction:column;gap:8px}
 .ux-cards .c{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
@@ -169,13 +169,18 @@ function ux(){
    let tot=0;document.querySelectorAll('#view .oc .money').forEach(m=>{tot+=+(m.textContent.replace(/[^\d]/g,''))||0});
    h.insertAdjacentHTML('afterend',`<div class="ux-sum"><div><span>Đơn của tôi</span><b>${n(/Đơn của tôi/)} đơn</b></div><div><span>Chờ người nhận</span><b style="color:#c27a00">${n(/chờ người giao/i)} đơn</b></div><div style="grid-column:1/-1"><span>Tổng tiền các đơn trên</span><b style="color:#1e9a5c">${vnd(tot)}</b></div></div>`)}
  // lên đơn sticky
+ const vs=document.querySelector('#vSave');
+ if(vs){const hh=document.querySelector('#view h1.big');const isN=!!document.querySelector('[data-vt="N"].on');const dt=new Date();const lab=hh&&/^Sửa phiếu/.test(hh.textContent.trim())?hh.textContent.trim():(isN?'Phiếu nhập':'Phiếu xuất')+' · hôm nay '+String(dt.getDate()).padStart(2,'0')+'/'+String(dt.getMonth()+1).padStart(2,'0');
+   let bar=document.querySelector('.ux-bar');if(!bar){document.body.insertAdjacentHTML('beforeend','<div class="ux-bar"><div class="t"></div><button type="button"></button></div>');bar=document.querySelector('.ux-bar');document.body.classList.add('ux-hasbar')}
+   bar.querySelector('button').onclick=()=>{const b=document.querySelector('#vSave');if(b&&!b.disabled)b.click()};
+   const t=`<b style="font-size:16px;color:var(--fg)">${esc(lab)}</b>`;const T=bar.querySelector('.t');if(T.innerHTML!==t)T.innerHTML=t;const B=bar.querySelector('button');if(B.textContent!=='Lưu phiếu')B.textContent='Lưu phiếu';B.disabled=vs.disabled}
  const sv=document.querySelector('#oSave');const tb=document.querySelector('.totalbar');
- if(!(sv&&tb)){const ob=document.querySelector('.ux-bar');if(ob){ob.remove();document.body.classList.remove('ux-hasbar')}}
- if(sv&&tb){let bar=document.querySelector('.ux-bar');if(!bar){document.body.insertAdjacentHTML('beforeend','<div class="ux-bar"><div class="t"></div><button type="button"></button></div>');bar=document.querySelector('.ux-bar');document.body.classList.add('ux-hasbar');bar.querySelector('button').onclick=()=>{const b=document.querySelector('#oSave');if(b&&!b.disabled)b.click()}}
+ if(!(sv&&tb)&&!vs){const ob=document.querySelector('.ux-bar');if(ob){ob.remove();document.body.classList.remove('ux-hasbar')}}
+ if(sv&&tb){let bar=document.querySelector('.ux-bar');if(!bar){document.body.insertAdjacentHTML('beforeend','<div class="ux-bar"><div class="t"></div><button type="button"></button></div>');bar=document.querySelector('.ux-bar');document.body.classList.add('ux-hasbar')}bar.querySelector('button').onclick=()=>{const b=document.querySelector('#oSave');if(b&&!b.disabled)b.click()};
    const sp=tb.querySelectorAll('span');const t=`<b>${esc(sp[1]?sp[1].textContent:'')}</b><span>${esc(sp[0]?sp[0].textContent:'')}</span>`;const T=bar.querySelector('.t');if(T.innerHTML!==t)T.innerHTML=t;const B=bar.querySelector('button');if(B.textContent!==sv.textContent)B.textContent=sv.textContent;B.disabled=sv.disabled}
  // bảng rộng → thẻ
  document.querySelectorAll('#view table:not(.ux-done)').forEach(t=>{t.classList.add('ux-done');const hs=[...t.querySelectorAll('thead th')].map(x=>x.textContent.trim());if(hs.length<4||/data-|onclick/.test(t.innerHTML))return;const box=t.closest('.tbl,.card,div');if(!(t.scrollWidth>(box?box.clientWidth:390)+4))return;
-   const rows=[...t.querySelectorAll('tbody tr,tfoot tr')].map(r=>[...r.children].map(td=>esc(td.textContent.trim())));
+   const rows=[...t.querySelectorAll('tbody tr,tfoot tr')].map(r=>[...r.children].map((td,i)=>esc((i?td.textContent:td.innerText).trim())));
    const html=`<div class="ux-cards">${rows.map(r=>`<div class="c"><div class="h">${r[0].replace(/\n/g,' · ')}</div><div class="kv">${r.slice(1).map((v,i)=>`<span>${hs[i+1]||''}</span><b>${v}</b>`).join('')}</div></div>`).join('')}</div>`;
    const wrap=t.parentElement;wrap.style.display='none';wrap.insertAdjacentHTML('afterend',html)});
 }
@@ -203,7 +208,7 @@ const css=`
 const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
 const hide=e=>e&&e.classList.add('mn-hide');
 const HIDE=/^(Xanh = có ảnh chấm công|Bắt buộc bật vị trí|Chọn khách hàng trước|Danh sách số điện thoại được phép|Bấm một dòng để sửa|App tự xếp đơn vào tuyến|Khách xếp theo đơn nợ cũ nhất|Giao theo đơn = |Phiếu xuất lấy SL|Bấm vào mặt hàng để xem thẻ kho|Hiển thị đơn 3 tháng gần nhất|Dùng khi nhân viên quên mật khẩu|Tích thêm tuyến|Mỗi ngày sale chụp 1 ảnh|Nhóm chuỗi \(app tự nhận)/;
-const TABN=/^(Lên đơn|Đơn của tôi|Chấm công|Báo cáo|Cần giao|Đã giao|Tổng quan|Đơn hàng|Kho|Danh mục|Cài đặt|Lập phiếu|Phiếu|Tồn kho|Theo đơn)$/;
+const TABN=/^(Lập phiếu kho|Phiếu kho|Lên đơn|Đơn của tôi|Chấm công|Báo cáo|Cần giao|Đã giao|Tổng quan|Đơn hàng|Kho|Danh mục|Cài đặt|Lập phiếu|Phiếu|Tồn kho|Theo đơn)$/;
 function mn(){
  const V=document.querySelector('#view');if(!V)return;
  // nhãn ngắn
@@ -228,6 +233,7 @@ function mn(){
  V.querySelectorAll('.card .tiny,.card div').forEach(e=>{const m=e.children.length<=1&&e.parentElement&&e.parentElement.querySelector('[data-dd]')&&e.textContent.trim().match(/^Giao (Thứ|Chủ)[^,]*, (\d{2}\/\d{2})/);if(m){hide(e);const on=e.parentElement&&e.parentElement.querySelector('.seg button.on, .seg button[aria-pressed="true"]');const sg=e.parentElement&&e.parentElement.querySelector('.seg');
    if(sg){const b=on||sg.querySelector('[data-dd="x"]');if(b&&!b.querySelector('.ux-d'))b.insertAdjacentHTML('beforeend',` <span class="ux-d">${m[2]}</span>`);sg.querySelectorAll('.ux-d').forEach(x=>{if(x.parentElement!==b)x.remove()})}}});
  const sv=V.querySelector('#oSave');if(sv&&document.querySelector('.ux-bar'))hide(sv);
+ const vsv=V.querySelector('#vSave');if(vsv&&document.querySelector('.ux-bar'))hide(vsv);
  const rs=V.querySelector('#oReset');if(rs){rs.classList.add('sm');rs.style.cssText='background:none;color:var(--muted);min-height:0;font-weight:600'}
  const pd=V.querySelector('#oPaid');if(pd){const g=pd.closest('.toggle');if(g){const t=g.querySelector('.tiny');hide(t)}}
  V.querySelectorAll('.sec').forEach(s=>{if(/^(Thanh toán|Sản phẩm)$/.test(s.textContent.trim()))hide(s)});
