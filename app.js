@@ -385,7 +385,9 @@ function voiceOrder(){const d=R.odraft||(R.odraft=newOrderDraft());const SR=wind
     if(mic){rec=new SR();rec.lang='vi-VN';rec.interimResults=true;rec.continuous=true;rec.maxAlternatives=1;
       rec.onresult=e=>{let fin='',tmp='';for(let i=0;i<e.results.length;i++){const r=e.results[i];if(r.isFinal)fin+=r[0].transcript+' ';else tmp+=r[0].transcript}T.value=(base+' '+fin+tmp).trim()};
       rec.onend=()=>{on=false;mic.textContent='🎤 Nói lại';if(T.value.trim())show()};
-      rec.onerror=e=>{on=false;mic.textContent='🎤 Nói lại';Rb.innerHTML=`<div class="alert r">${e.error==='not-allowed'||e.error==='service-not-allowed'?'Chưa cho phép dùng micro. Vào Cài đặt › Safari › Micro (hoặc bấm “Cho phép” khi được hỏi), hoặc bấm vào ô trên rồi dùng 🎤 của bàn phím.':e.error==='no-speech'?'Không nghe thấy tiếng nói, thử lại.':'Lỗi nhận giọng nói ('+esc(e.error)+'). Có thể dùng 🎤 của bàn phím.'}</div>`};
+      rec.onerror=e=>{on=false;mic.textContent='🎤 Nói lại';if(e.error==='not-allowed'||e.error==='service-not-allowed'||e.error==='audio-capture'){Rb.innerHTML=permHTML('mic')+'<button class="btn block pri" id="vcRetry" style="margin-top:8px">Thử lại</button><div class="tiny muted" style="margin-top:6px">Trong lúc chưa bật được: bấm vào ô trên rồi dùng 🎤 của bàn phím điện thoại.</div>';const r=Rb.querySelector('#vcRetry');if(r)r.onclick=()=>mic.onclick();return}
+        Rb.innerHTML=`<div class="alert r">${e.error==='no-speech'?'Không nghe thấy tiếng nói, thử lại.':'Lỗi nhận giọng nói ('+esc(e.error)+'). Có thể dùng 🎤 của bàn phím.'}</div>`};
+      permState('microphone').then(st=>{if(st==='denied'&&!on){Rb.innerHTML=permHTML('mic')+'<button class="btn block pri" id="vcRetry" style="margin-top:8px">Thử lại</button>';const r=Rb.querySelector('#vcRetry');if(r)r.onclick=()=>mic.onclick()}});
       mic.onclick=()=>{if(on){try{rec.stop()}catch(e){}return}base=T.value.trim();Rb.innerHTML='';try{rec.start();on=true;mic.textContent='🔴 Đang nghe… (bấm để dừng)'}catch(e){Rb.innerHTML='<div class="alert r">Không bật được micro.</div>'}};
       mic.onclick()/* tự bật micro ngay khi mở khung (vẫn trong lượt bấm của người dùng) */}
     else setTimeout(()=>T.focus(),50)},{onClose:()=>{if(rec&&on)try{rec.abort()}catch(e){}}})}
@@ -665,6 +667,27 @@ function bindPayAdmin(){bindPayMonth();const b=$('#payXls');if(!b)return;b.oncli
    Mỗi ngày 1 ảnh chụp từ camera + vị trí GPS bắt buộc → 1 công (attend/{uid}_{ngày}). Quản lý có thể bỏ công (void).
    Lương cứng = saleBase × công / saleStd; phụ cấp = saleAllow × công / saleStd (vượt chuẩn trả thêm).
    Hoa hồng = saleComm% × doanh số đơn sale lên đã giao trong tháng (theo ngày giao), giá sau KM, trước thuế, trừ hàng trả. */
+
+/* ===== v30: hướng dẫn bật lại quyền micro / vị trí khi lỡ bấm "Không cho phép" =====
+   Trang web không tự bật lại được quyền đã bị chặn; app phát hiện, chỉ đúng chỗ bật theo loại máy và cho "Thử lại". */
+const isIOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const isStandalone=()=>{try{return matchMedia('(display-mode: standalone)').matches||!!navigator.standalone}catch(e){return false}};
+function permSteps(kind,off){const n=kind==='mic'?'Micro':'Vị trí',site=location.host;const S=[];
+  if(isIOS){if(off&&kind==='geo')S.push('Bật định vị: <b>Cài đặt</b> › <b>Quyền riêng tư & Bảo mật</b> › <b>Dịch vụ định vị</b> › Bật; kéo xuống <b>Trang web Safari</b> › chọn <b>Khi dùng ứng dụng</b>.');
+    if(!isStandalone())S.push(`Trên Safari: bấm <b>aA</b> (hoặc biểu tượng ☰) ở thanh địa chỉ › <b>Cài đặt trang web</b> › <b>${n}</b> › chọn <b>Cho phép</b>.`);
+    S.push(`Hoặc: <b>Cài đặt</b> iPhone › <b>Safari</b> (hoặc <b>Ứng dụng › Safari</b>) › mục <b>${n}</b> › chọn <b>Cho phép</b> (không chọn "Hỏi" để lần sau tự bật).`);
+    if(kind==='geo'&&!off)S.push('Nếu vẫn lỗi: Cài đặt › Quyền riêng tư & Bảo mật › Dịch vụ định vị › <b>Trang web Safari</b> › <b>Khi dùng ứng dụng</b>.')}
+  else{if(off&&kind==='geo')S.push('Bật <b>Vị trí / GPS</b>: vuốt thanh thông báo từ trên xuống › bấm biểu tượng <b>Vị trí</b>.');
+    S.push(`Trên Chrome: bấm biểu tượng <b>ổ khóa / ⓘ / ⚙</b> bên trái địa chỉ trang › <b>Quyền</b> › <b>${n}</b> › <b>Cho phép</b>.`);
+    S.push(`Hoặc: Chrome › <b>⋮</b> › <b>Cài đặt</b> › <b>Cài đặt trang web</b> › <b>${n}</b> › tìm <b>${esc(site)}</b> (mục Bị chặn) › <b>Cho phép</b>.`);
+    S.push(`Nếu vẫn không được: <b>Cài đặt</b> điện thoại › <b>Ứng dụng</b> › <b>Chrome</b> › <b>Quyền</b> › <b>${n}</b> › <b>Cho phép</b>.`)}
+  S.push('Quay lại app, <b>tải lại trang</b> rồi bấm <b>Thử lại</b>.');return S}
+function permHTML(kind,off){const n=kind==='mic'?'micro':'vị trí';
+  return `<div class="alert w">${off?'Điện thoại đang tắt định vị (GPS).':'Điện thoại đang <b>chặn '+n+'</b> cho app (lần trước đã bấm “Không cho phép”).'} App không tự bật lại được, bạn làm 1 lần theo các bước dưới, chọn <b>Cho phép</b> để các lần sau app tự dùng ${n}.</div>
+   <ol style="margin:4px 0 0;padding-left:20px;line-height:1.55">${permSteps(kind,off).map(x=>`<li style="margin-bottom:6px">${x}</li>`).join('')}</ol>`}
+function permSheet(kind,retry,off){openSheet(kind==='mic'?'Bật micro cho app':off?'Bật định vị (GPS)':'Bật vị trí cho app',`${permHTML(kind,off)}<button class="btn block pri" id="permRetry">Thử lại</button><button class="btn block" id="permReload">Tải lại trang</button>`,b=>{
+  b.querySelector('#permRetry').onclick=()=>{closeSheet();retry&&retry()};b.querySelector('#permReload').onclick=()=>location.reload()})}
+async function permState(name){try{if(!navigator.permissions)return '';return (await navigator.permissions.query({name})).state}catch(e){return ''}}
 const attOf=(uid,ym)=>(R.attend||[]).filter(a=>a.uid===uid&&String(a.date||'').slice(0,7)===ym);
 function geoNow(){return new Promise((ok,no)=>{if(!navigator.geolocation)return no({code:'nogeo'});navigator.geolocation.getCurrentPosition(p=>ok(p.coords),e=>no(e),{enableHighAccuracy:true,timeout:20000,maximumAge:0})})}
 function camPhoto(){return new Promise(res=>{const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.setAttribute('capture','environment');inp.style.display='none';document.body.appendChild(inp);
@@ -672,7 +695,7 @@ function camPhoto(){return new Promise(res=>{const inp=document.createElement('i
 function kmDist(a,b){const R6=6371,r=x=>x*Math.PI/180;const dl=r(b[0]-a[0]),dn=r(b[1]-a[1]);const h=Math.sin(dl/2)**2+Math.cos(r(a[0]))*Math.cos(r(b[0]))*Math.sin(dn/2)**2;return 2*R6*Math.asin(Math.sqrt(h))}
 const coLoc=()=>{const m=String(ST().coLoc||'').match(/(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)/);return m?[+m[1],+m[2]]:null};
 async function doAttend(){const place=R.ui.attPlace||'cty';let c;
-  toast('Đang lấy vị trí…');try{c=await geoNow()}catch(e){toast(e&&e.code===1?'Bạn chưa cho phép vị trí. Bật quyền vị trí cho trình duyệt/app rồi chụp lại.':'Không lấy được vị trí. Bật GPS và thử lại.');return}
+  toast('Đang lấy vị trí…');try{c=await geoNow()}catch(e){if(e&&e.code===1)permSheet('geo',doAttend);else if(e&&e.code===3)toast('Chưa bắt được vị trí, ra chỗ thoáng rồi thử lại.');else permSheet('geo',doAttend,true);return}
   const d=await camPhoto();if(!d)return;const day=today(),id=R.uid+'_'+day,pid='att-'+id+'-'+uidShort();
   try{toast('Đang gửi chấm công…');await R.db.doc('photos/'+pid).set({data:d,kind:'attend',by:R.uid,at:Date.now()});R.photoCache.set(pid,d);
     await R.db.doc('attend/'+id).set({uid:R.uid,date:day,at:Date.now(),place,lat:+c.latitude.toFixed(6),lng:+c.longitude.toFixed(6),acc:Math.round(c.accuracy||0),photo:pid,void:false});toast('✓ Đã chấm công');render()}
