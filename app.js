@@ -762,8 +762,37 @@ function viewDash(v){const [f,t]=periodRange();const all=ordersIn(f,t);
    <div class="tw"><table><thead><tr><th>Mặt hàng</th><th class="n">Giao theo đơn</th><th class="n">Xuất kho</th><th class="n">Lệch</th><th class="n">Trả về theo đơn</th><th class="n">Nhập trả kho</th><th class="n">Lệch</th></tr></thead><tbody>
    ${recRows.map(([c,r])=>{const d1=r3(r.go-r.px),d2=r3(r.back-r.pn);return `<tr><td>${esc(r.name)}<div class="tiny muted">${esc(c)} · ${esc(r.unit)}</div></td><td class="n">${fmt(r.go)}</td><td class="n">${fmt(r.px)}</td><td class="n ${d1?'neg':''}">${d1?fmt(d1):'✓'}</td><td class="n">${fmt0(r.back)}</td><td class="n">${fmt0(r.pn)}</td><td class="n ${d2?'neg':''}">${d2?fmt(d2):r.back||r.pn?'✓':''}</td></tr>`}).join('')||'<tr><td colspan="7" class="empty">Chưa có phát sinh.</td></tr>'}</tbody></table></div>
    <div class="tiny muted">Giao theo đơn = SL bán + khuyến mại + hàng đổi của các đơn đã giao trong kỳ. Lệch khác 0 nghĩa là chưa lập phiếu xuất, hoặc phiếu xuất khác với số thực giao.</div>
-   <button class="btn" id="dXls">Xuất Excel chi tiết đơn hàng trong kỳ</button></div>`;
-  bindPeriod();$('#dXls').onclick=()=>exportOrders(all,f,t)}
+   <button class="btn" id="dXls">Xuất Excel chi tiết đơn hàng trong kỳ</button>
+   <button class="btn" id="dMisa">Xuất file nhập MISA (đơn đã giao trong kỳ)</button></div>`;
+  bindPeriod();$('#dXls').onclick=()=>exportOrders(all,f,t);$('#dMisa').onclick=()=>exportMisaSale(all,f,t)}
+/* ===== XUẤT FILE NHẬP MISA (đơn Đã giao) – mẫu "Nhập bán hàng hóa từ Excel" của MISA AMIS, tiêu đề dòng 1 =====
+   Số CT: chưa thu → bh… ; tiền mặt → ct… ; chuyển khoản → ntn… (+ số đơn app, VD DH2610-004 → bh2610004)
+   KM (tặng thêm hàng) trừ thẳng vào đơn giá; hàng đổi (xuất bù hỏng) → dòng mã hỗ trợ/đổi trả 0đ, TK 5112
+   Thuế GTGT theo bảng thuế suất (config/vatRates): khách công ty/HTX ↔ khách cá nhân/hộ kinh doanh */
+const MISA_H=["Phương thức thanh toán","Kiêm phiếu xuất kho","Lập kèm hóa đơn","Đã lập hóa đơn","Ngày hạch toán (*)","Ngày chứng từ (*)","Số chứng từ (*)","Số phiếu xuất","Mẫu số HĐ","Ký hiệu HĐ","Số hóa đơn","Ngày hóa đơn","Khách hàng","Địa chỉ","Mã số thuế","Nộp vào TK","Diễn giải/Lý do nộp","Lý do xuất","Loại tiền","Tỷ giá","Mã hàng (*)","Tên hàng","Hàng khuyến mại","Chiết khấu thương mại","TK Tiền/Chi phí/Nợ (*)","TK Doanh thu/Có (*)","ĐVT","Số lượng","Đơn giá","Thành tiền","Thành tiền quy đổi","Tỷ lệ CK (%)","Tiền chiết khấu","Tiền chiết khấu quy đổi","TK chiết khấu","% thuế GTGT","Tiền thuế GTGT","Tiền thuế GTGT quy đổi","TK thuế GTGT","Mã kho","TK giá vốn","TK Kho","Đơn giá vốn","Tiền vốn"];
+const vN=s=>noAcc(String(s||'').replace(/\n/g,' ')).replace(/[.\s]+$/,'').replace(/\s+/g,' ');
+function custKind(o){const c=findCust(o.cust)||{};const nm=noAcc((c.name||'')+' '+(o.custName||''));const tax=String(c.taxCode||'').replace(/\s/g,'');
+  if(/(^| )(cong ty|cty|hop tac xa|htx|chi nhanh|doanh nghiep|tong cong ty)( |$)/.test(nm)||/^\d{10}(-\d{3})?$/.test(tax))return {co:true,why:''};
+  if(/ho kinh doanh|hkd/.test(nm)||/^\d{12}$/.test(tax))return {co:false,why:''};return {co:false,why:'chưa rõ loại khách (không MST) – đang tính như cá nhân/hộ KD'}}
+function vatOf(name,co){const L=((R.vat||{}).items)||[];const n=vN(name);const it=L.find(x=>x.names.some(y=>vN(y)===n))||L.find(x=>x.names.some(y=>n.startsWith(vN(y))||vN(y).startsWith(n)));if(!it)return null;const v=co?it.co:it.hh;return v}
+function swapCode(code,name){const n=vN(name);let best=null;const all=R.allProducts||[];for(const p of all){const pn=vN(p.name);if(p.code===code||!pn.includes(n.replace(/ \d.*$/,'')))continue;const sc=/ho tro|dt|doi tra/.test(pn)&&pn.includes(n)?3:/ho tro|dt|doi tra/.test(pn)?2:/km|khuyen mai/.test(pn)&&pn.includes(n)?1:0;if(sc&&(!best||sc>best.sc))best={p,sc}}return best&&best.p}
+function exportMisaSale(list,f,t){const done=list.filter(o=>o.status==='done').sort((a,b)=>((a.doneAt||0)-(b.doneAt||0))||a.no.localeCompare(b.no));if(!done.length)return toast('Không có đơn Đã giao trong kỳ.');
+  const rows=[MISA_H],chk=[['Số đơn app','Số CT MISA','Ngày giao','Mã KH','Khách hàng','Loại khách (thuế)','Thanh toán','Tiền hàng','Thuế GTGT','Tổng thanh toán','Đã thu trên app','Ghi chú kiểm tra']];
+  for(const o of done){const dd=new Date(o.doneAt||Date.parse(o.date));const day=xDate(dd.getFullYear()+'-'+String(dd.getMonth()+1).padStart(2,'0')+'-'+String(dd.getDate()).padStart(2,'0'));
+    const pm=o.paid?(o.payMethod==='transfer'?'ck':'tm'):'no';const num=String(o.no||o.id).replace(/\D/g,'');const ref=(pm==='no'?'bh':pm==='tm'?'ct':'ntn')+num;
+    const tkNo=pm==='no'?'131':pm==='tm'?'1111':'1121';const ck=custKind(o);const c=findCust(o.cust)||{};const nm=c.name||o.custName||'';
+    const memo=(pm==='no'?'Bán hàng ':'Thu tiền bán hàng ')+nm;const notes=[];if(ck.why)notes.push(ck.why);if(pm==='ck')notes.push('Chuyển khoản: điền "Nộp vào TK" (tài khoản ngân hàng nhận).');
+    let first=true,sum=0,vsum=0;const put=(code,name,unit,qty,price,amt,km,tkCo,vat)=>{const vamt=typeof vat==='number'?Math.round(amt*vat):0;sum+=amt;vsum+=vamt;
+      rows.push([first?(pm==='no'?'Chưa thu tiền':'Thu tiền ngay'):'',first?'Không':'',first?'Không':'',first?'Chưa lập':'',day,day,ref,'','','','','',first?o.cust:'','','','',first?memo:'','',first?'VND':'','',code,name,km?'Có':'Không','',tkNo,tkCo,unit,qty,price,amt,'','','','','',vat==null?'':(typeof vat==='number'?vat*100:vat),vamt||'',
+        '',vat==null?'':'33311','','','','','']);first=false};
+    for(const l of o.lines||[]){const q=toNum(l.qty),km=toNum(l.promo),sw=toNum(l.swap),rt=toNum(l.ret),pr=toNum(l.price);const net=Math.max(0,q-rt);const amt=Math.round(net*pr);
+      const vat=vatOf(l.name,ck.co);if(vat==null)notes.push('Chưa có thuế suất cho '+l.name+'.');
+      const tq=net+km;const up=km&&tq?Math.round(amt/tq*100)/100:pr;if(km)notes.push(l.name+': tặng '+km+' '+(l.unit||'')+' → gộp vào số lượng ('+tq+'), đơn giá '+up+' (trừ thẳng vào giá).');
+      if(rt)notes.push(l.name+': khách trả lại '+rt+' khi giao → số lượng bán '+net+'.');if(!pr&&q)notes.push(l.name+': đơn giá 0đ.');
+      if(tq)put(l.code,l.name,l.unit||'',tq,up,amt,false,'5111',vat);
+      if(sw){const sp=swapCode(l.code,l.name);notes.push(l.name+': đổi '+sw+' '+(l.unit||'')+' → '+(sp?sp.code+' '+sp.name:'(chưa có mã đổi riêng, dùng mã '+l.code+')')+', TK 5112, 0đ.');put(sp?sp.code:l.code,sp?sp.name:l.name,(sp&&sp.unit)||l.unit||'',sw,0,0,true,'5112',vatOf(l.name,ck.co))}}
+    chk.push([o.no,ref,day,o.cust,nm,ck.co?'Công ty/HTX':'Cá nhân/Hộ KD',pm==='no'?'Chưa thu':pm==='tm'?'Tiền mặt':'Chuyển khoản',sum,vsum,sum+vsum,o.paid?toNum(o.paidAmount||sum):0,notes.join(' ')])}
+  xlsxFile(`Nhap_MISA_ban_hang_${f}_${t}.xlsx`,[{name:'Ban hang trong nuoc',rows,cols:MISA_H.map((h,i)=>[16,10,10,10,12,12,13].concat([8,8,8,8,10,20,10,10,10,40,10,6,6,11,30,9,8,9,9,7,9,12,13])[i]||9)},{name:'Kiem tra',rows:chk,cols:[13,13,11,18,40,16,13,12,11,13,13,80]}])}
 function exportOrders(list,f,t){const rows=[['Ngày','Số đơn','Trạng thái','Sale','Ship','Mã KH','Khách hàng','Địa chỉ','Mã SP','Tên SP','ĐVT','SL','KM','Đổi','Trả','Đơn giá','Giá mặc định','Thành tiền','Tình trạng thanh toán','Số tiền đã thu','Người thu','Còn phải thu','Ship ngoài','Phiếu xuất','Phiếu nhập trả','Nguồn đơn','Hình thức TT','Ngày giao','Tuyến giao']];
   const oTot=o=>(o.lines||[]).reduce((s,l)=>s+lineAmt(l),0),oPaid=o=>o.paid?toNum(o.paidAmount||oTot(o)):0,oPay=o=>{const t=oTot(o),p=oPaid(o);return p>=t&&p>0?'Đã thanh toán đủ':p>0?'Thanh toán một phần':'Chưa thanh toán'};
   list.slice().sort((a,b)=>(a.date+a.no).localeCompare(b.date+b.no)).forEach(o=>o.lines.forEach((l,i)=>rows.push([xDate(o.date),o.no,ST_NAME[o.status],staffName(o.saleId),o.shipId?staffName(o.shipId):'',o.cust,o.custName,o.address,l.code,l.name,l.unit,toNum(l.qty),toNum(l.promo),toNum(l.swap),toNum(l.ret),toNum(l.price),l.listPrice==null?'':toNum(l.listPrice),lineAmt(l),oPay(o),i===0&&o.paid?oPaid(o):'',o.paid?(o.paidBy==='ship'?'Ship':'Sale'):'',i===0?Math.max(0,oTot(o)-oPaid(o)):'',o.outside?'Có':'',o.px||'',o.pn||'',o.arising?'Ship phát sinh':'Sale',o.paid?(PM_NAME[o.payMethod]||''):'',xDate(o.dlvDate||o.date),RT().length?rtLabel(routeOf(o)):'']))); 
@@ -976,10 +1005,10 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   const hm=window.APP_MODE||(location.hash||'').replace('#','');if(['sale','ship','kho','admin'].includes(hm)){R.mode=hm;R.tab=null}
   const sub=(coll,fn)=>db.collection(coll).onSnapshot(s=>{fn(s);soon();resolveNames()},e=>toast('Mất kết nối '+coll+' ('+e.code+')'));
   sub('staff',s=>{R.staff=new Map(s.docs.map(d=>[d.id,d.data()]))});
-  sub('config',s=>{const d=s.docs.find(x=>x.id==='custGroups');R.cgroups=d?d.data():null});
+  sub('config',s=>{const d=s.docs.find(x=>x.id==='custGroups');R.cgroups=d?d.data():null;const v=s.docs.find(x=>x.id==='vatRates');R.vat=v?v.data():null});
   sub('config',s=>{const rt=s.docs.find(x=>x.id==='routes');const nr=rt?rt.data():null;if(JSON.stringify(nr)!==JSON.stringify(R.routes)){R.routes=nr;R.ui.rtSel=null}const d=s.docs.find(x=>x.id==='prodAlias');const it=(d&&d.data()||{}).items||{};R.palias=Object.fromEntries(Object.entries(it).map(([k,v])=>[k,(Array.isArray(v)?v:String(v||'').split(/[;|\n]/)).map(x=>String(x).trim()).filter(Boolean)]))});
   sub('requests',s=>{R.requests=new Map(s.docs.map(d=>[d.id,d.data()]))});
-  sub('products',s=>{R.products=new Map(s.docs.map(d=>[d.id,d.data()]).filter(x=>x[1]&&x[1].code&&/^(HH|TP)/i.test(String(x[1].code).trim())&&!PROD_HIDE.test(' '+noAcc(x[1].name).replace(/[^a-z0-9]+/g,' ')+' ')))});/* chỉ dùng mã hàng hoá HH và thành phẩm TP */
+  sub('products',s=>{R.allProducts=s.docs.map(d=>d.data()).filter(p=>p&&p.code);R.products=new Map(s.docs.map(d=>[d.id,d.data()]).filter(x=>x[1]&&x[1].code&&/^(HH|TP)/i.test(String(x[1].code).trim())&&!PROD_HIDE.test(' '+noAcc(x[1].name).replace(/[^a-z0-9]+/g,' ')+' ')))});/* chỉ dùng mã hàng hoá HH và thành phẩm TP */
   sub('customers',s=>{R.custInd=new Map(s.docs.map(d=>[d.id,d.data()]).filter(x=>x[1]&&x[1].code));rebuildCustomers()});
   sub('custpack',s=>{R.custPacks=new Map(s.docs.map(d=>[d.id,(d.data()||{}).items||[]]));rebuildCustomers()});
   sub('prices',s=>{R.prices=new Map(s.docs.map(d=>{const x=d.data();return [x.cust,x]}))});
