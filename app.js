@@ -574,15 +574,15 @@ function viewShipTodo(v){const L=R.orders.filter(o=>(o.status==='new'&&!o.shipId
 /* ================= BÁO CÁO SALE / SHIP ================= */
 function viewSaleReport(v,uid){const [f,t]=periodRange();const all=ordersIn(f,t);
   if(!all){v.innerHTML='<h1 class="big">Báo cáo</h1>'+periodBar()+'<div class="empty">Đang tải dữ liệu…</div>';bindPeriod();return}
-  const L=all.filter(o=>o.saleId===uid);const s=stats(L);const st=R.staff.get(uid);const p=st&&st.pct!=null&&st.pct!==''?toNum(st.pct):toNum(ST().salePct);
-  const prod=new Map();L.filter(o=>o.status!=='cancel').forEach(o=>o.lines.forEach(l=>{const r=prod.get(l.code)||{name:l.name,unit:l.unit,qty:0,promo:0,ret:0,swap:0,amt:0};r.qty+=toNum(l.qty);r.promo+=giftQ(l);r.ret+=toNum(l.ret);r.swap+=toNum(l.swap);r.amt+=lineAmt(l);prod.set(l.code,r)}));
-  v.innerHTML=`<h1 class="big">Báo cáo bán hàng</h1><div class="stack">${uid===R.uid?attendBlock(uid):''}${periodBar()}
-   <div class="kpis"><div class="kpi g"><div class="l">Tổng doanh số</div><div class="v">${vnd(s.revenue)}</div><div class="h">đã trừ hàng trả</div></div>
-   <div class="kpi"><div class="l">Số đơn hàng</div><div class="v">${s.orders}</div><div class="h">${s.done} đã giao${s.cancel?' · '+s.cancel+' hủy':''}</div></div>
-   <div class="kpi"><div class="l">Tổng số lượng</div><div class="v">${fmt(s.qty)}</div><div class="h">Tặng ${fmt(s.promo)}</div></div>
-   <div class="kpi ${s.ret+s.swap?'w':''}"><div class="l">Tỷ lệ đổi trả</div><div class="v">${retRate(s)}</div><div class="h">đổi ${fmt(s.swap)} · trả ${fmt(s.ret)}</div></div>
-   <div class="kpi ${s.unpaid?'r':''}"><div class="l">Khách còn nợ</div><div class="v">${vnd(s.unpaid)}</div><div class="h">đã thu ${vnd(s.paid)}</div></div></div>
-   <div class="sec">Theo sản phẩm</div>${prodTable(prod)}${salePayBlock(uid)}</div>`;bindPeriod();bindPayMonth();bindAttend()}
+  const L=all.filter(o=>o.saleId===uid);const s=stats(L);const prod=prodAgg(L);
+  const ym=payYm(),PL=saleOrdersDone(ym),pay=PL?salePay(uid,ym,PL):null;
+  const debt=R.orders.filter(o=>o.saleId===uid&&owedOf(o)>0);const dSum=debt.reduce((x,o)=>x+owedOf(o),0);const dCust=new Set(debt.map(o=>o.cust||o.custName)).size;
+  v.innerHTML=`<h1 class="big">Báo cáo</h1><div class="stack">${periodBar()}
+   ${accCard('ai','Tổng thu nhập tháng '+ym.slice(5)+'/'+ym.slice(0,4),pay?vnd(pay.total):'…',pay?pay.cong+' công · bấm để xem chi tiết':'',C_G,()=>salePayBlock(uid))}
+   ${accCard('ar','Tổng doanh số',vnd(s.revenue),`${s.orders} đơn · ${fmt(s.qty)} SL · đã trừ hàng trả`,C_B,()=>prodTable(prod))}
+   ${accCard('ad','Tổng nợ phải thu',vnd(dSum),`${debt.length} đơn · ${dCust} khách`,C_R,()=>debtBlock(debt))}
+   ${accCard('ax','Tỷ lệ đổi trả',retRate(s),`đổi ${fmt(s.swap)} · trả ${fmt(s.ret)}`,C_O,()=>retTable(prod))}
+   </div>`;bindPeriod();bindAcc();bindPayMonth();bindOids(R.orders)}
 function prodTable(prod){const rows=[...prod.entries()].sort((a,b)=>b[1].amt-a[1].amt);
   return rows.length?`<div class="tw"><table><thead><tr><th>Sản phẩm</th><th class="n">SL</th><th class="n">Tặng</th><th class="n">Đổi</th><th class="n">Trả</th><th class="n">Doanh số</th></tr></thead><tbody>${rows.map(([c,r])=>`<tr><td>${esc(r.name)}<div class="tiny muted">${esc(c)} · ${esc(r.unit)}</div></td><td class="n">${fmt(r.qty)}</td><td class="n">${fmt0(r.promo)}</td><td class="n">${fmt0(r.swap)}</td><td class="n">${fmt0(r.ret)}</td><td class="n">${vnd(r.amt)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Chưa có đơn trong kỳ này.</div>'}
 function viewShipDone(v){const [f,t]=periodRange();const all=ordersIn(f,t);
@@ -750,16 +750,42 @@ function bindSaleAdmin(){const s=$('#attSaleSel');if(s)s.onchange=()=>{R.ui.attS
     const det=[['Sale','Ngày','Giờ','Nơi','Vĩ độ','Kinh độ','Sai số (m)','Bỏ công','Lý do']];saleIds().forEach(u=>attOf(u,ym).sort((a,b)=>a.date<b.date?-1:1).forEach(a=>det.push([staffName(u),a.date,new Date(a.at).toTimeString().slice(0,5),a.place==='tuyen'?'Trên tuyến':'Tại công ty',a.lat,a.lng,a.acc,a.void?'Có':'',a.voidNote||''])));
     xlsxFile('Luong_sale_'+ym+'.xlsx',[{name:'Luong sale',rows,cols:[24,8,10,14,14,18,14,14]},{name:'Cham cong',rows:det,cols:[24,12,8,12,11,11,10,8,30]}])}}
 function shipStats(L){const s=stats(L);const S=ST();s.income=s.normal*toNum(S.shipFee)+s.outside*toNum(S.shipFeeOut);s.incomeOut=s.outside*toNum(S.shipFeeOut);s.incomeMonth=s.normal*toNum(S.shipFee);return s}
+
+/* ================= v32: BÁO CÁO DẠNG THẺ (bấm để xem chi tiết) ================= */
+const accOpen=k=>!!(R.ui.acc&&R.ui.acc[k]);
+function accCard(k,lab,val,sub,color,body){const o=accOpen(k);return `<div class="card" style="padding:0;overflow:hidden"><div data-acc="${k}" role="button" aria-expanded="${o}" style="display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer"><div style="flex:1;min-width:0"><div class="muted" style="font-size:13px;font-weight:600">${lab}</div><div style="font-size:24px;font-weight:800;color:${color||'var(--fg)'};overflow-wrap:anywhere">${val}</div>${sub?`<div class="tiny muted">${sub}</div>`:''}</div><div style="font-size:22px;color:var(--muted);transition:transform .15s;transform:rotate(${o?90:0}deg)">›</div></div>${o?`<div class="stack" style="border-top:1px solid var(--line);padding:12px 16px;gap:10px">${typeof body==='function'?body():body}</div>`:''}</div>`}
+function bindAcc(){$$('[data-acc]').forEach(b=>b.onclick=()=>{R.ui.acc=R.ui.acc||{};R.ui.acc[b.dataset.acc]=!R.ui.acc[b.dataset.acc];render()})}
+const C_G='#1e9a5c',C_B='var(--accent)',C_O='#c27a00',C_R='#d64545';
+function owedOf(o){if(o.status==='cancel')return 0;const t=orderTotal(o);const pa=o.paid?Math.min(t,toNum(o.paidAmount)||t):0;return Math.max(0,t-pa)}
+function debtBlock(list){const by=new Map();list.forEach(o=>{const d=owedOf(o);if(!d)return;const k=o.cust||o.custName;if(!by.has(k))by.set(k,{name:o.custName||k,addr:o.address||'',L:[]});by.get(k).L.push(o)});
+  const G=[...by.values()].map(g=>{g.L.sort((a,b)=>(a.date+a.no).localeCompare(b.date+b.no));g.sum=g.L.reduce((s,o)=>s+owedOf(o),0);g.first=g.L[0].date;return g}).sort((a,b)=>a.first.localeCompare(b.first)||b.sum-a.sum);
+  if(!G.length)return '<div class="empty">Không có đơn nợ.</div>';
+  return G.map(g=>`<div><div style="display:flex;justify-content:space-between;gap:8px;font-weight:700"><span>${esc(g.name)}</span><span style="color:${C_R};white-space:nowrap">${vnd(g.sum)}</span></div><div class="tiny muted">${g.L.length} đơn nợ${g.addr&&g.addr!==g.name?' · '+esc(g.addr):''}</div>
+   <div class="tw"><table><thead><tr><th>Ngày</th><th>Số đơn</th><th class="n">Còn nợ</th></tr></thead><tbody>${g.L.map(o=>`<tr data-oid="${esc(o.id)}" style="cursor:pointer"><td>${dmy(o.date).slice(0,5)}</td><td style="color:var(--accent)">${esc(o.no)}</td><td class="n">${fmt(owedOf(o))}</td></tr>`).join('')}</tbody></table></div></div>`).join('')+'<div class="tiny muted">Khách xếp theo đơn nợ cũ nhất trước; trong mỗi khách, đơn từ cũ đến mới. Bấm dòng để mở đơn. Tính trên đơn trong 3 tháng gần nhất, không gồm đơn đã hủy.</div>'}
+function prodAgg(list,doneOnly){const m=new Map();list.filter(o=>o.status!=='cancel'&&(!doneOnly||o.status==='done')).forEach(o=>(o.lines||[]).forEach(l=>{const r=m.get(l.code)||{name:l.name,unit:l.unit,qty:0,promo:0,ret:0,swap:0,amt:0};r.qty+=toNum(l.qty);r.promo+=giftQ(l);r.ret+=toNum(l.ret);r.swap+=toNum(l.swap);r.amt+=lineAmt(l);m.set(l.code,r)}));return m}
+function retTable(m){const rows=[...m.values()].filter(r=>r.ret||r.swap).sort((a,b)=>(b.ret+b.swap)/(b.qty||1)-(a.ret+a.swap)/(a.qty||1));
+  return rows.length?`<div class="tw"><table><thead><tr><th>Sản phẩm</th><th class="n">SL</th><th class="n">Đổi</th><th class="n">Trả</th><th class="n">Tỷ lệ</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}<div class="tiny muted">${esc(r.unit||'')}</div></td><td class="n">${fmt(r3(r.qty))}</td><td class="n">${fmt0(r3(r.swap))}</td><td class="n">${fmt0(r3(r.ret))}</td><td class="n">${pct(r.ret+r.swap,r.qty)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Không có hàng đổi trả trong kỳ.</div>'}
+function goTable(m){const rows=[...m.values()].sort((a,b)=>(b.qty+b.promo+b.swap)-(a.qty+a.promo+a.swap));
+  return rows.length?`<div class="tw"><table><thead><tr><th>Sản phẩm</th><th class="n">Bán</th><th class="n">Tặng</th><th class="n">Đổi</th><th class="n">Trả</th><th class="n">Tổng xuất</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}<div class="tiny muted">${esc(r.unit||'')}</div></td><td class="n">${fmt(r3(r.qty))}</td><td class="n">${fmt0(r3(r.promo))}</td><td class="n">${fmt0(r3(r.swap))}</td><td class="n">${fmt0(r3(r.ret))}</td><td class="n"><b>${fmt(r3(r.qty+r.promo+r.swap))}</b></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Chưa có hàng giao trong kỳ.</div>'}
+function bindOids(list){$$('[data-oid]').forEach(c=>c.onclick=e=>{e.stopPropagation();const o=list.find(x=>x.id===c.dataset.oid)||R.orders.find(x=>x.id===c.dataset.oid);if(o)orderDetail(o)})}
+function attCal(uid){const ym=today().slice(0,7);const [f,,n]=ymRange(ym);const A=attOf(uid,ym);const by=new Map(A.map(a=>[a.date,a]));const w0=(new Date(+f.slice(0,4),+f.slice(5,7)-1,1).getDay()+6)%7;
+  let cal='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:12px;margin-top:8px">'+['T2','T3','T4','T5','T6','T7','CN'].map(d=>`<div class="muted">${d}</div>`).join('')+'<div></div>'.repeat(w0);
+  for(let d=1;d<=n;d++){const a=by.get(f.slice(0,8)+pad(d));cal+=`<div style="padding:6px 0;border-radius:8px;${a?(a.void?'background:rgba(230,150,30,.18);color:#b36b00;font-weight:700;text-decoration:line-through':'background:rgba(30,150,90,.15);color:#1e9a5c'):'opacity:.45'}">${d}</div>`}
+  return `<div class="card"><div style="font-weight:700">📅 Tháng ${ym.slice(5)}/${ym.slice(0,4)}: ${A.filter(a=>!a.void).length} công</div><div class="tiny muted">Xanh = có ảnh chấm công · Cam gạch = quản lý bỏ công</div>${cal}</div>`}
+function viewAttend(v){v.innerHTML=`<h1 class="big">Chấm công</h1><div class="stack">${attendBlock(R.uid)}${attCal(R.uid)}</div>`;bindAttend()}
 function viewShipReport(v,uid){const [f,t]=periodRange();const all=ordersIn(f,t);
   if(!all){v.innerHTML='<h1 class="big">Báo cáo</h1>'+periodBar()+'<div class="empty">Đang tải…</div>';bindPeriod();return}
-  const L=all.filter(o=>o.shipId===uid&&o.status==='done');const s=shipStats(L);const S=ST();
-  v.innerHTML=`<h1 class="big">Báo cáo giao hàng</h1><div class="stack">${periodBar()}
-   <div class="kpis"><div class="kpi g"><div class="l">Tổng đơn giao</div><div class="v">${s.done}</div><div class="h">${s.outside} đơn ship ngoài</div></div>
-   <div class="kpi"><div class="l">Tổng số lượng giao</div><div class="v">${fmt(s.doneQty)}</div><div class="h">gồm hàng KM</div></div>
-   <div class="kpi ${s.ret+s.swap?'w':''}"><div class="l">Tỷ lệ đổi trả</div><div class="v">${retRate(s)}</div><div class="h">đổi ${fmt(s.swap)} · trả ${fmt(s.ret)}</div></div>
-   <div class="kpi b"><div class="l">Tiền hàng đã thu</div><div class="v">${vnd(s.collected)}</div><div class="h">ship thu khi giao</div></div>
-</div>
-   ${dayBlock(uid)}${payBlock(uid)}</div>`;bindPeriod();bindPayMonth();bindDay(uid)}
+  const L=all.filter(o=>o.shipId===uid&&o.status==='done');const s=shipStats(L);
+  const ym=payYm(),PL=payOrders(ym),pay=PL?shipPay(uid,ym,PL):null;const m=prodAgg(L,true);
+  const cash=L.filter(o=>o.paid&&o.paidBy==='ship'&&o.payMethod==='cash').sort((a,b)=>(a.doneAt||0)-(b.doneAt||0));const cashSum=cash.reduce((x,o)=>x+Math.min(orderTotal(o),toNum(o.paidAmount)||orderTotal(o)),0);
+  const gq=[...m.values()].reduce((a,r)=>({q:a.q+r.qty,g:a.g+r.promo,w:a.w+r.swap}),{q:0,g:0,w:0});
+  v.innerHTML=`<h1 class="big">Báo cáo</h1><div class="stack">${periodBar()}
+   ${accCard('si','Tổng thu nhập tháng '+ym.slice(5)+'/'+ym.slice(0,4),pay?vnd(pay.total):'…',pay&&pay.upto<pay.n?'tạm tính · bấm để xem chi tiết':'bấm để xem chi tiết',C_G,()=>payBlock(uid))}
+   ${accCard('sq','Tổng số lượng giao',fmt(r3(gq.q+gq.g+gq.w)),`bán ${fmt(r3(gq.q))} · tặng ${fmt(r3(gq.g))} · đổi ${fmt(r3(gq.w))}`,C_B,()=>goTable(m)+dayBlock(uid))}
+   ${accCard('so','Tổng đơn giao',fmt(s.done),s.outside?s.outside+' đơn ship ngoài':'',null,()=>`<div class="list">${L.slice().sort((a,b)=>(b.doneAt||0)-(a.doneAt||0)).map(o=>orderCard(o)).join('')||'<div class="empty">Chưa giao đơn nào trong kỳ.</div>'}</div>`)}
+   ${accCard('sc','Tổng tiền mặt đã thu',vnd(cashSum),cash.length+' đơn thu tiền mặt',C_G,()=>cash.length?`<div class="tw"><table><thead><tr><th>Ngày</th><th>Đơn · khách</th><th class="n">Tiền</th></tr></thead><tbody>${cash.map(o=>`<tr data-oid="${esc(o.id)}" style="cursor:pointer"><td>${dmy(isoOf(new Date(o.doneAt||Date.parse(o.date)))).slice(0,5)}</td><td>${esc(o.no)} · ${esc(o.custName)}</td><td class="n">${fmt(Math.min(orderTotal(o),toNum(o.paidAmount)||orderTotal(o)))}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Chưa thu tiền mặt đơn nào trong kỳ.</div>')}
+   ${accCard('sr','Tỷ lệ đổi trả',retRate(s),`đổi ${fmt(s.swap)} · trả ${fmt(s.ret)}`,C_O,()=>retTable(m))}
+   </div>`;bindPeriod();bindAcc();bindPayMonth();bindDay(uid);bindOids(L)}
 
 /* ================= KHO ================= */
 function stockMap(asOf,excludeId){const m=new Map();for(const p of R.products.values())m.set(p.code,toNum(p.openingQty));
@@ -917,19 +943,16 @@ function viewDash(v){const [f,t]=periodRange();const all=ordersIn(f,t);
   const noPx=R.orders.filter(o=>o.status==='done'&&!o.px).length,noPn=R.orders.filter(o=>o.status==='done'&&!o.pn&&(sumL(o,'ret')+sumL(o,'swap'))>0).length;
   const negStock=[...stockMap().values()].filter(x=>x<0).length;
   v.innerHTML=`<h1 class="big">Tổng quan</h1><div class="stack">${periodBar()}
-   <div class="kpis"><div class="kpi g"><div class="l">Tổng doanh số</div><div class="v">${vnd(s.revenue)}</div><div class="h">${s.orders} đơn · ${s.cancel} hủy</div></div>
-    <div class="kpi"><div class="l">Tổng số lượng bán</div><div class="v">${fmt(s.qty)}</div><div class="h">Tặng ${fmt(s.promo)}</div></div>
-    <div class="kpi ${s.ret+s.swap?'w':''}"><div class="l">Tỷ lệ đổi trả</div><div class="v">${retRate(s)}</div><div class="h">đổi ${fmt(s.swap)} · trả ${fmt(s.ret)}</div></div>
-    <div class="kpi b"><div class="l">Đã thu tiền</div><div class="v">${vnd(s.paid)}</div></div>
-    <div class="kpi ${s.unpaid?'r':''}"><div class="l">Khách còn nợ</div><div class="v">${vnd(s.unpaid)}</div></div>
-    <div class="kpi ${waiting?'w':''}"><div class="l">Đơn chưa giao</div><div class="v">${waiting}</div><div class="h">tất cả thời gian</div></div></div>
+   ${(()=>{const prod=prodAgg(all);const debt=R.orders.filter(o=>owedOf(o)>0);const dSum=debt.reduce((x,o)=>x+owedOf(o),0);const st={};all.forEach(o=>st[o.status]=(st[o.status]||0)+1);
+    return accCard('mr','Tổng doanh số',vnd(s.revenue),`đã trừ hàng trả · ${s.orders} đơn`,C_B,()=>`<div class="tiny muted">Theo nhân viên bán hàng</div><div class="tw"><table><thead><tr><th>Sale</th><th class="n">Đơn</th><th class="n">SL</th><th class="n">Doanh số</th><th class="n">Đổi trả</th><th class="n">Còn nợ</th></tr></thead><tbody>${saleRows.map(r=>`<tr><td>${esc(staffName(r.id))}</td><td class="n">${r.x.orders}</td><td class="n">${fmt(r.x.qty)}</td><td class="n">${vnd(r.x.revenue)}</td><td class="n">${retRate(r.x)}</td><td class="n">${vnd(r.x.unpaid)}</td></tr>`).join('')||'<tr><td colspan="6" class="empty">Chưa có dữ liệu.</td></tr>'}</tbody></table></div><div class="tiny muted">Theo sản phẩm</div>${prodTable(prod)}`)
+     +accCard('md','Tổng nợ phải thu',vnd(dSum),`${debt.length} đơn · ${new Set(debt.map(o=>o.cust||o.custName)).size} khách · đã thu trong kỳ ${vnd(s.paid)}`,C_R,()=>debtBlock(debt))
+     +accCard('mx','Tỷ lệ đổi trả',retRate(s),`đổi ${fmt(s.swap)} · trả ${fmt(s.ret)}`,C_O,()=>retTable(prod))
+     +accCard('mo','Tổng số đơn hàng',fmt(s.orders+s.cancel),`${st.done||0} đã giao · ${(st.new||0)+(st.shipping||0)} chờ/đang giao · ${s.cancel} hủy · chưa giao (mọi lúc) ${waiting}`,null,()=>`<div class="tw"><table><thead><tr><th>Trạng thái</th><th class="n">Số đơn</th></tr></thead><tbody>${['new','shipping','done','cancel'].map(k=>`<tr><td>${ST_NAME[k]}</td><td class="n">${st[k]||0}</td></tr>`).join('')}</tbody></table></div>`)
+     +accCard('mq','Tổng số lượng sản phẩm',fmt(s.qty),`tặng ${fmt(s.promo)}`,null,()=>goTable(prod))})()}
    ${noPx||noPn||negStock||s.edited?`<div class="stack" style="gap:8px">${noPx?`<div class="alert w">${noPx} đơn đã giao nhưng chưa có phiếu xuất kho.</div>`:''}${noPn?`<div class="alert w">${noPn} đơn có hàng đổi trả chưa nhập lại kho.</div>`:''}${negStock?`<div class="alert r">${negStock} mặt hàng đang tồn âm.</div>`:''}${s.edited?`<div class="alert b">${s.edited} đơn trong kỳ có sửa giá so với giá mặc định.</div>`:''}</div>`:''}
-   <div class="sec">Theo nhân viên bán hàng</div>
-   <div class="tw"><table><thead><tr><th>Sale</th><th class="n">Đơn</th><th class="n">SL</th><th class="n">Doanh số</th><th class="n">Đổi trả</th><th class="n">Còn nợ</th><th class="n">Thu nhập</th></tr></thead><tbody>
-   ${saleRows.map(r=>`<tr><td>${esc(staffName(r.id))}</td><td class="n">${r.x.orders}</td><td class="n">${fmt(r.x.qty)}</td><td class="n">${vnd(r.x.revenue)}</td><td class="n">${retRate(r.x)}</td><td class="n">${vnd(r.x.unpaid)}</td><td class="n">${vnd(r.inc)}<div class="tiny muted">${fmt(r.p)}%</div></td></tr>`).join('')||'<tr><td colspan="7" class="empty">Chưa có dữ liệu.</td></tr>'}</tbody></table></div>
    <div class="sec">Theo nhân viên giao hàng</div>
-   <div class="tw"><table><thead><tr><th>Ship</th><th class="n">Đơn giao</th><th class="n">SL giao</th><th class="n">Đổi trả</th><th class="n">Tiền đã thu</th><th class="n">Ship ngoài</th><th class="n">Thu nhập</th></tr></thead><tbody>
-   ${shipRows.map(r=>`<tr><td>${esc(staffName(r.id))}</td><td class="n">${r.x.done}</td><td class="n">${fmt(r.x.doneQty)}</td><td class="n">${retRate(r.x)}</td><td class="n">${vnd(r.x.collected)}</td><td class="n">${r.x.outside}<div class="tiny muted">${vnd(r.x.incomeOut)}</div></td><td class="n">${vnd(r.x.income)}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">Chưa có dữ liệu.</td></tr>'}</tbody></table></div>
+   <div class="tw"><table><thead><tr><th>Ship</th><th class="n">Đơn giao</th><th class="n">SL giao</th><th class="n">Đổi trả</th><th class="n">Tiền đã thu</th><th class="n">Ship ngoài</th></tr></thead><tbody>
+   ${shipRows.map(r=>`<tr><td>${esc(staffName(r.id))}</td><td class="n">${r.x.done}</td><td class="n">${fmt(r.x.doneQty)}</td><td class="n">${retRate(r.x)}</td><td class="n">${vnd(r.x.collected)}</td><td class="n">${r.x.outside}</td></tr>`).join('')||'<tr><td colspan="6" class="empty">Chưa có dữ liệu.</td></tr>'}</tbody></table></div>
    <div class="sec">Đối chiếu bán hàng với kho</div>
    <div class="tw"><table><thead><tr><th>Mặt hàng</th><th class="n">Giao theo đơn</th><th class="n">Xuất kho</th><th class="n">Lệch</th><th class="n">Trả về theo đơn</th><th class="n">Nhập trả kho</th><th class="n">Lệch</th></tr></thead><tbody>
    ${recRows.map(([c,r])=>{const d1=r3(r.go-r.px),d2=r3(r.back-r.pn);return `<tr><td>${esc(r.name)}<div class="tiny muted">${esc(c)} · ${esc(r.unit)}</div></td><td class="n">${fmt(r.go)}</td><td class="n">${fmt(r.px)}</td><td class="n ${d1?'neg':''}">${d1?fmt(d1):'✓'}</td><td class="n">${fmt0(r.back)}</td><td class="n">${fmt0(r.pn)}</td><td class="n ${d2?'neg':''}">${d2?fmt(d2):r.back||r.pn?'✓':''}</td></tr>`}).join('')||'<tr><td colspan="7" class="empty">Chưa có phát sinh.</td></tr>'}</tbody></table></div>
@@ -937,7 +960,7 @@ function viewDash(v){const [f,t]=periodRange();const all=ordersIn(f,t);
    <button class="btn" id="dXls">Xuất Excel chi tiết đơn hàng trong kỳ</button>
    <button class="btn" id="dMisa">Xuất file nhập MISA (đơn đã giao trong kỳ)</button>
    ${payAdmin()}${attAdmin()}${salePayAdmin()}</div>`;
-  bindPeriod();$('#dXls').onclick=()=>exportOrders(all,f,t);$('#dMisa').onclick=()=>exportMisaSale(all,f,t);bindPayAdmin();bindSaleAdmin();hydratePhotos(document)}
+  bindPeriod();$('#dXls').onclick=()=>exportOrders(all,f,t);$('#dMisa').onclick=()=>exportMisaSale(all,f,t);bindPayAdmin();bindSaleAdmin();hydratePhotos(document);bindAcc();bindOids(R.orders)}
 /* ===== XUẤT FILE NHẬP MISA (đơn Đã giao) – mẫu "Nhập bán hàng hóa từ Excel" của MISA AMIS, tiêu đề dòng 1 =====
    Số CT: chưa thu → bh… ; tiền mặt → ct… ; chuyển khoản → ntn… (+ số đơn app, VD DH2610-004 → bh2610004)
    KM (tặng thêm hàng) trừ thẳng vào đơn giá; hàng đổi (xuất bù hỏng) → dòng mã hỗ trợ/đổi trả 0đ, TK 5112
@@ -1162,12 +1185,12 @@ function pickShipDay(){const t0=today(),t1=isoAdd(t0,1);const opt=[['','Tất c�
 
 /* ================= ĐIỀU HƯỚNG ================= */
 const TABS={
-  sale:[['new','Lên đơn','cart'],['orders','Đơn của tôi','list'],['report','Báo cáo','chart']],
+  sale:[['new','Lên đơn','cart'],['orders','Đơn của tôi','list'],['att','Chấm công','cam'],['report','Báo cáo','chart']],
   ship:[['todo','Cần giao','truck'],['new','Phát sinh','cart'],['done','Đã giao','check'],['report','Báo cáo','chart']],
   kho:[['vnew','Lập phiếu','doc'],['vlist','Phiếu','list'],['stock','Tồn kho','box'],['byorder','Theo đơn','truck']],
   admin:[['dash','Tổng quan','home'],['orders','Đơn hàng','list'],['stock','Kho','box'],['catalog','Danh mục','book'],['settings','Cài đặt','gear']]};
 function views(){return{
-  sale:{new:viewSaleNew,orders:v=>orderListView(v,R.orders.filter(o=>o.saleId===R.uid),{title:'Đơn của tôi',emptyHint:'Đơn bạn lên sẽ hiện ở đây.'}),report:v=>viewSaleReport(v,R.uid)},
+  sale:{new:viewSaleNew,orders:v=>orderListView(v,R.orders.filter(o=>o.saleId===R.uid),{title:'Đơn của tôi',emptyHint:'Đơn bạn lên sẽ hiện ở đây.'}),att:viewAttend,report:v=>viewSaleReport(v,R.uid)},
   ship:{todo:viewShipTodo,new:viewSaleNew,done:viewShipDone,report:v=>viewShipReport(v,R.uid)},
   kho:{vnew:viewKhoNew,vlist:viewKhoList,stock:viewStock,byorder:viewKhoByOrder},
   admin:{dash:viewDash,orders:viewAllOrders,stock:viewStock,catalog:viewCatalog,settings:viewSettings}}}
