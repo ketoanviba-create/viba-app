@@ -81,7 +81,7 @@ const WD=['Chủ nhật','Thứ Hai','Thứ Ba','Thứ Tư','Thứ Năm','Thứ 
 const rN=x=>noAcc(x).toUpperCase().replace(/[^A-Z0-9.]/g,'');
 const addrCode=a=>{const m=String(a||'').match(/^\s*\(([^)]*)\)/);return m?rN(m[1].split(/\s*-\s/)[0]):''};
 const RT=()=>((R.routes||{}).list)||[];const routeById=id=>RT().find(r=>r.id===id);
-function routeOf(o){const a=(o&&o.address)||'';const c=addrCode(a);if(c){const r=RT().find(r=>(r.codes||[]).some(x=>rN(x)===c));if(r)return r.id}
+function routeOf(o){const a=(o&&o.address)||'';const m2=String(a).match(/^\s*\(\s*20[^)]*\)\s*\(([^)]*)\)/);if(m2){const c2=rN(m2[1]);const r2=RT().find(r=>(r.codes||[]).some(x=>rN(x)===c2));if(r2)return r2.id}const c=addrCode(a);if(c){const r=RT().find(r=>(r.codes||[]).some(x=>rN(x)===c));if(r)return r.id}
   return tinhMap()[tKey(a)]||''}
 const tKey=a=>noAcc(a).replace(/\s+/g,' ').replace(/^\(\s*20[^)]*\)\s*/,'').slice(0,24);
 function tinhMap(){const g=(R.routes||{}).tinhG;if(!g)return {};if(R._tm&&R._tmSrc===g)return R._tm;const m={};for(const k in g)for(const x of String(g[k]).split('|'))if(x)m[x]=k;R._tmSrc=g;return R._tm=m}
@@ -204,9 +204,9 @@ function autoGroup(text){const L=((R.cgroups||{}).list)||[];const t=' '+noAcc(te
     if(!sc)continue;if(!best||sc>best.sc){amb=best&&best.sc===sc&&sc<90;best={g,sc}}else if(sc===best.sc&&sc<90)amb=true}
   return best&&!amb?best.g:null}
 function nextCustNo(prefix,ym){const re=new RegExp('^'+prefix+ym+'(\\d{2,})$','i');let mx=0;for(const c of R.customers.values()){const m=String(c.code||'').match(re);if(m)mx=Math.max(mx,+m[1])}return prefix+ym+String(mx+1).padStart(2,'0')}
-function newCustomer(after,preName){const S={pl:'',pay:'tt',rt:'',inv:false,mst:'',name:'',bill:'',email:'',loc:preName||'',phone:'',grp:undefined,mstMsg:'',busy:false};
+function newCustomer(after,preName){const S={pl:'',pay:'tt',rt:'',rt2:'',inv:false,mst:'',name:'',bill:'',email:'',loc:preName||'',phone:'',grp:undefined,mstMsg:'',busy:false};
   const prefix=()=>S.pay==='cn'?'KH':(S.rt==='20.TỈNH'?'NLT':'TTL');const ym=()=>{const d=today();return d.slice(0,4)+d.slice(5,7)};
-  const locFull=()=>{const l=S.loc.trim();if(!l)return'';if(/^\s*\(\s*\d{2}\./.test(l)||!S.rt)return l;return '('+S.rt+') '+l};
+  const locFull=()=>{const l=S.loc.trim();if(!l)return'';if(/^\s*\(\s*\d{2}\./.test(l)||!S.rt)return l;if(S.rt==='20.TỈNH')return '(20.TỈNH)'+(S.rt2?'('+S.rt2+')':'')+' '+l;return '('+S.rt+') '+l};
   const code=()=>S.inv?(S.mst.trim()?prefix()+S.mst.trim().replace(/\s+/g,''):''):nextCustNo(prefix(),ym());
   const auto=()=>S.grp===undefined?autoGroup((S.inv?S.name+' ':'')+S.loc):S.grp;
   const draw=b=>{const g=auto(),c=code(),ex=c&&findCust(c);
@@ -217,6 +217,7 @@ function newCustomer(after,preName){const S={pl:'',pay:'tt',rt:'',inv:false,mst:
       <div><div class="tiny muted" style="margin-bottom:6px">Nhóm chuỗi (app tự nhận theo tên khách / địa điểm giao)</div>${g?`<span class="chip b" style="font-size:14px;padding:6px 12px">${esc(g.name)} <span id="nc_grpx" style="margin-left:6px;cursor:pointer">✕</span></span>`:`<span class="tiny muted">${S.grp===null?'Đã bỏ nhóm chuỗi':'Chưa nhận ra chuỗi nào'}</span>${S.grp===null?' <a href="#" id="nc_grpr" class="tiny">Tự nhận lại</a>':''}`}</div>
       <div><div class="tiny muted" style="margin-bottom:6px">Loại thanh toán <span style="color:var(--bad)">*</span></div><div class="seg"><button data-pay="tt" class="${S.pay==='tt'?'on':''}">Thanh toán luôn</button><button data-pay="cn" class="${S.pay==='cn'?'on':''}">Công nợ</button></div></div>
       <label class="f"><span>Tuyến / khu vực giao <span style="color:var(--bad)">*</span></span><select id="nc_rt"><option value="">— Chọn tuyến —</option>${KH_RT.map(([k,n])=>`<option value="${esc(k)}" ${S.rt===k?'selected':''}>${esc(k)} – ${esc(n)}</option>`).join('')}</select></label>
+      ${S.rt==='20.TỈNH'?`<label class="f"><span>Tuyến giao trong Hà Nội (ship mang hàng đi) <span style="color:var(--bad)">*</span></span><select id="nc_rt2"><option value="">— Chọn tuyến —</option>${KH_RT.filter(([k])=>k!=='20.TỈNH').map(([k,n])=>`<option value="${esc(k)}" ${S.rt2===k?'selected':''}>${esc(k)} – ${esc(n)}</option>`).join('')}</select></label>`:''}
      </div>
      <div class="sec" style="margin:0">2. Thông tin xuất hóa đơn</div>
      <div class="card stack" style="gap:10px">
@@ -229,7 +230,7 @@ function newCustomer(after,preName){const S={pl:'',pay:'tt',rt:'',inv:false,mst:
      <div class="sec" style="margin:0">3. Giao hàng</div>
      <div class="card stack" style="gap:10px">
       <label class="f"><span>Địa điểm giao hàng <span style="color:var(--bad)">*</span></span><textarea id="nc_loc" rows="2" placeholder="VD: Easy Mart tòa Diamond, Xuân La">${esc(S.loc)}</textarea></label>
-      <div class="tiny muted" style="margin-top:-6px">${S.rt?'Lưu thành: <b>'+esc(locFull()||'('+S.rt+') …')+'</b>':'Chọn tuyến để app thêm mã tuyến ở đầu.'}</div>
+      <div class="tiny muted" style="margin-top:-6px">${S.rt?'Lưu thành: <b>'+esc(locFull()||(S.rt==='20.TỈNH'?'(20.TỈNH)'+(S.rt2?'('+S.rt2+')':'(mã tuyến)'):'('+S.rt+')')+' …')+'</b>':'Chọn tuyến để app thêm mã tuyến ở đầu.'}</div>
       <label class="f">Số điện thoại<input id="nc_phone" value="${esc(S.phone)}" inputmode="tel"></label>
      </div>
      <div style="background:var(--blue-soft,#e7f0fa);border:1.5px solid #1b6aa5;border-radius:12px;padding:12px 14px"><div class="tiny muted">Mã khách hàng (app tự tạo)</div><div style="font-size:24px;font-weight:800;color:#1b6aa5;letter-spacing:.5px">${esc(c||'—')}</div>
@@ -239,7 +240,7 @@ function newCustomer(after,preName){const S={pl:'',pay:'tt',rt:'',inv:false,mst:
      <div id="nc_msg"></div><button class="btn block pri" id="nc_save">Lưu khách hàng</button></div>`;
     const v=id=>b.querySelector('#'+id);const keep=(id,k)=>{const x=v(id);if(x)x.oninput=()=>{S[k]=x.value;if(k==='loc'||k==='name'){clearTimeout(S._t);S._t=setTimeout(()=>{const p=document.activeElement&&document.activeElement.id,ss=document.activeElement&&document.activeElement.selectionStart;draw(b);const n=p&&v(p);if(n){n.focus();try{n.setSelectionRange(ss,ss)}catch(e){}}},500)}}};
     keep('nc_mst','mst');keep('nc_name','name');keep('nc_bill','bill');keep('nc_email','email');keep('nc_loc','loc');keep('nc_phone','phone');
-    v('nc_pl').onchange=e=>{S.pl=e.target.value;draw(b)};v('nc_rt').onchange=e=>{S.rt=e.target.value;if(S.rt==='20.TỈNH'&&!S.pl)S.pl='PL Nhóm khách tỉnh';draw(b)};
+    v('nc_pl').onchange=e=>{S.pl=e.target.value;draw(b)};v('nc_rt').onchange=e=>{S.rt=e.target.value;if(S.rt==='20.TỈNH'&&!S.pl)S.pl='PL Nhóm khách tỉnh';draw(b)};const r2=v('nc_rt2');if(r2)r2.onchange=e=>{S.rt2=e.target.value;draw(b)};
     $$('[data-pay]',b).forEach(x=>x.onclick=()=>{S.pay=x.dataset.pay;draw(b)});v('nc_inv').onchange=e=>{S.inv=e.target.checked;draw(b)};
     const gx=v('nc_grpx');if(gx)gx.onclick=()=>{S.grp=null;draw(b)};const gr=v('nc_grpr');if(gr)gr.onclick=e=>{e.preventDefault();S.grp=undefined;draw(b)};
     const lk=v('nc_lookup');if(lk)lk.onclick=async()=>{const m=S.mst.trim().replace(/\s+/g,'');if(!/^\d{10}(-\d{3})?$/.test(m)){S.mstMsg='<div class="alert r">MST phải có 10 số (chi nhánh: 10 số-3 số).</div>';return draw(b)}
@@ -248,7 +249,7 @@ function newCustomer(after,preName){const S={pl:'',pay:'tt',rt:'',inv:false,mst:
         else S.mstMsg='<div class="alert w">Không tìm thấy MST này – kiểm tra lại hoặc nhập tay Tên, Địa chỉ.</div>'}catch(e){S.mstMsg='<div class="alert w">Chưa lấy được thông tin (mạng?) – nhập tay Tên, Địa chỉ.</div>'}
       S.busy=false;draw(b)};
     v('nc_save').onclick=async()=>{const err=t=>v('nc_msg').innerHTML='<div class="alert r">'+t+'</div>';
-      if(!S.pl)return err('Chọn nhóm khách hàng.');if(!S.rt)return err('Chọn tuyến / khu vực giao.');if(!S.loc.trim())return err('Nhập địa điểm giao hàng.');
+      if(!S.pl)return err('Chọn nhóm khách hàng.');if(!S.rt)return err('Chọn tuyến / khu vực giao.');if(S.rt==='20.TỈNH'&&!S.rt2&&!/^\s*\(\s*\d{2}\./.test(S.loc))return err('Khách tỉnh: chọn thêm tuyến giao trong Hà Nội.');if(!S.loc.trim())return err('Nhập địa điểm giao hàng.');
       if(S.inv&&(!/^\d{10}(-\d{3})?$/.test(S.mst.trim())||!S.name.trim()||!S.bill.trim()))return err('Khách lấy hóa đơn cần đủ MST (10 số), Tên và Địa chỉ.');
       const cd=code();if(findCust(cd))return err('Mã '+esc(cd)+' đã có trong danh mục.');const g=auto();
       const d={code:cd,name:S.inv?S.name.trim():locFull(),address:locFull(),billAddr:S.inv?S.bill.trim():'',taxCode:S.inv?S.mst.trim():'',email:S.inv?S.email.trim():'',phone:S.phone.trim(),area:S.rt,
