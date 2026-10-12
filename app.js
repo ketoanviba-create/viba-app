@@ -394,8 +394,10 @@ function voiceOrder(){const d=R.odraft||(R.odraft=newOrderDraft());const SR=wind
       mic.onclick()/* tự bật micro ngay khi mở khung (vẫn trong lượt bấm của người dùng) */}
     else setTimeout(()=>T.focus(),50)},{onClose:()=>{if(rec&&on)try{rec.abort()}catch(e){}}})}
 
+/* v40: phí ship thu của khách = dòng hàng VT00003 "Phí Ship" (1 chuyến), không tính hoa hồng sale / lương ship */
+const FEE_CODE='VT00003';const isFee=l=>!!l&&(l.fee||l.code===FEE_CODE||l.code==='CPVC 01');const feeOf=d=>Math.max(0,Math.round(toNum(d.shipFee)));
 function viewSaleNew(v){if(!R.odraft)R.odraft=newOrderDraft();const d=R.odraft;const c=d.cust?findCust(d.cust):null;
-  const total=orderTotal(d);const bal=stockMap();
+  const fee=feeOf(d);const total=orderTotal(d)+fee;const bal=stockMap();
   v.innerHTML=`<h1 class="big">${d.id?'Sửa đơn '+esc(d.no):R.mode==='ship'?'Đơn phát sinh':'Lên đơn'}</h1>${R.mode==='ship'&&!d.id?'<div class="alert" style="margin-bottom:10px">Đơn khách đặt thêm khi đang giao. Đơn ghi tên bạn là người tạo và người giao, đánh dấu <b>Phát sinh</b>.</div>':''}
   <div class="stack">
   ${R.mode==='ship'&&!d.id?`<button class="btn block pri" id="oSlip" style="font-size:16px">📷 Chụp phiếu giao hàng</button>${d.slipPhotos&&d.slipPhotos.length?`<div><img id="oSlipImg" src="${d.slipPhotos[0].data}" style="width:100%;max-height:220px;object-fit:contain;border-radius:12px;background:#fff;border:1px solid var(--line,#e3e8ef)"><div class="tiny muted" style="margin-top:4px">Ảnh phiếu lưu kèm đơn · bấm để xem to · <a href="#" id="oSlipX">bỏ ảnh</a></div><div class="tiny" style="margin-top:4px">🚚 Ship: <b>${esc(staffName(R.uid))}</b> · Ngày giao: <b>${dmy(d.slipDate||today())}</b> (ngày chụp phiếu)</div></div>${slipReadHtml(d)}`:''}`:''}
@@ -408,6 +410,7 @@ function viewSaleNew(v){if(!R.odraft)R.odraft=newOrderDraft();const d=R.odraft;c
   <div class="list" id="oLines">${d.lines.map((l,i)=>lineCard(l,i,bal)).join('')}</div>
   <button class="btn" id="oAdd" ${d.cust?'':'disabled'}>${ICON.plus.replace('<svg','<svg width="18" height="18"')} Thêm sản phẩm</button>
   ${d.cust?'':'<div class="tiny muted" style="text-align:center">Chọn khách hàng trước để lấy đúng giá.</div>'}
+  <div class="group"><div class="row" style="flex-direction:column;align-items:stretch;gap:8px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div><div style="font-weight:600">🚚 Phí ship</div><div class="tiny muted">Thu thêm của khách, cộng vào tổng đơn</div></div><input id="oFee" inputmode="numeric" class="num" style="width:120px;text-align:right" value="${fee?fee:''}" placeholder="0"></div><div class="seg">${[0,20000,30000,50000].map(x=>`<button data-fee="${x}" class="${fee===x?'on':''}">${x?fmt(x/1000)+'k':'Không'}</button>`).join('')}</div></div></div>
   <div class="sec" style="margin-bottom:0">Thanh toán</div>
   <div class="group"><div class="toggle"><div><div style="font-weight:600">Khách đã thanh toán</div><div class="tiny muted">${d.paid?'Đã thu tiền':'Chưa thu, ship sẽ thu khi giao'}</div></div><input type="checkbox" class="sw" id="oPaid" ${d.paid?'checked':''} aria-label="Đã thanh toán"></div>
    ${d.paid?`<div class="row" style="flex-direction:column;align-items:stretch;gap:10px"><label class="f">Số tiền đã thu<input id="oPaidAmt" inputmode="numeric" class="num" value="${esc(d.paidAmount===''?total:d.paidAmount)}"></label>${pmSeg(d.payMethod)}${pmPhotos(d.payMethod,d.payPhotos,'pay')}</div>`:''}</div>
@@ -425,7 +428,7 @@ function viewSaleNew(v){if(!R.odraft)R.odraft=newOrderDraft();const d=R.odraft;c
   const a=$('#oAddr');if(a)a.oninput=()=>d.address=a.value;
   $('#oAdd').onclick=()=>pickProduct(d.cust,p=>{if(!p)return;const ex=d.lines.find(l=>l.code===p.code);if(ex){ex.qty=r3(toNum(ex.qty)+1)}else{const dp=defaultPrice(d.cust,p.code);d.lines.push({code:p.code,name:p.name,unit:p.unit,qty:1,promo:0,swap:0,ret:0,price:dp.p,listPrice:dp.p,src:dp.src,g:1})}render()});
   bindLineCards(v,d,()=>render());
-  $('#oPaid').onchange=e=>{d.paid=e.target.checked;render()};$$('#view [data-pm]').forEach(x=>x.onclick=()=>{d.payMethod=x.dataset.pm;render()});
+  $('#oPaid').onchange=e=>{d.paid=e.target.checked;render()};$$('#view [data-fee]').forEach(x=>x.onclick=()=>{d.shipFee=+x.dataset.fee;render()});const fe=$('#oFee');if(fe){fe.oninput=()=>{d.shipFee=fe.value};fe.onchange=()=>{d.shipFee=feeOf(d);render()}}$$('#view [data-pm]').forEach(x=>x.onclick=()=>{d.payMethod=x.dataset.pm;render()});
   const pa=$('#oPaidAmt');if(pa)pa.oninput=()=>d.paidAmount=pa.value;
   $('#oNote').oninput=e=>d.note=e.target.value;
   bindPhotos(v,()=>d.payPhotos,()=>render());
@@ -460,6 +463,7 @@ async function saveOrder(){const d=R.odraft,msg=$('#oMsg');d._err='';const err=t
   if(!d.cust)return err('Chưa chọn khách hàng.');
   const lines=d.lines.map(l=>({code:l.code,name:l.name,unit:l.unit,qty:r3(toNum(l.qty)),promo:r3(toNum(l.promo)),gift:r3(toNum(l.gift)),disc:Math.min(100,Math.max(0,r3(toNum(l.disc)))),g:l.g?1:0,swap:r3(toNum(l.swap)),ret:r3(toNum(l.ret)),price:Math.round(toNum(l.price)),listPrice:l.listPrice==null?null:Math.round(toNum(l.listPrice))})).filter(l=>l.qty>0||l.promo>0||l.gift>0||l.swap>0||l.ret>0);
   if(!lines.length)return err('Đơn chưa có sản phẩm nào có số lượng.');
+  {const fee=feeOf(d);if(fee>0){const fp=findProd(FEE_CODE);lines.push({code:FEE_CODE,name:fp?fp.name:'Phí Ship',unit:fp?fp.unit:'chuyến',qty:1,promo:0,gift:0,disc:0,g:1,swap:0,ret:0,price:fee,listPrice:fee,fee:1})}}
   const bad=lines.find(l=>l.ret>l.qty+1e-9);if(bad)return err(`${esc(bad.name)}: số trả (${fmt(bad.ret)}) lớn hơn số bán (${fmt(bad.qty)}).`);
   const zero=lines.find(l=>l.qty>0&&!l.price);if(zero&&!d._zeroOk){d._zeroOk=true;return msg.innerHTML=`<div class="alert w">${esc(zero.name)} đang có đơn giá 0đ. Bấm Gửi lần nữa nếu đúng là hàng không tính tiền.</div>`}
   if(d.paid){const e2=pmCheck(d.payMethod,d.payPhotos);if(e2)return err(e2)}
@@ -521,7 +525,7 @@ function orderDetail(o){if(!o)return;const role=R.mode;const mine=o.saleId===R.u
       await R.db.doc('orders/'+o.id).update({status:'shipping',shipId:R.uid,shipAt:Date.now()});toast('Đã nhận đơn '+o.no);closeSheet()}catch(e){toast('Lỗi: '+(e.code||''))}});
     act('deliver',()=>{closeSheet();deliverSheet(o)});
     act('pay',()=>{closeSheet();paySheet(o)});
-    act('edit',()=>{R.odraft={id:o.id,no:o.no,cust:o.cust,custName:o.custName,address:o.address||'',phone:o.phone||'',lines:o.lines.map(l=>Object.assign({},l,{src:'Giá mặc định'})),paid:o.paid,payMethod:o.payMethod||'',paidAmount:o.paidAmount||'',payPhotos:(o.payPhotos||[]).map(id=>({id})),note:o.note||'',date:o.date,dlvDate:o.dlvDate||o.date};closeSheet();if(R.mode==='admin')R.mode='sale';R.tab='new';render()});
+    act('edit',()=>{R.odraft={id:o.id,no:o.no,cust:o.cust,custName:o.custName,address:o.address||'',phone:o.phone||'',lines:o.lines.filter(l=>!isFee(l)).map(l=>Object.assign({},l,{src:'Giá mặc định'})),shipFee:(o.lines||[]).filter(isFee).reduce((a,l)=>a+lineAmt(l),0)||'',paid:o.paid,payMethod:o.payMethod||'',paidAmount:o.paidAmount||'',payPhotos:(o.payPhotos||[]).map(id=>({id})),note:o.note||'',date:o.date,dlvDate:o.dlvDate||o.date};closeSheet();if(R.mode==='admin')R.mode='sale';R.tab='new';render()});
     act('cancel',async()=>{closeSheet();if(await confirmSheet('Hủy đơn '+o.no+'?','Đơn của '+esc(o.custName)+' sẽ chuyển sang trạng thái Đã hủy và không tính vào doanh số.','Hủy đơn',true)){await R.db.doc('orders/'+o.id).update({status:'cancel',updatedAt:Date.now(),updatedBy:R.uid});toast('Đã hủy đơn')}});
     act('reopen',async()=>{closeSheet();if(await confirmSheet('Mở lại đơn?','Đơn sẽ về trạng thái Đang giao để ship xác nhận lại.','Mở lại')){await R.db.doc('orders/'+o.id).update({status:'shipping',updatedAt:Date.now(),updatedBy:R.uid});toast('Đã mở lại')}});
   })}
@@ -617,7 +621,7 @@ function shipPay(uid,ym,L){const S=ST(),[f,t,n]=ymRange(ym);const td=today();con
   const far=String(S.shipFarCodes||'').split(/[,;\s]+/).map(x=>noAcc(x)).filter(Boolean);
   for(const o of L){if(o.shipId!==uid)continue;days.add(isoOf(new Date(o.doneAt)));const ck=custKind(o);
     if(o.outside){const m=noAcc(o.address||'').match(/^\(([^)]*)\)/);const code=m?m[1].replace(/\s*-.*$/,'').trim():'';if(far.some(x=>code===x))outF++;else outN++}
-    for(const l of o.lines||[]){const q0=toNum(l.qty),rt=toNum(l.ret),sw0=toNum(l.swap),gq=giftQ(l);const net=Math.max(0,q0-rt);const base=q0+sw0+gq;if(!base)continue;const pk=payKg(l);
+    for(const l of o.lines||[]){if(isFee(l))continue;const q0=toNum(l.qty),rt=toNum(l.ret),sw0=toNum(l.swap),gq=giftQ(l);const net=Math.max(0,q0-rt);const base=q0+sw0+gq;if(!base)continue;const pk=payKg(l);
       if(pk){if(!pk.k){noKg.push(l.name);continue}kg+=base*pk.k;kgS+=q0*pk.k;kgW+=sw0*pk.k;kgG+=gq*pk.k;if(pk.ch){chKg+=net*pk.k;swKg+=sw0*pk.k}
         const r=kgRows.get(l.code)||{name:l.name,qty:0,kg:0,sw:0,ch:pk.ch};r.qty+=base;r.kg+=base*pk.k;r.sw+=pk.ch?sw0*pk.k:0;kgRows.set(l.code,r)}
       else{let up,gross;if(toNum(l.price)){up=toNum(l.price);gross=!!l.g}else{up=toNum(defaultPrice(o.cust,l.code).p);gross=true}if(!up)continue;
@@ -782,7 +786,7 @@ function bindAttend(){$$('[data-attpl]').forEach(b=>b.onclick=()=>{R.ui.attPlace
 function saleOrdersDone(ym){const [f,t]=ymRange(ym);const pf=isoOf(new Date(+f.slice(0,4),+f.slice(5,7)-1,-30));const all=ordersIn(pf<windowStart()&&f>=windowStart()?windowStart():pf,t);if(!all)return null;
   return all.filter(o=>o.status==='done'&&(d=>d>=f&&d<=t)(o.doneAt?isoOf(new Date(o.doneAt)):o.date))}
 function salePay(uid,ym,L){const S=ST();const A=attOf(uid,ym);const cong=A.filter(a=>!a.void).length;const std=toNum(S.saleStd)||26;
-  let rev=0;for(const o of L){if(o.saleId!==uid)continue;const ck=custKind(o);for(const l of o.lines||[]){const a=lineAmt(l);if(!a)continue;const v=l.g?vatOf(l.name,ck.co):0;rev+=typeof v==='number'?a/(1+v):a}}
+  let rev=0;for(const o of L){if(o.saleId!==uid)continue;const ck=custKind(o);for(const l of o.lines||[]){if(isFee(l))continue;const a=lineAmt(l);if(!a)continue;const v=l.g?vatOf(l.name,ck.co):0;rev+=typeof v==='number'?a/(1+v):a}}
   const base=Math.round(toNum(S.saleBase)*cong/std),allow=Math.round(toNum(S.saleAllow)*cong/std),comm=Math.round(rev*toNum(S.saleComm)/100);
   return{uid,ym,cong,std,A,rev:Math.round(rev),base,allow,comm,total:base+allow+comm}}
 function salePayBlock(uid){const ym=payYm();const L=saleOrdersDone(ym);const head=`<div class="sec">Lương tháng ${ym.slice(5)}/${ym.slice(0,4)}</div>${payMonthBar()}`;
