@@ -80,7 +80,8 @@ const isoAdd=(iso,n)=>{const d=new Date(iso+'T00:00:00');d.setDate(d.getDate()+n
 const WD=['Chủ nhật','Thứ Hai','Thứ Ba','Thứ Tư','Thứ Năm','Thứ Sáu','Thứ Bảy'];const wdName=iso=>iso?WD[new Date(iso+'T00:00:00').getDay()]:'';
 const rN=x=>noAcc(x).toUpperCase().replace(/[^A-Z0-9.]/g,'');
 const addrCode=a=>{const m=String(a||'').match(/^\s*\(([^)]*)\)/);return m?rN(m[1].split(/\s*-\s/)[0]):''};
-const RT=()=>((R.routes||{}).list)||[];const routeById=id=>RT().find(r=>r.id===id);
+const shipByName=n=>{const k=noAcc(n||'');if(!k)return '';for(const [i,st] of R.staff.entries())if(st.role==='ship'&&st.active!==false&&noAcc(st.name||'')===k)return i;return ''};
+const RT=()=>(((R.routes||{}).list)||[]).map(r=>r.ship||!r.shipHint?r:Object.assign({},r,{ship:shipByName(r.shipHint)}));const routeById=id=>RT().find(r=>r.id===id);
 function routeOf(o){const a=(o&&o.address)||'';const m2=String(a).match(/^\s*\(\s*20[^)]*\)\s*\(([^)]*)\)/);if(m2){const c2=rN(m2[1]);const r2=RT().find(r=>(r.codes||[]).some(x=>rN(x)===c2));if(r2)return r2.id}const c=addrCode(a);if(c){const r=RT().find(r=>(r.codes||[]).some(x=>rN(x)===c));if(r)return r.id}
   return tinhMap()[tKey(a)]||''}
 const tKey=a=>noAcc(a).replace(/\s+/g,' ').replace(/^\(\s*20[^)]*\)\s*/,'').slice(0,24);
