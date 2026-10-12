@@ -398,7 +398,7 @@ function viewSaleNew(v){if(!R.odraft)R.odraft=newOrderDraft();const d=R.odraft;c
   const total=orderTotal(d);const bal=stockMap();
   v.innerHTML=`<h1 class="big">${d.id?'Sửa đơn '+esc(d.no):R.mode==='ship'?'Đơn phát sinh':'Lên đơn'}</h1>${R.mode==='ship'&&!d.id?'<div class="alert" style="margin-bottom:10px">Đơn khách đặt thêm khi đang giao. Đơn ghi tên bạn là người tạo và người giao, đánh dấu <b>Phát sinh</b>.</div>':''}
   <div class="stack">
-  ${R.mode==='ship'&&!d.id?`<button class="btn block pri" id="oSlip" style="font-size:16px">📷 Chụp phiếu giao hàng</button>${d.slipPhotos&&d.slipPhotos.length?`<div><img id="oSlipImg" src="${d.slipPhotos[0].data}" style="width:100%;max-height:220px;object-fit:contain;border-radius:12px;background:#fff;border:1px solid var(--line,#e3e8ef)"><div class="tiny muted" style="margin-top:4px">Ảnh phiếu lưu kèm đơn · bấm để xem to · <a href="#" id="oSlipX">bỏ ảnh</a></div></div>`:''}`:''}
+  ${R.mode==='ship'&&!d.id?`<button class="btn block pri" id="oSlip" style="font-size:16px">📷 Chụp phiếu giao hàng</button>${d.slipPhotos&&d.slipPhotos.length?`<div><img id="oSlipImg" src="${d.slipPhotos[0].data}" style="width:100%;max-height:220px;object-fit:contain;border-radius:12px;background:#fff;border:1px solid var(--line,#e3e8ef)"><div class="tiny muted" style="margin-top:4px">Ảnh phiếu lưu kèm đơn · bấm để xem to · <a href="#" id="oSlipX">bỏ ảnh</a></div><div class="tiny" style="margin-top:4px">🚚 Ship: <b>${esc(staffName(R.uid))}</b> · Ngày giao: <b>${dmy(d.slipDate||today())}</b> (ngày chụp phiếu)</div></div>${slipReadHtml(d)}`:''}`:''}
   <button class="btn block" id="oVoice" style="font-size:16px">🎤 Đọc đơn bằng giọng nói</button>
   <div class="group"><div class="row tap" id="oCust"><div class="grow">${c||d.custName?`<div class="t">${esc(c?c.name:d.custName)}</div><div class="s">${esc(d.address||'Chưa có địa chỉ giao')}${d.phone?' · '+esc(d.phone):''}</div>`:'<div class="t" style="color:var(--accent)">Chọn khách hàng</div><div class="s">Bấm để tìm hoặc thêm khách mới</div>'}</div><span class="chev">›</span></div></div>
   ${d.cust?`<label class="f">Địa chỉ giao hàng${(c&&c.alt)?' <span class="tiny">(bấm để chọn điểm giao khác)</span>':''}<input id="oAddr" list="dlAddr" value="${esc(d.address)}" placeholder="Địa chỉ giao"></label><datalist id="dlAddr">${[c&&c.address,c&&c.billAddr,...String((c&&c.alt)||'').split('|')].map(x=>String(x||'').trim()).filter((x,i,a)=>x&&a.indexOf(x)===i).map(x=>`<option value="${esc(x)}"></option>`).join('')}</datalist>`:''}
@@ -418,7 +418,7 @@ function viewSaleNew(v){if(!R.odraft)R.odraft=newOrderDraft();const d=R.odraft;c
   <button class="btn block pri" id="oSave">${d.id?'Lưu thay đổi':R.mode==='ship'?'Lưu đơn phát sinh':'Gửi đơn hàng'}</button>
   ${d.id||d.lines.length||d.cust?'<button class="btn block" id="oReset">'+(d.id?'Hủy sửa':'Làm lại từ đầu')+'</button>':''}
   </div>`;
-  $('#oVoice').onclick=()=>voiceOrder();const slb=$('#oSlip');if(slb)slb.onclick=()=>slipFlow(d);const sli=$('#oSlipImg');if(sli)sli.onclick=()=>openSheet('Ảnh phiếu',`<img src="${sli.src}" style="width:100%">`);const slx=$('#oSlipX');if(slx)slx.onclick=e=>{e.preventDefault();d.slipPhotos=[];d._slipGeo=null;render()};
+  $('#oVoice').onclick=()=>voiceOrder();const slb=$('#oSlip');if(slb)slb.onclick=()=>slipFlow(d);const sli=$('#oSlipImg');if(sli)sli.onclick=()=>openSheet('Ảnh phiếu',`<img src="${sli.src}" style="width:100%">`);const slx=$('#oSlipX');if(slx)slx.onclick=e=>{e.preventDefault();d.slipPhotos=[];d._slipGeo=null;d.slipRead=null;d.slipDate=null;render()};$$('#view [data-sro]').forEach(el=>el.onchange=()=>{d.slipRead.rows[+el.dataset.sro].on=el.checked});$$('#view [data-srq]').forEach(el=>el.oninput=()=>{d.slipRead.rows[+el.dataset.srq].qty=el.value});const sla=$('#oSlipAdd');if(sla)sla.onclick=()=>slipAdd(d);
   $$('#view [data-dd]').forEach(x=>x.onclick=()=>{const t0=today();if(x.dataset.dd==='x'){d._dlvPick=true}else{d._dlvPick=false;d.dlvDate=isoAdd(t0,+x.dataset.dd)}render()});
   const dlv0=$('#oDlv');if(dlv0)dlv0.onchange=()=>{if(dlv0.value){d.dlvDate=dlv0.value;render()}};
   $('#oCust').onclick=()=>pickCustomer((cu,addr)=>{if(!cu)return;d.cust=cu.code;d.custName=cu.name;d.address=addr||cu.address||'';d.phone=cu.phone||'';d.lines.forEach(l=>{const dp=defaultPrice(cu.code,l.code);l.listPrice=dp.p;l.price=dp.p;l.src=dp.src;l.g=1});render()});
@@ -442,6 +442,13 @@ function lineCard(l,i,bal,opt){opt=opt||{};const edited=l.listPrice!=null&&toNum
    ${dsc||gf?`<div class="pricehint" style="background:rgba(47,134,200,.10);padding:8px 10px;border-radius:10px;line-height:1.5">${dsc?`Giá sau khuyến mại: ${fmt(toNum(l.price))} × (1 − ${fmt(dsc)}%) = <b>${vnd(unitNet(l))}</b>`:''}${dsc&&gf?'<br>':''}${gf?`Hàng tặng ${fmt(gf)} ${esc(l.unit||'')}: giá 0đ, không tính tiền`:''}</div>`:''}`
    :`<button class="btn sm" data-lmore="${i}" style="align-self:flex-start">+ Khuyến mại % / Hàng tặng / Đổi trả</button>`}
    <div class="hrow"><span class="tiny muted">Thành tiền${dsc&&nq?' · '+fmt(nq)+' × '+fmt(unitNet(l)):''}</span><span class="money right">${vnd(lineAmt(l))}</span></div></div>`}
+function slipReadHtml(d){const S=d.slipRead;if(!S||S.st==='added')return '';
+  if(S.st==='run')return '<div class="alert">🔎 Đang đọc số lượng trên phiếu…</div>';
+  if(S.st==='fail')return `<div class="alert w">Chưa đọc được số trên phiếu${S.msg?' ('+esc(S.msg)+')':''}. Chụp lại thẳng, đủ sáng, thấy hết bảng – hoặc nhập tay.</div>`;
+  if(!S.rows.length)return '<div class="alert w">Không thấy số lượng nào trong cột "Số lượng". Kiểm tra lại ảnh hoặc nhập tay.</div>';
+  return `<div class="group"><div class="row"><div class="grow"><div class="t">Số lượng đọc từ phiếu</div><div class="s">So với ảnh, sửa nếu sai · ô vàng = app chưa chắc</div></div></div>
+  ${S.rows.map((x,i)=>`<div class="row" style="gap:8px"><input type="checkbox" data-sro="${i}" ${x.on?'checked':''} style="width:22px;height:22px"><img src="${x.img}" style="height:44px;max-width:110px;border-radius:6px;border:1px solid var(--line,#e3e8ef)"><div class="grow"><div class="t" style="font-size:14px">${esc(x.name)}</div><div class="s">Phiếu: ${esc(x.form)}${x.code?'':' · chưa gắn mã hàng'}</div></div><input inputmode="decimal" data-srq="${i}" value="${esc(String(x.qty))}" style="width:64px;font-size:17px;font-weight:700;text-align:center;border-radius:10px;padding:6px;border:1.5px solid ${x.conf<0.8?'#e0a100;background:#fff8e1':'var(--line,#cfd8e3)'}"></div>`).join('')}
+  <div class="row"><button class="btn block pri" id="oSlipAdd" style="margin:0">➕ Thêm vào đơn</button></div></div>`}
 function bindLineCards(root,d,rerender,moreKey){
   $$('[data-ldel]',root).forEach(b=>b.onclick=()=>{d.lines.splice(+b.dataset.ldel,1);rerender()});
   $$('[data-lstep]',root).forEach(b=>b.onclick=()=>{const [i,s]=b.dataset.lstep.split(':');const l=d.lines[+i];l.qty=Math.max(0,r3(toNum(l.qty)+(+s)));rerender()});
@@ -459,7 +466,7 @@ async function saveOrder(){const d=R.odraft,msg=$('#oMsg');d._err='';const err=t
   if(!d.id&&R.mode!=='ship'&&(d.dlvDate||'')<today())return err('Ngày giao không được trước hôm nay.');
   const btn=$('#oSave');btn.disabled=true;
   const total=lines.reduce((s,l)=>s+lineAmt(l),0);const base={cust:d.cust,custName:d.custName,address:d.address.trim(),phone:d.phone,lines,note:d.note.trim(),total,
-      paid:!!d.paid,paidAmount:d.paid?Math.round(d.paidAmount===''?total:toNum(d.paidAmount)):0,paidBy:d.paid?(R.mode==='ship'?'ship':'sale'):null,payMethod:d.paid?d.payMethod:null,dlvDate:(R.mode==='ship'&&!d.id)?today():(d.dlvDate||isoAdd(today(),1))};
+      paid:!!d.paid,paidAmount:d.paid?Math.round(d.paidAmount===''?total:toNum(d.paidAmount)):0,paidBy:d.paid?(R.mode==='ship'?'ship':'sale'):null,payMethod:d.paid?d.payMethod:null,dlvDate:(R.mode==='ship'&&!d.id)?(d.slipDate||today()):(d.dlvDate||isoAdd(today(),1))};
   if(d.id){const o=R.orders.find(x=>x.id===d.id);if(!o||o.status!=='new'){btn.disabled=false;return err('Đơn đã được nhận giao, không sửa được nữa.')}}
   /* GỬI NỀN: màn hình chuyển ngay, đơn hiện ngay trong danh sách; máy chủ ghi phía sau. Lỗi mạng → trả lại đơn nháp để bấm Gửi lại. */
   const mode=R.mode,wasShip=mode==='ship',arise=wasShip&&!d.id,dv=arise&&d.delivered!==false;
@@ -715,7 +722,29 @@ function slipCands(c){const p=c?[c.latitude,c.longitude]:null;const m=new Map();
   return [...m.values()].sort((a,b)=>((a.dist==null?99:a.dist)-(b.dist==null?99:b.dist))||(b.o?1:0)-(a.o?1:0)||String(a.address).localeCompare(String(b.address),'vi'))}
 function setDraftCust(d,cu,addr){d.cust=cu.code;d.custName=cu.name;d.address=addr||cu.address||'';d.phone=cu.phone||'';d.lines.forEach(l=>{const dp=defaultPrice(cu.code,l.code);l.listPrice=dp.p;l.price=dp.p;l.src=dp.src;l.g=1})}
 /* v38: chụp phiếu giao hàng → nhận khách theo vị trí */
-async function slipFlow(d){const gp=geoSoft();gp.catch(()=>{});const ph=await camPhoto();if(!ph)return;d.slipPhotos=[{data:ph}];render();
+const SLIP_MAP=['TP001','TP003','TP005','TP0065','TP0051','TP898','TP019','TP0035','TP014','TP069','TP087','TP088'];/* 12 dòng in sẵn trên phiếu → mã hàng */
+const slipProd=i=>{const m=((R.settings||{}).slipMap||'').split(/[,;\s]+/).filter(Boolean);return findProd(m[i]||SLIP_MAP[i])};
+const loadJS=src=>new Promise((ok,no)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=()=>no(new Error('load '+src));document.head.appendChild(s)});
+let _ocrP=null;const ocrLib=()=>_ocrP||(_ocrP=(window.VibaOCR?Promise.resolve():loadJS('ocr.js?v=39')).catch(e=>{_ocrP=null;throw e}));
+/* v39: đọc cột "Số lượng" trên ảnh phiếu (chạy trên điện thoại, không gửi ảnh đi đâu) */
+async function slipRead(d,ph){const S=d.slipRead={st:'run',rows:[]};render();
+  try{await ocrLib();const img=new Image();await new Promise((ok,no)=>{img.onload=ok;img.onerror=no;img.src=ph});
+    const W=1000,H=Math.round(img.naturalHeight*W/img.naturalWidth),cv=document.createElement('canvas');cv.width=W;cv.height=H;const cx=cv.getContext('2d');cx.drawImage(img,0,0,W,H);
+    const px=cx.getImageData(0,0,W,H).data,g=new Float32Array(W*H);for(let i=0;i<W*H;i++)g[i]=0.299*px[4*i]+0.587*px[4*i+1]+0.114*px[4*i+2];
+    await new Promise(r=>setTimeout(r,30));const r=VibaOCR.readSlip(g,W,H,null,{cols:[4]});if(d.slipRead!==S)return;
+    if(!r.ok){S.st='fail';S.msg=r.msg;render();return}
+    const crop=b=>{const x0=Math.max(0,b.cx0-2),x1=Math.min(W,b.cx1+2),y0=Math.max(0,Math.min(b.y0,b.cy0)-2),y1=Math.min(H,Math.max(b.y1,b.cy1)+2),cw=x1-x0,ch=y1-y0;
+      const c=document.createElement('canvas');c.width=cw;c.height=ch;const id=c.getContext('2d').createImageData(cw,ch);for(let y=0;y<ch;y++)for(let x=0;x<cw;x++){const v=r.gray[(y+y0)*W+x+x0],k=4*(y*cw+x);id.data[k]=id.data[k+1]=id.data[k+2]=v;id.data[k+3]=255}
+      c.getContext('2d').putImageData(id,0,0);return c.toDataURL('image/jpeg',.7)};
+    S.rows=r.rows.filter(x=>x.qty>0).map(x=>{const p=slipProd(x.row);return {row:x.row,form:x.name,code:p?p.code:'',name:p?p.name:x.name,unit:p?p.unit:'',read:x.text,qty:x.qty,conf:x.conf,img:crop(x.box),on:!!p}});
+    S.st='done';render()}catch(e){if(d.slipRead===S){S.st='fail';S.msg='Không đọc được ảnh ('+(e.message||e)+')';render()}}}
+function slipAdd(d){const S=d.slipRead;if(!S)return;let n=0;const train=[];
+  for(const x of S.rows){const q=r3(toNum(x.qty));train.push({row:x.row,read:x.read,qty:q,conf:x.conf,img:x.img,on:!!x.on});if(!x.on||!(q>0)||!x.code)continue;const p=findProd(x.code);if(!p)continue;
+    const ex=d.lines.find(l=>l.code===p.code);if(ex)ex.qty=q;else{const dp=defaultPrice(d.cust,p.code);d.lines.push({code:p.code,name:p.name,unit:p.unit,qty:q,promo:0,swap:0,ret:0,price:dp.p,listPrice:dp.p,src:dp.src,g:1})}n++}
+  /* lưu mẫu đã duyệt để cải thiện việc đọc số sau này */
+  if(R.db&&train.length)R.db.doc('slipTrain/'+uidShort()).set({at:Date.now(),by:R.uid,items:train}).catch(()=>{});
+  S.st='added';toast(n?'Đã thêm '+n+' sản phẩm từ phiếu':'Không có dòng nào được chọn');render()}
+async function slipFlow(d){const gp=geoSoft();gp.catch(()=>{});const ph=await camPhoto();if(!ph)return;d.slipPhotos=[{data:ph}];d.slipDate=today();d.date=d.slipDate;slipRead(d,ph);render();
   openSheet('Khách của phiếu này',`<div class="stack"><img src="${ph}" style="width:100%;max-height:190px;object-fit:contain;border-radius:12px;background:#fff;border:1px solid var(--line,#e3e8ef)"><div id="slR"><div class="alert">📍 Đang lấy vị trí để tìm khách…</div></div></div>`,b=>{
     const box=b.querySelector('#slR');
     const show=(c,err)=>{d._slipGeo=c||null;const L=slipCands(c);const best=L[0]&&L[0].dist!=null&&L[0].dist<=0.15?L[0]:null;
@@ -727,7 +756,7 @@ async function slipFlow(d){const gp=geoSoft();gp.catch(()=>{});const ph=await ca
       box.querySelectorAll('[data-sl]').forEach(el=>el.onclick=()=>{const x=L[+el.dataset.sl];const cu=findCust(x.cust)||{code:x.cust,name:x.name,address:x.address};
         const pick=()=>{setDraftCust(d,cu,x.address);closeSheet();render()};
         if(x.o){box.innerHTML=`<div class="alert w">Khách này đang có đơn <b>${esc(x.o.no)}</b> chờ giao (${esc((x.o.lines||[]).map(l=>l.name+' ×'+fmt(l.qty)).join(', '))}). Nếu phiếu này là đơn đó, giao đơn đó để không tạo trùng.</div><button class="btn block pri" id="slDv">Giao đơn ${esc(x.o.no)}</button><button class="btn block" id="slNew">Không, tạo đơn phát sinh mới</button>`;
-          box.querySelector('#slDv').onclick=()=>{closeSheet();d.slipPhotos=[];render();deliverSheet(x.o)};box.querySelector('#slNew').onclick=pick}else pick()});
+          box.querySelector('#slDv').onclick=()=>{closeSheet();d.slipPhotos=[];d.slipRead=null;d.slipDate=null;render();deliverSheet(x.o)};box.querySelector('#slNew').onclick=pick}else pick()});
       box.querySelector('#slFind').onclick=()=>{closeSheet();pickCustomer((cu,addr)=>{if(!cu)return;setDraftCust(d,cu,addr);render()})}};
     gp.then(c=>show(c)).catch(e=>show(null,e))})}
 async function doAttend(){const place=R.ui.attPlace||'cty';
