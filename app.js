@@ -689,25 +689,32 @@ function permSheet(kind,retry,off){openSheet(kind==='mic'?'Bật micro cho app':
   b.querySelector('#permRetry').onclick=()=>{closeSheet();retry&&retry()};b.querySelector('#permReload').onclick=()=>location.reload()})}
 async function permState(name){try{if(!navigator.permissions)return '';return (await navigator.permissions.query({name})).state}catch(e){return ''}}
 const attOf=(uid,ym)=>(R.attend||[]).filter(a=>a.uid===uid&&String(a.date||'').slice(0,7)===ym);
-function geoNow(){return new Promise((ok,no)=>{if(!navigator.geolocation)return no({code:'nogeo'});navigator.geolocation.getCurrentPosition(p=>ok(p.coords),e=>no(e),{enableHighAccuracy:true,timeout:20000,maximumAge:0})})}
+function geoTry(o){return new Promise((ok,no)=>{if(!navigator.geolocation)return no({code:'nogeo'});navigator.geolocation.getCurrentPosition(p=>ok(p.coords),e=>no(e),o)})}
+function geoNow(){return geoTry({enableHighAccuracy:true,timeout:15000,maximumAge:60000}).catch(e=>{if(e&&e.code===1)throw e;return geoTry({enableHighAccuracy:false,timeout:20000,maximumAge:300000})})}
+const inApp=()=>/Zalo|FBAN|FBAV|FB_IAB|Instagram|Line\/|Messenger/i.test(navigator.userAgent||'');
 function camPhoto(){return new Promise(res=>{const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.setAttribute('capture','environment');inp.style.display='none';document.body.appendChild(inp);
   inp.onchange=async()=>{const f=inp.files[0];inp.remove();if(!f)return res(null);try{res(await compress(f))}catch(e){toast('Không đọc được ảnh này');res(null)}};inp.click()})}
 function kmDist(a,b){const R6=6371,r=x=>x*Math.PI/180;const dl=r(b[0]-a[0]),dn=r(b[1]-a[1]);const h=Math.sin(dl/2)**2+Math.cos(r(a[0]))*Math.cos(r(b[0]))*Math.sin(dn/2)**2;return 2*R6*Math.asin(Math.sqrt(h))}
 const coLoc=()=>{const m=String(ST().coLoc||'').match(/(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)/);return m?[+m[1],+m[2]]:null};
-async function doAttend(){const place=R.ui.attPlace||'cty';let c;
-  toast('Đang lấy vị trí…');try{c=await geoNow()}catch(e){if(e&&e.code===1)permSheet('geo',doAttend);else if(e&&e.code===3)toast('Chưa bắt được vị trí, ra chỗ thoáng rồi thử lại.');else permSheet('geo',doAttend,true);return}
-  const d=await camPhoto();if(!d)return;const day=today(),id=R.uid+'_'+day,pid='att-'+id+'-'+uidShort();
+async function doAttend(){const place=R.ui.attPlace||'cty';
+  if(!navigator.geolocation){permSheet('geo',doAttend,true);return}
+  if(R._geoSt&&R._geoSt.state==='denied'){permSheet('geo',doAttend);return}/* đã chặn vị trí: hướng dẫn bật trước khi chụp */
+  const gp=geoNow();gp.catch(()=>{});/* lấy vị trí song song, không chặn camera */
+  const d=await camPhoto();if(!d)return;R._attPend={d,place,gp};render();return attFinish()}
+async function attFinish(){const P=R._attPend;if(!P)return;let c;toast('Đang lấy vị trí…');
+  try{c=await (P.gp||geoNow())}catch(e){P.gp=null;render();if(e&&e.code===1)permSheet('geo',attFinish);else if(e&&e.code===3)permSheet('geo',attFinish,true);else permSheet('geo',attFinish,true);return}
+  P.gp=null;const d=P.d,place=P.place;const day=today(),id=R.uid+'_'+day,pid='att-'+id+'-'+uidShort();
   try{toast('Đang gửi chấm công…');await R.db.doc('photos/'+pid).set({data:d,kind:'attend',by:R.uid,at:Date.now()});R.photoCache.set(pid,d);
-    await R.db.doc('attend/'+id).set({uid:R.uid,date:day,at:Date.now(),place,lat:+c.latitude.toFixed(6),lng:+c.longitude.toFixed(6),acc:Math.round(c.accuracy||0),photo:pid,void:false});toast('✓ Đã chấm công');render()}
+    await R.db.doc('attend/'+id).set({uid:R.uid,date:day,at:Date.now(),place,lat:+c.latitude.toFixed(6),lng:+c.longitude.toFixed(6),acc:Math.round(c.accuracy||0),photo:pid,void:false});R._attPend=null;toast('✓ Đã chấm công');render()}
   catch(e){toast('Chưa gửi được chấm công ('+(e.code||'lỗi mạng')+'), thử lại.')}}
 function attendBlock(uid){const day=today();const a=(R.attend||[]).find(x=>x.uid===uid&&x.date===day);const pl=R.ui.attPlace||'cty';
-  return `<div class="sec" style="margin-top:0">Chấm công hôm nay</div><div class="card stack" style="gap:10px"><div style="font-weight:700">${wdName(day)}, ${dmy(day)}</div>
+  return `<div class="sec" style="margin-top:0">Chấm công hôm nay</div>${inApp()?'<div class="alert w">Bạn đang mở app trong Zalo/Facebook nên camera và vị trí có thể không chạy. Bấm <b>⋯</b> (góc trên) › <b>Mở bằng trình duyệt</b> (Safari/Chrome) rồi chấm công.</div>':''}${R._attPend&&uid===R.uid?`<div class="alert b">Đã chụp ảnh, đang chờ vị trí… <button class="btn sm" id="attLoc" style="margin-left:6px">Lấy lại vị trí</button></div>`:''}<div class="card stack" style="gap:10px"><div style="font-weight:700">${wdName(day)}, ${dmy(day)}</div>
    ${a&&!a.void?`<div style="display:flex;gap:12px;align-items:center"><div class="ph" data-attph="${esc(a.photo)}" data-pid="${esc(a.photo)}" style="width:76px;height:76px;border-radius:12px;flex:none;background-size:cover;background-position:center" role="button" aria-label="Xem ảnh"></div><div><div style="font-weight:700;color:#1e9a5c">✓ Đã chấm công</div><div class="tiny muted" style="margin-top:4px">${new Date(a.at).toTimeString().slice(0,5)} · ${a.place==='tuyen'?'Trên tuyến':'Tại công ty'}<br>📍 ${a.lat}, ${a.lng} (±${a.acc} m) · <a href="https://www.google.com/maps/search/?api=1&query=${a.lat},${a.lng}" target="_blank" rel="noopener" style="color:var(--accent)">Bản đồ</a></div></div></div>
     <button class="btn sm" id="attRe" style="align-self:flex-start">Chụp lại</button>`:
    `${a&&a.void?'<div class="alert w">Ảnh chấm công hôm nay đã bị quản lý bỏ công'+(a.voidNote?': '+esc(a.voidNote):'')+'. Chụp lại nếu cần.</div>':''}<div class="seg"><button data-attpl="cty" class="${pl==='cty'?'on':''}">🏢 Tại công ty</button><button data-attpl="tuyen" class="${pl==='tuyen'?'on':''}">🛣️ Trên tuyến</button></div>
     <button class="btn block pri" id="attGo" style="font-size:17px">📷 Chụp ảnh chấm công</button>
     <div class="tiny muted">Bắt buộc bật vị trí (GPS). App mở camera để chụp ảnh mới, tự ghi giờ chụp và vị trí.</div>`}</div>`}
-function bindAttend(){$$('[data-attpl]').forEach(b=>b.onclick=()=>{R.ui.attPlace=b.dataset.attpl;render()});const g=$('#attGo');if(g)g.onclick=doAttend;const r=$('#attRe');if(r)r.onclick=doAttend;
+function bindAttend(){$$('[data-attpl]').forEach(b=>b.onclick=()=>{R.ui.attPlace=b.dataset.attpl;render()});const g=$('#attGo');if(g)g.onclick=doAttend;const r=$('#attRe');if(r)r.onclick=doAttend;const lc=$('#attLoc');if(lc)lc.onclick=attFinish;if(!R._geoSt&&navigator.permissions&&navigator.permissions.query)navigator.permissions.query({name:'geolocation'}).then(st=>{R._geoSt=st}).catch(()=>{});
   $$('[data-attph]').forEach(el=>el.onclick=async()=>{const d=await loadPhoto(el.dataset.attph);if(d)showImg(d)});hydratePhotos(document)}
 function saleOrdersDone(ym){const [f,t]=ymRange(ym);const pf=isoOf(new Date(+f.slice(0,4),+f.slice(5,7)-1,-30));const all=ordersIn(pf<windowStart()&&f>=windowStart()?windowStart():pf,t);if(!all)return null;
   return all.filter(o=>o.status==='done'&&(d=>d>=f&&d<=t)(o.doneAt?isoOf(new Date(o.doneAt)):o.date))}
