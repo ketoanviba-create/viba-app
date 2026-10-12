@@ -398,6 +398,7 @@ function viewSaleNew(v){if(!R.odraft)R.odraft=newOrderDraft();const d=R.odraft;c
   const total=orderTotal(d);const bal=stockMap();
   v.innerHTML=`<h1 class="big">${d.id?'Sửa đơn '+esc(d.no):R.mode==='ship'?'Đơn phát sinh':'Lên đơn'}</h1>${R.mode==='ship'&&!d.id?'<div class="alert" style="margin-bottom:10px">Đơn khách đặt thêm khi đang giao. Đơn ghi tên bạn là người tạo và người giao, đánh dấu <b>Phát sinh</b>.</div>':''}
   <div class="stack">
+  ${R.mode==='ship'&&!d.id?`<button class="btn block pri" id="oSlip" style="font-size:16px">📷 Chụp phiếu giao hàng</button>${d.slipPhotos&&d.slipPhotos.length?`<div><img id="oSlipImg" src="${d.slipPhotos[0].data}" style="width:100%;max-height:220px;object-fit:contain;border-radius:12px;background:#fff;border:1px solid var(--line,#e3e8ef)"><div class="tiny muted" style="margin-top:4px">Ảnh phiếu lưu kèm đơn · bấm để xem to · <a href="#" id="oSlipX">bỏ ảnh</a></div></div>`:''}`:''}
   <button class="btn block" id="oVoice" style="font-size:16px">🎤 Đọc đơn bằng giọng nói</button>
   <div class="group"><div class="row tap" id="oCust"><div class="grow">${c||d.custName?`<div class="t">${esc(c?c.name:d.custName)}</div><div class="s">${esc(d.address||'Chưa có địa chỉ giao')}${d.phone?' · '+esc(d.phone):''}</div>`:'<div class="t" style="color:var(--accent)">Chọn khách hàng</div><div class="s">Bấm để tìm hoặc thêm khách mới</div>'}</div><span class="chev">›</span></div></div>
   ${d.cust?`<label class="f">Địa chỉ giao hàng${(c&&c.alt)?' <span class="tiny">(bấm để chọn điểm giao khác)</span>':''}<input id="oAddr" list="dlAddr" value="${esc(d.address)}" placeholder="Địa chỉ giao"></label><datalist id="dlAddr">${[c&&c.address,c&&c.billAddr,...String((c&&c.alt)||'').split('|')].map(x=>String(x||'').trim()).filter((x,i,a)=>x&&a.indexOf(x)===i).map(x=>`<option value="${esc(x)}"></option>`).join('')}</datalist>`:''}
@@ -417,7 +418,7 @@ function viewSaleNew(v){if(!R.odraft)R.odraft=newOrderDraft();const d=R.odraft;c
   <button class="btn block pri" id="oSave">${d.id?'Lưu thay đổi':R.mode==='ship'?'Lưu đơn phát sinh':'Gửi đơn hàng'}</button>
   ${d.id||d.lines.length||d.cust?'<button class="btn block" id="oReset">'+(d.id?'Hủy sửa':'Làm lại từ đầu')+'</button>':''}
   </div>`;
-  $('#oVoice').onclick=()=>voiceOrder();
+  $('#oVoice').onclick=()=>voiceOrder();const slb=$('#oSlip');if(slb)slb.onclick=()=>slipFlow(d);const sli=$('#oSlipImg');if(sli)sli.onclick=()=>openSheet('Ảnh phiếu',`<img src="${sli.src}" style="width:100%">`);const slx=$('#oSlipX');if(slx)slx.onclick=e=>{e.preventDefault();d.slipPhotos=[];d._slipGeo=null;render()};
   $$('#view [data-dd]').forEach(x=>x.onclick=()=>{const t0=today();if(x.dataset.dd==='x'){d._dlvPick=true}else{d._dlvPick=false;d.dlvDate=isoAdd(t0,+x.dataset.dd)}render()});
   const dlv0=$('#oDlv');if(dlv0)dlv0.onchange=()=>{if(dlv0.value){d.dlvDate=dlv0.value;render()}};
   $('#oCust').onclick=()=>pickCustomer((cu,addr)=>{if(!cu)return;d.cust=cu.code;d.custName=cu.name;d.address=addr||cu.address||'';d.phone=cu.phone||'';d.lines.forEach(l=>{const dp=defaultPrice(cu.code,l.code);l.listPrice=dp.p;l.price=dp.p;l.src=dp.src;l.g=1});render()});
@@ -466,11 +467,11 @@ async function saveOrder(){const d=R.odraft,msg=$('#oMsg');d._err='';const err=t
   R.odraft=newOrderDraft();R.tab=wasShip?(dv||d.id?'done':'todo'):'orders';render();toast(d.id?'Đang lưu đơn…':'Đang gửi đơn…');
   (async()=>{try{
     if(d.id){base.payPhotos=pre(d.payPhotos,d.id);await Promise.all(jobs.map(f=>f()));await R.db.doc('orders/'+d.id).update(Object.assign(base,{updatedAt:Date.now(),updatedBy:R.uid}));toast('✓ Đã lưu đơn '+(d.no||''))}
-    else{let no=nextNo('DH',d.date,R.orders);base.payPhotos=pre(d.payPhotos,no);const now=Date.now();
+    else{let no=nextNo('DH',d.date,R.orders);base.payPhotos=pre(d.payPhotos,no);if(d.slipPhotos&&d.slipPhotos.length)base.slipPhotos=pre(d.slipPhotos,no);const now=Date.now();
       const mk=async()=>{for(let k=0;k<40;k++){while(R.orders.some(o=>o.id===no))no=bumpNo(no);
           try{await R.db.doc('orders/'+no).create(Object.assign({},base,{no,date:d.date,saleId:R.uid,status:arise?(dv?'done':'shipping'):'new',shipId:arise?R.uid:null,outside:false,retPhotos:[],createdAt:now},arise?{arising:true,saleLines:lines,shipAt:now}:{},dv?{doneAt:now}:{}));return}
           catch(e){if(e.code!=='exists')throw e;no=bumpNo(no)}}throw{message:'không cấp được số đơn'}};
-      await Promise.all([mk(),...jobs.map(f=>f())]);toast((arise?'✓ Đã lưu đơn phát sinh ':'✓ Đã gửi đơn ')+no)}
+      await Promise.all([mk(),...jobs.map(f=>f())]);if(dv){(d._slipGeo?Promise.resolve(d._slipGeo):geoSoft()).then(c=>learnLoc(base,c)).catch(()=>{})}toast((arise?'✓ Đã lưu đơn phát sinh ':'✓ Đã gửi đơn ')+no)}
   }catch(e){R.odraft=d;R.mode=mode;R.tab='new';render();d._err='<div class="alert r">'+(e.code==='invalid_argument'?'Bạn không có quyền ghi dữ liệu.':e.code==='quota_exceeded'?'Kho dữ liệu đầy, báo quản lý.':'Chưa gửi được (mạng yếu?): '+esc(e.message||e.code||'lỗi')+'. Đơn vẫn còn đây – bấm Gửi lại.')+'</div>';render();toast('⚠ Chưa gửi được đơn')}})()}
 
 /* ================= DANH SÁCH ĐƠN (dùng chung) ================= */
@@ -493,7 +494,7 @@ function orderDetail(o){if(!o)return;const role=R.mode;const mine=o.saleId===R.u
   const canEdit=(role==='sale'&&mine||role==='admin')&&o.status==='new';
   const canDeliver=(role==='ship'&&(o.shipId===R.uid||!o.shipId)||role==='admin')&&(o.status==='new'||o.status==='shipping');
   const lines=(o.lines||[]).map(l=>`<div class="row"><div class="grow"><div class="t">${esc(l.name)}</div><div class="s">${fmt(l.qty)} ${esc(l.unit)} × ${vnd(l.price)}${l.listPrice!=null&&l.price!==l.listPrice?' <span class="edited">(giá gốc '+vnd(l.listPrice)+')</span>':''}${toNum(l.disc)?' · <b>KM '+fmt(l.disc)+'% → '+vnd(unitNet(l))+'</b>':''}${toNum(l.gift)?' · <b>Tặng '+fmt(l.gift)+'</b>':''}${l.promo?' · KM '+fmt(l.promo):''}${l.swap?' · Đổi '+fmt(l.swap):''}${l.ret?' · Trả '+fmt(l.ret):''}</div></div><div class="money">${vnd(lineAmt(l))}</div></div>`).join('');
-  const pay=(o.payPhotos||[]).map(id=>({id})),rp=(o.retPhotos||[]).map(id=>({id}));
+  const pay=(o.payPhotos||[]).map(id=>({id})),rp=(o.retPhotos||[]).map(id=>({id})),slp=(o.slipPhotos||[]).map(id=>({id}));
   openSheet('Đơn '+o.no,`<div class="hrow">${stChip(o)}${payChip(o)}${o.arising?'<span class="chip b">Phát sinh</span>':''}${o.outside?'<span class="chip b">Ship ngoài</span>':''}${o.px?'<span class="chip">Đã xuất kho '+esc(o.px)+'</span>':''}</div>
    <div class="group"><div class="row"><div class="grow"><div class="t">${esc(o.custName)}</div><div class="s">${esc(o.address||'')}${o.phone?' · '+esc(o.phone):''}</div></div>${o.address?`<a class="mapl" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address)}" target="_blank" rel="noopener">Bản đồ</a>`:''}</div>
    <div class="row"><div class="grow s">Ngày ${dmy(o.date)} · Sale: ${esc(staffName(o.saleId))}${o.shipId?' · Ship: '+esc(staffName(o.shipId)):''}</div></div></div>
@@ -501,13 +502,13 @@ function orderDetail(o){if(!o)return;const role=R.mode;const mine=o.saleId===R.u
    ${o.paid?`<div class="row"><div class="grow s">Đã thu ${vnd(o.paidAmount)} (${o.paidBy==='ship'?'ship thu':'sale thu'}${o.payMethod?' · '+PM_NAME[o.payMethod]:''})</div></div>`:''}</div>
    ${o.note?`<div class="card small">${esc(o.note)}</div>`:''}
    ${pay.length?'<div><div class="sec" style="margin-top:0">Ảnh thanh toán</div>'+photoStrip(pay,false,'p')+'</div>':''}
-   ${rp.length?'<div><div class="sec" style="margin-top:0">Ảnh hàng đổi trả</div>'+photoStrip(rp,false,'r')+'</div>':''}
+   ${rp.length?'<div><div class="sec" style="margin-top:0">Ảnh hàng đổi trả</div>'+photoStrip(rp,false,'r')+'</div>':''}${slp.length?'<div><div class="sec" style="margin-top:0">Ảnh phiếu giao hàng</div>'+photoStrip(slp,false,'s')+'</div>':''}
    ${canDeliver&&o.status==='new'&&role==='ship'?'<button class="btn block blue" data-a="take">Nhận giao đơn này</button>':''}
    ${canDeliver?'<button class="btn block pri" data-a="deliver">Xác nhận đã giao</button>':''}
    ${!o.paid&&o.status!=='cancel'?'<button class="btn block" data-a="pay">Cập nhật đã thanh toán</button>':''}
    ${canEdit?'<button class="btn block" data-a="edit">Sửa đơn</button><button class="btn block danger" data-a="cancel">Hủy đơn</button>':''}
    ${role==='admin'&&o.status==='done'&&!o.px?'<button class="btn block" data-a="reopen">Mở lại đơn (chưa giao)</button>':''}`,b=>{
-    bindPhotos(b,k=>k==='p'?pay:rp,()=>{});
+    bindPhotos(b,k=>k==='p'?pay:k==='s'?slp:rp,()=>{});
     const act=(k,f)=>{const x=b.querySelector(`[data-a="${k}"]`);if(x)x.onclick=f};
     act('take',async()=>{try{const s=await R.db.doc('orders/'+o.id).get();const cur=s.data();if(cur.shipId&&cur.shipId!==R.uid){toast('Đơn đã có người khác nhận.');return}
       await R.db.doc('orders/'+o.id).update({status:'shipping',shipId:R.uid,shipAt:Date.now()});toast('Đã nhận đơn '+o.no);closeSheet()}catch(e){toast('Lỗi: '+(e.code||''))}});
@@ -550,11 +551,11 @@ function deliverSheet(o){const d={lines:o.lines.map(l=>Object.assign({},l,{src:'
       if(lines.some(l=>l.ret>l.qty+1e-9)){m.innerHTML='<div class="alert r">Số trả không được lớn hơn số giao.</div>';return}
       if((lines.some(l=>l.ret||l.swap))&&!d.retPhotos.length&&!d._noPhotoOk){d._noPhotoOk=1;m.innerHTML='<div class="alert w">Có hàng đổi trả nhưng chưa chụp ảnh. Bấm xác nhận lần nữa nếu vẫn muốn lưu.</div>';return}
       if(!o.paid&&d.paid){const e2=pmCheck(d.payMethod,d.payPhotos);if(e2){m.innerHTML='<div class="alert r">'+e2+'</div>';return}}
-      e.target.disabled=true;try{const pay=await savePhotos(d.payPhotos,o.id,'pay'),ret=await savePhotos(d.retPhotos,o.id,'ret');const total=lines.reduce((s,l)=>s+lineAmt(l),0);
+      e.target.disabled=true;const gpL=geoSoft();gpL.catch(()=>{});try{const pay=await savePhotos(d.payPhotos,o.id,'pay'),ret=await savePhotos(d.retPhotos,o.id,'ret');const total=lines.reduce((s,l)=>s+lineAmt(l),0);
         const up={lines,total,status:'done',shipId:o.shipId||R.uid,doneAt:Date.now(),outside:!!d.outside,retPhotos:(o.retPhotos||[]).concat(ret),updatedAt:Date.now(),updatedBy:R.uid};
         if(!o.saleLines)up.saleLines=o.lines;if(d.note)up.note=(o.note?o.note+' | ':'')+'Giao: '+d.note;
         if(!o.paid&&d.paid){up.paid=true;up.paidAmount=Math.round(d.paidAmount===''?total:toNum(d.paidAmount));up.paidBy='ship';up.payMethod=d.payMethod;up.payPhotos=(o.payPhotos||[]).concat(pay)}
-        await R.db.doc('orders/'+o.id).update(up);toast('Đã giao đơn '+o.no);closeSheet()}catch(x){e.target.disabled=false;m.innerHTML='<div class="alert r">Không lưu được ('+esc(x.code||'lỗi')+').</div>'}}};
+        await R.db.doc('orders/'+o.id).update(up);gpL.then(c=>learnLoc(o,c)).catch(()=>{});toast('Đã giao đơn '+o.no);closeSheet()}catch(x){e.target.disabled=false;m.innerHTML='<div class="alert r">Không lưu được ('+esc(x.code||'lỗi')+').</div>'}}};
   openSheet('Giao đơn '+o.no,'',draw)}
 function viewShipTodo(v){const L=R.orders.filter(o=>(o.status==='new'&&!o.shipId)||(o.status==='shipping'&&o.shipId===R.uid)||(o.status==='new'&&o.shipId===R.uid));
   const mine=L.filter(o=>o.shipId===R.uid),free0=L.filter(o=>!o.shipId),free=free0.filter(o=>inRt(o)&&inDay(o));const sortF=(a,b)=>((a.dlvDate||a.date)+a.no).localeCompare((b.dlvDate||b.date)+b.no);
@@ -698,6 +699,37 @@ function camPhoto(){return new Promise(res=>{const inp=document.createElement('i
   inp.onchange=async()=>{const f=inp.files[0];inp.remove();if(!f)return res(null);try{res(await compress(f))}catch(e){toast('Không đọc được ảnh này');res(null)}};inp.click()})}
 function kmDist(a,b){const R6=6371,r=x=>x*Math.PI/180;const dl=r(b[0]-a[0]),dn=r(b[1]-a[1]);const h=Math.sin(dl/2)**2+Math.cos(r(a[0]))*Math.cos(r(b[0]))*Math.sin(dn/2)**2;return 2*R6*Math.asin(Math.sqrt(h))}
 const coLoc=()=>{const m=String(ST().coLoc||'').match(/(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)/);return m?[+m[1],+m[2]]:null};
+const hash36=s=>{let a=7,b=13;for(const c of new TextEncoder().encode(String(s))){a=(Math.imul(a,31)+c)>>>0;b=(Math.imul(b,37)+c)>>>0}return a.toString(36)+b.toString(36)};
+const locKey=(cust,addr)=>'L_'+hash36(String(cust)+'|'+noAcc(addr||'').replace(/\s+/g,' '));
+const geoSoft=()=>(R._geoSt&&R._geoSt.state==='denied')?Promise.reject({code:1}):geoNow();
+/* v38: học vị trí khách mỗi lần ship giao xong (trung bình tối đa 10 lần, bỏ điểm lệch > 400 m khi đã chắc) */
+async function learnLoc(o,c){try{if(!c||!o||!o.cust||!R.db||!(c.accuracy<=150))return;const id=locKey(o.cust,o.address);const old=(R.custLoc||[]).find(x=>x._id===id);
+  const p=[c.latitude,c.longitude];let n=0,lat=p[0],lng=p[1];
+  if(old){const dk=kmDist([old.lat,old.lng],p);const on=Math.min(old.n||1,9);if(dk>0.4){if(on>=3)return}else{n=on;lat=(old.lat*n+p[0])/(n+1);lng=(old.lng*n+p[1])/(n+1)}}
+  await R.db.doc('custLoc/'+id).set({cust:o.cust,custName:o.custName||'',address:o.address||'',lat:+lat.toFixed(6),lng:+lng.toFixed(6),n:n+1,acc:Math.round(c.accuracy),at:Date.now(),by:R.uid})}catch(e){}}
+function slipCands(c){const p=c?[c.latitude,c.longitude]:null;const m=new Map();
+  const add=(cust,address,name,dist,why,o)=>{const k=cust+'|'+noAcc(address||'');const x=m.get(k);if(x){if(dist!=null&&(x.dist==null||dist<x.dist))x.dist=dist;if(why&&!x.why.includes(why))x.why.push(why);if(o&&!x.o)x.o=o}else m.set(k,{cust,address:address||'',name:name||'',dist,why:why?[why]:[],o:o||null})};
+  const dOf=(cust,address)=>{if(!p)return null;const L=(R.custLoc||[]).find(x=>x._id===locKey(cust,address));return L?kmDist([L.lat,L.lng],p):null};
+  if(p)for(const L of R.custLoc||[]){const dk=kmDist([L.lat,L.lng],p);if(dk<=0.5)add(L.cust,L.address,L.custName,dk,'')}
+  for(const o of R.orders)if((o.status==='new'||o.status==='shipping')&&(o.shipId===R.uid||(!o.shipId&&inRt(o)&&inDay(o))))add(o.cust,o.address,o.custName,dOf(o.cust,o.address),'Đơn '+o.no+' chờ giao',o);
+  return [...m.values()].sort((a,b)=>((a.dist==null?99:a.dist)-(b.dist==null?99:b.dist))||(b.o?1:0)-(a.o?1:0)||String(a.address).localeCompare(String(b.address),'vi'))}
+function setDraftCust(d,cu,addr){d.cust=cu.code;d.custName=cu.name;d.address=addr||cu.address||'';d.phone=cu.phone||'';d.lines.forEach(l=>{const dp=defaultPrice(cu.code,l.code);l.listPrice=dp.p;l.price=dp.p;l.src=dp.src;l.g=1})}
+/* v38: chụp phiếu giao hàng → nhận khách theo vị trí */
+async function slipFlow(d){const gp=geoSoft();gp.catch(()=>{});const ph=await camPhoto();if(!ph)return;d.slipPhotos=[{data:ph}];render();
+  openSheet('Khách của phiếu này',`<div class="stack"><img src="${ph}" style="width:100%;max-height:190px;object-fit:contain;border-radius:12px;background:#fff;border:1px solid var(--line,#e3e8ef)"><div id="slR"><div class="alert">📍 Đang lấy vị trí để tìm khách…</div></div></div>`,b=>{
+    const box=b.querySelector('#slR');
+    const show=(c,err)=>{d._slipGeo=c||null;const L=slipCands(c);const best=L[0]&&L[0].dist!=null&&L[0].dist<=0.15?L[0]:null;
+      const nm=x=>{const cu=findCust(x.cust);return esc(x.address||(cu&&cu.name)||x.name||x.cust)};
+      const ds=x=>x.dist==null?'':(x.dist<1?Math.round(x.dist*1000)+' m':x.dist.toFixed(1)+' km');
+      const row=(x,i)=>`<div class="row tap" data-sl="${i}"><div class="grow"><div class="t">${nm(x)}</div><div class="s">${esc(x.cust)}${x.why.length?' · '+esc(x.why.join(' · ')):''}</div></div>${ds(x)?`<b style="white-space:nowrap">${ds(x)}</b>`:''}<span class="chev">›</span></div>`;
+      const head=!c?`<div class="alert w">Chưa lấy được vị trí${err&&err.code===1?' (điện thoại đang chặn vị trí)':''}. Chọn khách trong danh sách dưới.</div>`:best?`<div class="alert g">✓ Nhận khách theo vị trí (cách ${ds(best)}). Bấm khách để xác nhận.</div>`:L.some(x=>x.dist!=null)?'<div class="alert w">Có khách ở gần nhưng chưa chắc chắn. Chọn đúng khách.</div>':'<div class="alert w">Vị trí này chưa có khách nào được ghi nhận (app sẽ tự học sau các lần giao). Chọn khách dưới hoặc tìm khách.</div>';
+      box.innerHTML=head+(L.length?`<div class="group">${L.slice(0,8).map(row).join('')}</div>`:'')+'<button class="btn block" id="slFind">🔍 Tìm khách khác</button>';
+      box.querySelectorAll('[data-sl]').forEach(el=>el.onclick=()=>{const x=L[+el.dataset.sl];const cu=findCust(x.cust)||{code:x.cust,name:x.name,address:x.address};
+        const pick=()=>{setDraftCust(d,cu,x.address);closeSheet();render()};
+        if(x.o){box.innerHTML=`<div class="alert w">Khách này đang có đơn <b>${esc(x.o.no)}</b> chờ giao (${esc((x.o.lines||[]).map(l=>l.name+' ×'+fmt(l.qty)).join(', '))}). Nếu phiếu này là đơn đó, giao đơn đó để không tạo trùng.</div><button class="btn block pri" id="slDv">Giao đơn ${esc(x.o.no)}</button><button class="btn block" id="slNew">Không, tạo đơn phát sinh mới</button>`;
+          box.querySelector('#slDv').onclick=()=>{closeSheet();d.slipPhotos=[];render();deliverSheet(x.o)};box.querySelector('#slNew').onclick=pick}else pick()});
+      box.querySelector('#slFind').onclick=()=>{closeSheet();pickCustomer((cu,addr)=>{if(!cu)return;setDraftCust(d,cu,addr);render()})}};
+    gp.then(c=>show(c)).catch(e=>show(null,e))})}
 async function doAttend(){const place=R.ui.attPlace||'cty';
   if(!navigator.geolocation){permSheet('geo',doAttend,true);return}
   if(R._geoSt&&R._geoSt.state==='denied'){permSheet('geo',doAttend);return}/* đã chặn vị trí: hướng dẫn bật trước khi chụp */
@@ -1320,6 +1352,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   sub('products',s=>{R.allProducts=s.docs.map(d=>d.data()).filter(p=>p&&p.code);R.products=new Map(s.docs.map(d=>[d.id,d.data()]).filter(x=>x[1]&&x[1].code&&/^(HH|TP)/i.test(String(x[1].code).trim())&&!PROD_HIDE.test(' '+noAcc(x[1].name).replace(/[^a-z0-9]+/g,' ')+' ')))});/* chỉ dùng mã hàng hoá HH và thành phẩm TP */
   sub('customers',s=>{R.custInd=new Map(s.docs.map(d=>[d.id,d.data()]).filter(x=>x[1]&&x[1].code));rebuildCustomers()});
   sub('custpack',s=>{R.custPacks=new Map(s.docs.map(d=>[d.id,(d.data()||{}).items||[]]));rebuildCustomers()});
+  sub('custLoc',s=>{R.custLoc=s.docs.map(d=>Object.assign({},d.data(),{_id:d.id})).filter(x=>x&&x.cust&&isFinite(x.lat)&&isFinite(x.lng))});
   sub('prices',s=>{R.prices=new Map(s.docs.map(d=>{const x=d.data();return [x.cust,x]}))});
   sub('vouchers',s=>{R.vouchers=s.docs.map(d=>Object.assign({},d.data(),{id:d.id})).filter(v=>v.date&&v.type)});
   db.collection('orders').where('date','>=',windowStart()).onSnapshot(s=>{R.orders=s.docs.map(d=>Object.assign({},d.data(),{id:d.id}));soon();resolveNames()},e=>toast('Mất kết nối đơn hàng ('+e.code+')'));
