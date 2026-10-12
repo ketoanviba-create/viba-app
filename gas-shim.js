@@ -108,7 +108,7 @@ if(window.VIBA_API&&!/^https:\/\/script\.google\.com\//.test(window.VIBA_API))wi
 const ready=(async()=>{if(!window.VIBA_API&&!(window.google&&google.script)){document.body.insertAdjacentHTML('afterbegin','<div class="alert w" style="margin:16px">App chưa được nối với máy chủ dữ liệu Google Drive. Quản lý cần triển khai Code.gs và cập nhật config.js.</div>');throw new Error('noapi')}if(!token)await loginUI();try{me=await call('me')}catch(e){delTok();token=null;await loginUI();me=await call('me')}
   const p=null;startSync();await firstLoad;const pr=store.get('profiles/'+me.uid);me.name=pr&&pr.name})();
 window.vibaLogout=()=>{delTok();location.reload()};
-window.vibaAdmin={resetPassword:uid=>call('resetPassword',{uid})};
+window.vibaAdmin={resetPassword:uid=>call('resetPassword',{uid})};window.vibaAI={slipRead:a=>call('slipRead',a),slipUsage:()=>call('slipUsage',{})};
 window.vibaChangePw=()=>{if(document.getElementById('loginBox'))return;const box=document.createElement('div');box.id='loginBox';
   box.innerHTML=`<div class="lg-card"><img class="lg-logo" src="logo2.png" alt="VIBA FOOD"><h1 class="big" style="margin:4px 0 10px">Đổi mật khẩu</h1>
    <div class="stack"><label class="f">Mật khẩu hiện tại<input id="cpOld" type="password" autocomplete="current-password"></label>
