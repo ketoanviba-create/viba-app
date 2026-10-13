@@ -448,7 +448,7 @@ function lineCard(l,i,bal,opt){opt=opt||{};const edited=l.listPrice!=null&&toNum
 function slipReadHtml(d){const S=d.slipRead;if(!S||S.st==='added')return '';
   if(S.st==='run')return S.ai?'<div class="alert">🤖 AI đang đọc phiếu…</div>':'<div class="alert">🔎 Đang đọc số lượng trên phiếu…</div>';
   if(S.st==='fail')return `<div class="alert w">Chưa đọc được số trên phiếu${S.msg?' ('+esc(S.msg)+')':''}. Chụp lại thẳng, đủ sáng, thấy hết bảng – hoặc nhập tay.</div>`;
-  const skipN=S.aiSkip?`<div class="tiny muted">AI tạm không dùng (${esc(S.aiSkip)}) – app tự đọc số lượng.</div>`:'';
+  const skipN=S.aiSkip?`<div class="tiny muted">AI tạm không dùng (${esc(S.aiSkip)}) – app tự đọc số lượng, dễ sai: so từng số với ảnh, sửa rồi tick chọn dòng đúng.</div>`:'';
   if(!S.rows.length)return skipN+'<div class="alert w">Không thấy số lượng nào trên phiếu. Kiểm tra lại ảnh hoặc nhập tay.</div>';
   const pay=S.pay?`<div class="row"><div class="grow"><div class="s">Thanh toán trên phiếu</div><div class="t" style="font-size:15px">${S.pay.paid==='paid'?'✅ Đã thanh toán'+(S.pay.amount?' · '+vnd(S.pay.amount):''):S.pay.paid==='unpaid'?'Chưa thanh toán':'Không rõ'}${S.pay.total?' · Tổng phiếu '+vnd(S.pay.total):''}</div></div></div>`:'';
   return skipN+`<div class="group"><div class="row"><div class="grow"><div class="t">${S.ai?'🤖 AI đọc từ phiếu':'Số lượng đọc từ phiếu'}</div><div class="s">So với ảnh, sửa nếu sai · ô vàng = chưa chắc${S.slipNo?' · Phiếu '+esc(S.slipNo):''}</div></div></div>${S.unsure?`<div class="row"><div class="grow s" style="color:#8a5a00">⚠ Chưa chắc: ${esc(S.unsure)}</div></div>`:''}
@@ -748,7 +748,7 @@ async function slipRead(d,ph){const S=d.slipRead={st:'run',rows:[]};render();
     const crop=b=>{const x0=Math.max(0,b.cx0-2),x1=Math.min(W,b.cx1+2),y0=Math.max(0,Math.min(b.y0,b.cy0)-2),y1=Math.min(H,Math.max(b.y1,b.cy1)+2),cw=x1-x0,ch=y1-y0;
       const c=document.createElement('canvas');c.width=cw;c.height=ch;const id=c.getContext('2d').createImageData(cw,ch);for(let y=0;y<ch;y++)for(let x=0;x<cw;x++){const v=r.gray[(y+y0)*W+x+x0],k=4*(y*cw+x);id.data[k]=id.data[k+1]=id.data[k+2]=v;id.data[k+3]=255}
       c.getContext('2d').putImageData(id,0,0);return c.toDataURL('image/jpeg',.7)};
-    S.rows=r.rows.filter(x=>x.qty>0).map(x=>{const p=slipProd(x.row);return {row:x.row,form:x.name,code:p?p.code:'',name:p?p.name:x.name,unit:p?p.unit:'',read:x.text,qty:x.qty,conf:x.conf,img:crop(x.box),on:!!p}});
+    S.rows=r.rows.filter(x=>x.qty>0).map(x=>{const p=slipProd(x.row);return {row:x.row,form:x.name,code:p?p.code:'',name:p?p.name:x.name,unit:p?p.unit:'',read:x.text,qty:x.qty,conf:Math.min(x.conf,0.5),img:crop(x.box),on:false}});
     S.st='done';render()}catch(e){if(d.slipRead===S){S.st='fail';S.msg='Không đọc được ảnh ('+(e.message||e)+')';render()}}}
 const SLIP_FORM=['chuoi tieu','chuoi tay','chuoi ngu','dua qua tuoi','dua hop','mia','nem bui','san','sau','khoai so','khoai mon','doc mung'];
 function slipProdByName(name){const n=noAcc(name||'');if(!n)return null;for(let i=0;i<SLIP_FORM.length;i++)if(n.startsWith(SLIP_FORM[i]))return slipProd(i);
