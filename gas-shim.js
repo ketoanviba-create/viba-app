@@ -7,9 +7,9 @@ const ss={get:k=>{try{return sessionStorage.getItem(k)}catch(e){return null}},se
 const delTok=()=>{ls.del(TK);ss.del(TK)};
 let token=ls.get(TK)||ss.get(TK),me=null;
 /* Google đôi khi trả 404 ở bước chuyển hướng (script.googleusercontent.com/macros/echo) dù máy chủ đã chạy xong: thử lại tối đa 4 lần */
-async function fetchApi(op,a){let last;for(let i=0;i<4;i++){try{const r=await fetch(window.VIBA_API,{method:'POST',credentials:'omit',cache:'no-store',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({api:1,tok:token,op,a:a||{}})});const t=await r.text();if(r.ok&&t.charAt(0)==='{'){const o=JSON.parse(t);
+async function fetchApi(op,a){let last;const N=op==='sync'?2:4;for(let i=0;i<N;i++){let ac=null,tm=null;try{if(op==='sync'&&window.AbortController){ac=new AbortController();tm=setTimeout(()=>ac.abort(),30000)}const r=await fetch(window.VIBA_API,{method:'POST',credentials:'omit',cache:'no-store',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({api:1,tok:token,op,a:a||{}}),signal:ac?ac.signal:undefined});clearTimeout(tm);const t=await r.text();if(r.ok&&t.charAt(0)==='{'){const o=JSON.parse(t);
       if(i>0&&op==='signup'&&/đã có tài khoản/.test(o.error||''))return fetchApi('login',a); /* lần trước đã tạo xong nhưng mất phản hồi */
-      return o}last=new Error('HTTP '+r.status)}catch(e){last=e}await new Promise(r=>setTimeout(r,600*(i+1)))}
+      return o}last=new Error('HTTP '+r.status)}catch(e){clearTimeout(tm);last=e}if(i<N-1)await new Promise(r=>setTimeout(r,800*(i+1)+Math.random()*900))}
   throw Object.assign(new Error(navigator.onLine===false?'Mất kết nối mạng':'Máy chủ dữ liệu chưa phản hồi, thử lại sau ít phút'),{code:'unavailable',cause:last})}
 function call(op,a){if(window.VIBA_API)return fetchApi(op,a).then(o=>{if(o.ok)return o.r;if(/^AUTH:/.test(o.error||'')){delTok();location.reload();return new Promise(()=>{})}throw Object.assign(new Error(o.error),{code:o.code||'unavailable'})});
   return new Promise((res,rej)=>{google.script.run.withSuccessHandler(s=>{let o;try{o=JSON.parse(s)}catch(e){return rej(Object.assign(new Error('Phản hồi lỗi'),{code:'unavailable'}))}
@@ -25,9 +25,18 @@ const snapDoc=(id,d)=>({id,exists:d!=null,data:()=>d==null?undefined:clone(d),me
 const qsnap=l=>({docs:l,size:l.length,empty:!l.length,docChanges:()=>[],metadata:{fromCache:false,hasPendingWrites:false}});
 function applyRows(rows){const touched=new Set();for(const r of rows){let d=null;if(r.j){try{d=JSON.parse(r.j)}catch(e){d=null}}if(d==null)store.delete(r.p);else store.set(r.p,d);touched.add(split(r.p).coll);touched.add('#'+r.p)}return touched}
 function notify(touched){listeners.forEach(l=>{if(touched===true||touched.has(l.key))l.fire()})}
-let perm=null;async function syncNow(){if(syncing)return;syncing=true;try{let r=await call('sync',{since});const pk=(r.owner?'o':'')+(r.staff?'s':'');if(perm!==null&&pk!==perm){/* vừa được giao/thu quyền: tải lại toàn bộ */store.clear();since=0;r=await call('sync',{since:0})}perm=pk;since=r.now;notify(r.rows.length?applyRows(r.rows):new Set());if(pk!==perm)notify(true)}catch(e){}finally{syncing=false}}
+/* v43: lưu dữ liệu trên máy (IndexedDB) để mở lại app chỉ tải phần thay đổi, đỡ tải máy chủ khi nhiều người cùng vào */
+const IDB={d:null,open(){return this.d||(this.d=new Promise(res=>{try{const q=indexedDB.open('viba',1);q.onupgradeneeded=()=>q.result.createObjectStore('kv');q.onsuccess=()=>res(q.result);q.onerror=()=>res(null);setTimeout(()=>res(null),3000)}catch(e){res(null)}}))},
+  async get(k){const d=await this.open();if(!d)return null;return new Promise(res=>{try{const q=d.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>res(q.result||null);q.onerror=()=>res(null)}catch(e){res(null)}})},
+  async put(k,v){const d=await this.open();if(!d)return;try{d.transaction('kv','readwrite').objectStore('kv').put(v,k)}catch(e){}},
+  async del(k){const d=await this.open();if(!d)return;try{d.transaction('kv','readwrite').objectStore('kv').delete(k)}catch(e){}}};
+const CK=()=>me&&me.uid?'c2:'+me.uid:null;let saveT=null;
+function saveCache(){clearTimeout(saveT);saveT=setTimeout(()=>{const k=CK();if(k)IDB.put(k,{since,perm,at:Date.now(),rows:[...store]})},4000)}
+async function loadCache(){const k=CK();if(!k)return;const c=await IDB.get(k);if(!c||!Array.isArray(c.rows)||Date.now()-(c.at||0)>20*864e5)return;for(const [p,d] of c.rows)store.set(p,d);since=c.since||0;perm=c.perm==null?null:c.perm}
+let perm=null;async function syncNow(){if(syncing)return;syncing=true;try{let r=await call('sync',{since});const pk=(r.owner?'o':'')+(r.staff?'s':'');if(perm!==null&&pk!==perm){/* vừa được giao/thu quyền: tải lại toàn bộ */store.clear();since=0;r=await call('sync',{since:0})}const changed=r.rows.length>0||perm!==pk;perm=pk;since=r.now;notify(r.rows.length?applyRows(r.rows):new Set());if(changed)saveCache()}catch(e){}finally{syncing=false}}
 let firstLoad=null;
-function startSync(){firstLoad=syncNow();setInterval(()=>{if(document.visibilityState!=='hidden')syncNow()},15000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow()})}
+function startSync(){firstLoad=(async()=>{try{await loadCache()}catch(e){}if(store.size){syncNow();return}await syncNow()})();
+  const tick=()=>setTimeout(async()=>{try{if(document.visibilityState!=='hidden')await syncNow()}finally{tick()}},15000+Math.random()*5000);tick();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow()})}
 function pass(d,filters){for(const [f,op,v] of filters){const x=d?d[f]:undefined;const s=x==null?'':String(x);
   if(op==='>='&&!(s>=v))return false;if(op==='<='&&!(s<=v))return false;if(op==='>'&&!(s>v))return false;if(op==='<'&&!(s<v))return false;if(op==='=='&&s!==String(v))return false;if(op==='!='&&s===String(v))return false}return true}
 function listColl(coll,filters){const out=[];const pre=coll+'/';for(const [p,d] of store){if(!p.startsWith(pre))continue;const rest=p.slice(pre.length);if(rest.includes('/'))continue;if(pass(d,filters))out.push(snapDoc(rest,d))}return out.sort((a,b)=>a.id<b.id?-1:1)}
@@ -107,7 +116,7 @@ function loginUI(){return new Promise(resolve=>{const box=document.createElement
 if(window.VIBA_API&&!/^https:\/\/script\.google\.com\//.test(window.VIBA_API))window.VIBA_API='';
 const ready=(async()=>{if(!window.VIBA_API&&!(window.google&&google.script)){document.body.insertAdjacentHTML('afterbegin','<div class="alert w" style="margin:16px">App chưa được nối với máy chủ dữ liệu Google Drive. Quản lý cần triển khai Code.gs và cập nhật config.js.</div>');throw new Error('noapi')}if(!token)await loginUI();try{me=await call('me')}catch(e){delTok();token=null;await loginUI();me=await call('me')}
   const p=null;startSync();await firstLoad;const pr=store.get('profiles/'+me.uid);me.name=pr&&pr.name})();
-window.vibaLogout=()=>{delTok();location.reload()};
+window.vibaLogout=async()=>{const k=CK();delTok();if(k)await IDB.del(k);location.reload()};
 window.vibaAdmin={resetPassword:uid=>call('resetPassword',{uid})};window.vibaAI={slipRead:a=>call('slipRead',a),slipUsage:()=>call('slipUsage',{})};
 window.vibaChangePw=()=>{if(document.getElementById('loginBox'))return;const box=document.createElement('div');box.id='loginBox';
   box.innerHTML=`<div class="lg-card"><img class="lg-logo" src="logo2.png" alt="VIBA FOOD"><h1 class="big" style="margin:4px 0 10px">Đổi mật khẩu</h1>
