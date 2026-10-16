@@ -318,7 +318,12 @@ let _vUA=null,_vUAk=null;
 function vUserAlias(){const t=typeof ST==='function'?String(ST().vAlias||''):'';if(t===_vUAk)return _vUA;_vUAk=t;_vUA=[];
   for(const ln of t.split(/[;\n]+/)){const i=ln.indexOf('=');if(i<0)continue;const to=vLow(ln.slice(i+1)).trim();const fr=ln.slice(0,i).split(/[,|]+/).map(x=>vLow(x).trim().replace(/[.*+?^${}()[\]\\]/g,'\\$&')).filter(Boolean);
     if(to&&fr.length)_vUA.push([to,new RegExp('(^|[\\s,;!?|])(?:'+fr.join('|')+')(?=[\\s,.;!?|]|$)','g')])}return _vUA}
-function vBrandNorm(s){for(const [k,re] of vUserAlias())s=s.replace(re,(m,p)=>p+k);for(const [k,re] of _VB)s=s.replace(re,(m,p)=>p+k);return s}
+/* v50: so gần đúng theo âm (bỏ dấu, ghép 1–3 âm ngắn liền nhau) cho các cách Google ghi khác lạ */
+const V_FZ=[['aeon',/^(a|e|i|y|ai|ay|ae|ea|ia|eo|ie|ye|ơ)(o|oa|u|ô)n(g)?$/],['coop',/^(co|ko|cu|ku|cô|qu)(o|ô)?(p|op|up|ốp)$/],['tmart',/^(t|ti|te|tê|thi|tee|tea|tim)(mat|mart|mac|mak|ma|mát)$/]];
+function vFuzzyBrand(s){const W=s.split(' ');const k=w=>noAcc(w).replace(/[^a-z0-9]/g,'');
+  for(let i=0;i<W.length;i++){for(let n=3;n>=1;n--){const g=W.slice(i,i+n);if(g.length<n||g.some(w=>!w||/\d/.test(w)||k(w).length>5||w==='|'))continue;const j=g.map(k).join('');if(!j)continue;
+    const f=V_FZ.find(([b,re])=>re.test(j));if(f&&!(n===1&&/^(ong|on|un|ung|oan)$/.test(j))){W.splice(i,n,f[0]);break}}}return W.join(' ')}
+function vBrandNorm(s){for(const [k,re] of vUserAlias())s=s.replace(re,(m,p)=>p+k);for(const [k,re] of _VB)s=s.replace(re,(m,p)=>p+k);return vFuzzyBrand(s)}
 /* tên địa điểm (đã bỏ dấu) → cùng tên chuẩn: Co.op/Coopmart→coop, Tmart/T-Mart→tmart, Eco Mart→ecomart, BRG Mart→brg, HaproFood→hapro food, PTMart→pt mart, Winmart/VM+→vm, Big C→bigc, Maxvalu→mvl */
 function locBN(n){let s=' '+n+' ';
   s=s.replace(/([^a-z0-9])co\s*[.\-]?\s*op(?:\s*mart)?(?=[^a-z0-9])/g,'$1coop ').replace(/([^a-z0-9&])t\s*-?\s*mart(?:stores?)?(?=[^a-z0-9])/g,'$1tmart ')
@@ -353,7 +358,7 @@ function vMatchProd(words,unit,noAccMode){const q0=words.filter(w=>!V_FILL.test(
   return {list:L.slice(0,6),q,sure,sc:top?top.sc:0}}
 /* địa điểm giao: chỉ so với tên ĐỊA ĐIỂM (không so tên khách) */
 const VSYN={vm:['vm','vinmart','winmart','wm','vmplus']};
-const V_LFILL=/^(plus|cộng|giao|cho|đến|den|tới|toi|tại|tai|địa|dia|điểm|diem|khách|khach|ở|o|về|nhà|siêu|thị|cửa|hàng|chi|nhánh)$/;
+const V_LFILL=/^(plus|cộng|giao|cho|đến|den|tới|toi|tại|tai|địa|dia|điểm|diem|khách|khach|ở|o|về|nhà|siêu|thị|cửa|hàng|chi|nhánh|đơn|bên|của|em|anh|chị|ơi|nhé|đặt|order|lên|mall|mon|trung|tâm)$/;
 function vMatchLoc(words){const qa=words.filter(w=>!V_LFILL.test(w));const q=qa.map(noAcc);if(!q.length)return {list:[],sc:0};
   const L=[];for(const x of locIndex()){if(!x.loc)continue;const bn=x._bn||(x._bn=locBN(x.n));const lt=x._lt||(x._lt=bn.split(/[^a-z0-9]+/).filter(Boolean));let m=0;
     for(let i=0;i<q.length;i++){const w=q[i];if(qa[i]&&isNumW(qa[i])){const la=x._la||(x._la=vLow(x.loc).split(/[^\p{L}\p{N}]+/u));if(la.includes(qa[i]))m++;continue}const ws=VSYN[w]||[w];if(ws.some(y=>lt.includes(y)||(y.length>=4&&bn.includes(y))||(y.length>=5&&(x._ns||(x._ns=bn.replace(/[^a-z0-9]/g,''))).includes(y))))m++}
@@ -369,7 +374,7 @@ function vParse(text){const out={loc:null,lines:[],unknown:[],note:'',paid:false
   const noAccMode=!vHasAcc(t);let T=vTokens(t);
   /* 1) ĐỊA ĐIỂM: sau từ khoá "giao/khách/…" hoặc ở đầu câu; lấy đoạn dài nhất khớp đủ mọi từ với 1 địa điểm */
   const starts=[];for(let i=0;i<T.length;i++){for(const k of V_LK){const kw=k.split(' ');if(kw.every((x,j)=>T[i+j]===x)){starts.push({s:i+kw.length,k:i,kw:true});break}}}
-  if(!starts.some(x=>x.k===0))starts.push({s:0,k:0,kw:false});
+  if(!starts.some(x=>x.k===0))starts.push({s:0,k:0,kw:false});/* v50: cho phép tên khách bắt đầu sau vài từ đệm ở đầu câu */for(let i=1;i<Math.min(T.length,4);i++){if(T[i]==='|'||/^\d/.test(T[i]))break;if(V_LFILL.test(T[i-1])||V_FILL.test(T[i-1])){if(!starts.some(x=>x.s===i))starts.push({s:i,k:0,kw:false})}else break}
   let best=null;for(const st of starts){for(let e=st.s+1;e<=Math.min(T.length,st.s+8);e++){const seg=T.slice(st.s,e);const lw=seg[seg.length-1];if(lw==='|')break;if(/^\d+([.,]\d+)?$/.test(lw)){const nx=T[e]||'';if(e===st.s+1||!nx||nx==='|'||VU[nx]||/^\d/.test(nx)||isNumW(nx))break;continue}
       const m=vMatchLoc(seg);if(m.sc<1)continue;const words=seg.filter(w=>!V_LFILL.test(w)).length;const sc=words*10+(m.sure?5:0)+(st.kw?3:0)-m.list.length*.1;if(!best||sc>best.sc)best={st,e,m,sc,seg}}}
   if(best&&(best.st.kw||best.seg.filter(w=>!V_LFILL.test(w)).length>=2)){out.loc={said:best.seg.join(' '),...best.m};T=T.slice(0,best.st.k).concat(['|'],T.slice(best.e))}
@@ -391,7 +396,7 @@ function vParse(text){const out={loc:null,lines:[],unknown:[],note:'',paid:false
         if(mode==='qf'&&cur)push(cur);cur={w:[],qty:q,unit:u};mode='qf';continue}
       if(!cur)cur={w:[],qty:null,unit:''};cur.w.push(w)}
     if(cur)push(cur)}
-  for(const it of items){if(it.qty==null||!it.w.length){if(it.w.length||it.qty!=null)out.unknown.push((it.w.join(' ')+(it.qty!=null?' '+it.qty:'')).trim());continue}
+  for(const it of items){if(it.qty==null||!it.w.length){if((it.w.length&&!it.w.every(w=>V_FILL.test(w)||V_LFILL.test(w)))||it.qty!=null)out.unknown.push((it.w.join(' ')+(it.qty!=null?' '+it.qty:'')).trim());continue}
     const m=vMatchProd(it.w,it.unit,noAccMode);if(!m.list.length){out.unknown.push((it.qty+' '+(it.unit||'')+' '+it.w.join(' ')).replace(/\s+/g,' ').trim());continue}
     out.lines.push({said:(it.qty+' '+(it.unit?it.unit+' ':'')+it.w.join(' ')),qty:it.qty,unit:it.unit,promo:it.promo||0,swap:it.swap||0,ret:it.ret||0,...m})}
   return out}
@@ -438,7 +443,7 @@ function voiceOrder(mode){const MSG=mode==='msg';const d=R.odraft||(R.odraft=new
       if(P.paid){d.paid=true;if(P.pm)d.payMethod=P.pm}if(P.note)d.note=(d.note?d.note+'; ':'')+P.note;
       if(rec&&on)try{rec.abort()}catch(e){}closeSheet();render();toast('Đã điền '+n+' mặt hàng – kiểm tra rồi bấm Gửi đơn')};
     b.querySelector('#vcGo').onclick=show;const vp=b.querySelector('#vcPaste');if(vp)vp.onclick=async()=>{try{const t=await navigator.clipboard.readText();if(t&&t.trim()){T.value=t.trim();show();return}}catch(e){}T.focus();toast('Bấm giữ vào ô trống rồi chọn Dán')};
-    if(mic){rec=new SR();rec.lang='vi-VN';rec.interimResults=true;rec.continuous=true;rec.maxAlternatives=1;
+    if(mic){rec=new SR();rec.lang='vi-VN';rec.interimResults=true;rec.continuous=true;rec.maxAlternatives=1;try{if('phrases' in rec&&window.SpeechRecognitionPhrase)rec.phrases=['Aeon','Aeon Mall','MaxValu','Coopmart','Co.op Food','Tmart','Winmart','VM+','Ecomart','Leco Mart','BRG Mart','Hapro','PT Mart','Big C','Lotte','Mega Mart'].map(p=>new SpeechRecognitionPhrase(p,5))}catch(e){}
       rec.onresult=e=>{let fin='',tmp='';for(let i=0;i<e.results.length;i++){const r=e.results[i];if(r.isFinal)fin+=r[0].transcript+' ';else tmp+=r[0].transcript}T.value=(base+' '+fin+tmp).trim()};
       rec.onend=()=>{on=false;mic.textContent='🎤 Nói lại';if(T.value.trim())show()};
       rec.onerror=e=>{on=false;mic.textContent='🎤 Nói lại';if(e.error==='not-allowed'||e.error==='service-not-allowed'||e.error==='audio-capture'){Rb.innerHTML=permHTML('mic')+'<button class="btn block pri" id="vcRetry" style="margin-top:8px">Thử lại</button><div class="tiny muted" style="margin-top:6px">Trong lúc chưa bật được: bấm vào ô trên rồi dùng 🎤 của bàn phím điện thoại.</div>';const r=Rb.querySelector('#vcRetry');if(r)r.onclick=()=>mic.onclick();return}
@@ -1045,7 +1050,7 @@ function voiceVoucher(){const d=R.vdraft||(R.vdraft=newVoucher('N'));const SR=wi
           const ex=d.lines.find(x=>x.code===p.code);if(ex)ex.qty=r3(toNum(ex.qty)+q);else d.lines.push({code:p.code,name:p.name,unit:p.unit,qtyDoc:'',qty:q,note:''});n++});
         if(rec&&on)try{rec.abort()}catch(e){}closeSheet();render();toast('Đã điền '+n+' mặt hàng – kiểm tra rồi bấm Lưu phiếu')}};
     b.querySelector('#vvGo').onclick=show;
-    if(mic){rec=new SR();rec.lang='vi-VN';rec.interimResults=true;rec.continuous=true;rec.maxAlternatives=1;
+    if(mic){rec=new SR();rec.lang='vi-VN';rec.interimResults=true;rec.continuous=true;rec.maxAlternatives=1;try{if('phrases' in rec&&window.SpeechRecognitionPhrase)rec.phrases=['Aeon','Aeon Mall','MaxValu','Coopmart','Co.op Food','Tmart','Winmart','VM+','Ecomart','Leco Mart','BRG Mart','Hapro','PT Mart','Big C','Lotte','Mega Mart'].map(p=>new SpeechRecognitionPhrase(p,5))}catch(e){}
       rec.onresult=e=>{let fin='',tmp='';for(let i=0;i<e.results.length;i++){const r=e.results[i];if(r.isFinal)fin+=r[0].transcript+' ';else tmp+=r[0].transcript}T.value=(base+' '+fin+tmp).trim()};
       rec.onend=()=>{on=false;mic.textContent='🎤 Nói lại';if(T.value.trim())show()};
       rec.onerror=e=>{on=false;mic.textContent='🎤 Nói lại';if(e.error==='not-allowed'||e.error==='service-not-allowed'||e.error==='audio-capture'){Rb.innerHTML=permHTML('mic')+'<button class="btn block pri" id="vvRetry" style="margin-top:8px">Thử lại</button>';const r=Rb.querySelector('#vvRetry');if(r)r.onclick=()=>mic.onclick();return}
@@ -1503,7 +1508,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='49';
+const APP_BUILD='50';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
