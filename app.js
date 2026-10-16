@@ -59,7 +59,7 @@ const R={db:null,user:null,dl:null,uid:null,isOwner:false,checked:false,
   ui:{q:'',ordQ:'',ordStatus:'',catTab:'products',catQ:'',stockQ:'',vType:'',vQ:''}};
 window.__R=R;
 const ST=()=>Object.assign({company:'VIBA FOOD',address:'',taxCode:'',dept:'',whName:'Kho chính',whCode:'KHO',whPlace:'',keeper:'',chiefAcc:'',director:'',
-  circular:'(Kèm theo Thông tư số 99/2025/TT-BTC ngày 27/10/2025 của Bộ trưởng Bộ Tài chính)',lockDate:'',salePct:2,shipFee:20000,shipFeeOut:30000,shipFeeFar:50000,shipFarCodes:'07.LB, 16.GL',saleBase:6000000,saleAllow:2500000,saleStd:26,saleComm:2.4,coLoc:'',shipCC:300000,shipCCOff:100000,shipKg:1350,shipPct:3.6,shipSwapStd:5.5,shipSwapPrice:18000,shipSupNeg:1,shipBepCodes:'KH0105145683, KH0107522785, KH0104567410, KHĐQ0111269334, KH0111269334, KH0102061812, KH0106490072-001, KH0108462391-001, Tư thục hạt giống, KH345, KH358, KH0110797613, KH0109048659, KH0107499688, TTL0107361087'},R.settings);
+  circular:'(Kèm theo Thông tư số 99/2025/TT-BTC ngày 27/10/2025 của Bộ trưởng Bộ Tài chính)',lockDate:'',salePct:2,shipFee:20000,shipFeeOut:30000,shipFeeFar:50000,shipFarCodes:'07.LB, 16.GL',saleBase:6000000,saleAllow:2500000,saleStd:26,saleComm:2.4,coLoc:'',shipCC:300000,shipCCOff:100000,shipKg:1350,shipPct:3.6,shipSwapStd:5.5,shipSwapPrice:18000,shipSupNeg:1,shipBepCodes:'KH0105145683, KH0107522785, KH0104567410, KHĐQ0111269334, KH0111269334, KH0102061812, KH0106490072-001, KH0108462391-001, Tư thục hạt giống, KH345, KH358, KH0110797613, KH0109048659, KH0107499688, TTL0107361087',vAlias:''},R.settings);
 const ROLE_NAME={admin:'Quản lý',sale:'Bán hàng',ship:'Giao hàng',kho:'Thủ kho'};
 function myRole(){if(R.isOwner)return'admin';const s=R.staff.get(R.uid);return s&&s.active!==false?s.role:null}
 function staffName(id){if(!id)return'—';const s=R.staff.get(id);return (s&&s.name)||R.names[id]||(id===R.uid?'Bạn':'Nhân viên')}
@@ -294,7 +294,39 @@ function vWordsToNum(ws){let tot=0,h=0,p=null,aft=false;
   return tot+h+(p||0)}
 const isNumW=w=>w in VNUM||w in VNUMX;
 /* chữ → token; quy cách "170 gam" → "170g" */
-function vTokens(text){let s=' '+vLow(text)+' ';
+/* v46: TÊN CHUỖI TIẾNG ANH – mọi cách đọc (tiếng Anh / phiên âm Việt) → 1 tên chuẩn, so với tên địa điểm đã chuẩn hoá cùng cách */
+const VBR=[
+ ['lecomart','leco ?mart|lecomart|lê cô ?mát|le co ?mát|lê cô ?mart|lê cô ?mác|lê kô ?mát|lê cô ?mạt|lê-cô ?mát'],
+ ['ecopark','eco ?park|ecopark|ê cô ?pác|e cô ?pác|i cô ?pác|ê cô ?park|e co ?park|ê kô ?pác|ê cô ?pắc'],
+ ['ecomart','eco ?mart|ecomart|eco ?mát|ê cô ?mát|e cô ?mát|i cô ?mát|ê kô ?mát|ê cô ?mác|e cô ?mác|ê cô ?mart|e cô ?mart|e co ?mart|ê cô ?mạt|ê-cô ?mát|ecomát'],
+ ['coop food','(?:co\\.? ?op|co-op|coop|cốp|cóp|cộp|cúp|cụp|côp|cô ốp|cô óp|cô ộp|cô op|cô-óp|kô óp|ko op|cô úp|cô ốp) (?:food|phút|fút|phu|phúc|phút|phut|fu|phuốt|phút)'],
+ ['coop','(?:co\\.? ?op|co-op|coop|cốp|cóp|cộp|cúp|cụp|côp|cô ốp|cô óp|cô ộp|cô op|cô-óp|kô óp|ko op|cô úp|co\\.? ?opmart|coopmart)(?: (?:mart|mát|mác|mạt))?'],
+ ['pt mart','(?:pt|p t|pê tê|pi ti|bê tê|pê-tê|pi-ti|pê ti|bi ti|pi tê) ?(?:mart|mát|mác|mạt)|ptmart'],
+ ['tmart','t-? ?mart|tmart|t mát|ti ?mart|tê ?mart|tê ?mát|ti ?mát|tí ?mát|tì ?mát|thi ?mát|tê ?mác|ti ?mác|tea ?mart|tee ?mart|tê-mát|ti-mát|tê ?mạt|ti ?mạt|tê mát'],
+ ['aeon','(?:aeon|a eon|a on|e on|ê on|a ôn|e ôn|ê ôn|ê ông|e oăn|a oăn|ê oăn|i on|i ôn|ai on|ê-on|e-on|a-on|eon|iôn|a-ê-on|ê ôn)(?: (?:mall|mon|môn|mo|mol|moll|mau|mao))?'],
+ ['mvl','mvl|em vê eo|em vê lờ|em vi eo|em vê en|em vê el|mắc va lu|mắc xơ va lu|mắc xi va lu|max ?valu|maxvalu|mắc va liu|mác va lu|mắc va lư'],
+ ['brg','(?:brg|b r g|bê rê giê|bê e rờ giê|bê rờ giê|bi a gi|bi rờ gi|bê rờ gờ|bê ê rờ giê|bê rê gờ|bờ rờ gờ|bi a ri|bê a giê)(?: ?(?:mart|mát|mác|mạt))?'],
+ ['hapro food','(?:hapro|ha prô|ha pờ rô|ha phờ rô|ha pro|ha bờ rô|hắc prô|ha prồ|ha-prô) ?(?:food|phút|fút|phu|phúc|phut|fu)|haprofood'],
+ ['hapro','hapro|ha prô|ha pờ rô|ha phờ rô|ha pro|ha bờ rô|hắc prô|ha prồ|ha-prô'],
+ ['mega mart','(?:mega|mê ga|mét ga|me ga|mê-ga) ?(?:mart|mát|mác|mạt)'],
+ ['lotte','lotte|lốt tê|lô tê|lót tê|lốt te|lô te|lót te|lốt-tê'],
+ ['bigc','big ?c|bích xi|bít xi|bic xi|big xi|bích xê|bít xê'],
+ ['vm','uyn ?mát|quyn ?mát|vinh ?mát|wing ?mát|vin ?mạt|win ?mạt|vi mát|uyn ?mart|quyn ?mart|vinh ?mart|wing ?mart'],
+ ['mart','mát|mác|mạt']];
+const _VB=(a=>a.map(([k,p])=>[k,new RegExp('(^|[\\s,;!?|])(?:'+p+')(?=[\\s,.;!?|]|$)','g')]))(VBR);
+let _vUA=null,_vUAk=null;
+function vUserAlias(){const t=typeof ST==='function'?String(ST().vAlias||''):'';if(t===_vUAk)return _vUA;_vUAk=t;_vUA=[];
+  for(const ln of t.split(/[;\n]+/)){const i=ln.indexOf('=');if(i<0)continue;const to=vLow(ln.slice(i+1)).trim();const fr=ln.slice(0,i).split(/[,|]+/).map(x=>vLow(x).trim().replace(/[.*+?^${}()[\]\\]/g,'\\$&')).filter(Boolean);
+    if(to&&fr.length)_vUA.push([to,new RegExp('(^|[\\s,;!?|])(?:'+fr.join('|')+')(?=[\\s,.;!?|]|$)','g')])}return _vUA}
+function vBrandNorm(s){for(const [k,re] of vUserAlias())s=s.replace(re,(m,p)=>p+k);for(const [k,re] of _VB)s=s.replace(re,(m,p)=>p+k);return s}
+/* tên địa điểm (đã bỏ dấu) → cùng tên chuẩn: Co.op/Coopmart→coop, Tmart/T-Mart→tmart, Eco Mart→ecomart, BRG Mart→brg, HaproFood→hapro food, PTMart→pt mart, Winmart/VM+→vm, Big C→bigc, Maxvalu→mvl */
+function locBN(n){let s=' '+n+' ';
+  s=s.replace(/([^a-z0-9])co\s*[.\-]?\s*op(?:\s*mart)?(?=[^a-z0-9])/g,'$1coop ').replace(/([^a-z0-9&])t\s*-?\s*mart(?:stores?)?(?=[^a-z0-9])/g,'$1tmart ')
+   .replace(/([^a-z0-9])leco\s*mart(?=[^a-z0-9])/g,'$1lecomart ').replace(/([^a-z0-9])eco\s*mart(?=[^a-z0-9])/g,'$1ecomart ').replace(/([^a-z0-9])eco\s*park(?=[^a-z0-9])/g,'$1ecopark ')
+   .replace(/([^a-z0-9])brg\s*mart(?=[^a-z0-9])/g,'$1brg ').replace(/haprofood/g,'hapro food').replace(/([^a-z0-9])ptmart(?=[^a-z0-9])/g,'$1pt mart ')
+   .replace(/([^a-z0-9])(?:win|vin)\s*mart\+?(?=[^a-z0-9])/g,'$1vm ').replace(/([^a-z0-9])big\s*c(?=[^a-z0-9])/g,'$1bigc ').replace(/max\s*valu/g,'mvl');
+  return s.replace(/\s+/g,' ').trim()}
+function vTokens(text){let s=' '+vLow(text)+' ';s=vBrandNorm(s);
   s=s.replace(/[,;!?\n]+/g,' | ').replace(/\.(?!\d)/g,' | ');
   s=s.replace(/(\d+)\s*(gam|gram|gờ ram|gr|g)(?=[\s|])/g,'$1g').replace(/(\d+)\s*(mi li lít|mililít|ml)(?=[\s|])/g,'$1ml');
   s=s.replace(/\b(ki lô gam|ki lô|kilôgam|kilogram|kilô|kí lô|ký lô)\b/g,'kg');
@@ -322,11 +354,11 @@ function vMatchProd(words,unit,noAccMode){const q=words.filter(w=>!V_FILL.test(w
 const VSYN={vm:['vm','vinmart','winmart','wm','vmplus']};
 const V_LFILL=/^(plus|cộng|giao|cho|đến|den|tới|toi|tại|tai|địa|dia|điểm|diem|khách|khach|ở|o|về|nhà|siêu|thị|cửa|hàng|chi|nhánh)$/;
 function vMatchLoc(words){const qa=words.filter(w=>!V_LFILL.test(w));const q=qa.map(noAcc);if(!q.length)return {list:[],sc:0};
-  const L=[];for(const x of locIndex()){if(!x.loc)continue;const lt=x._lt||(x._lt=x.n.split(/[^a-z0-9]+/).filter(Boolean));let m=0;
-    for(let i=0;i<q.length;i++){const w=q[i];if(qa[i]&&isNumW(qa[i])){const la=x._la||(x._la=vLow(x.loc).split(/[^\p{L}\p{N}]+/u));if(la.includes(qa[i]))m++;continue}const ws=VSYN[w]||[w];if(ws.some(y=>lt.includes(y)||(y.length>=4&&x.n.includes(y))))m++}
-    if(m)L.push({x,sc:m/q.length,len:x.n.length})}
-  L.sort((a,b)=>b.sc-a.sc||a.len-b.len);const top=L[0],sec=L[1];
-  return {list:L.slice(0,6),sc:top?top.sc:0,sure:!!top&&top.sc===1&&(!sec||sec.sc<1)}}
+  const L=[];for(const x of locIndex()){if(!x.loc)continue;const bn=x._bn||(x._bn=locBN(x.n));const lt=x._lt||(x._lt=bn.split(/[^a-z0-9]+/).filter(Boolean));let m=0;
+    for(let i=0;i<q.length;i++){const w=q[i];if(qa[i]&&isNumW(qa[i])){const la=x._la||(x._la=vLow(x.loc).split(/[^\p{L}\p{N}]+/u));if(la.includes(qa[i]))m++;continue}const ws=VSYN[w]||[w];if(ws.some(y=>lt.includes(y)||(y.length>=4&&bn.includes(y))))m++}
+    if(m){let ph=0;for(let i=0;i+1<q.length;i++){const a=lt.indexOf(q[i]);if(a>=0&&lt[a+1]===q[i+1])ph++}const ps=lt.findIndex(t=>q.includes(t));L.push({x,sc:m/q.length,ph,ps:ps<0?99:ps,len:x.n.length})}}
+  L.sort((a,b)=>b.sc-a.sc||b.ph-a.ph||a.ps-b.ps||a.len-b.len);const top=L[0],sec=L[1];
+  return {list:L.slice(0,6),sc:top?top.sc:0,sure:!!top&&top.sc===1&&(!sec||sec.sc<1||top.ph>sec.ph||(top.ph===sec.ph&&top.ps<sec.ps-2))}}
 const V_LK=['giao hàng cho','giao hàng đến','giao hàng tới','giao hàng tại','giao cho','giao đến','giao tới','giao tại','giao','địa điểm','điểm giao','khách hàng','khách','cửa hàng','siêu thị'];
 function vParse(text){const out={loc:null,lines:[],unknown:[],note:'',paid:false};let t=String(text||'');
   const nm=t.match(/(ghi chú|ghi chu|lưu ý|luu y)\s*[:,]?\s*(.*)$/i);if(nm){out.note=nm[2].trim();t=t.slice(0,nm.index)}
@@ -337,7 +369,7 @@ function vParse(text){const out={loc:null,lines:[],unknown:[],note:'',paid:false
   /* 1) ĐỊA ĐIỂM: sau từ khoá "giao/khách/…" hoặc ở đầu câu; lấy đoạn dài nhất khớp đủ mọi từ với 1 địa điểm */
   const starts=[];for(let i=0;i<T.length;i++){for(const k of V_LK){const kw=k.split(' ');if(kw.every((x,j)=>T[i+j]===x)){starts.push({s:i+kw.length,k:i,kw:true});break}}}
   if(!starts.some(x=>x.k===0))starts.push({s:0,k:0,kw:false});
-  let best=null;for(const st of starts){for(let e=st.s+1;e<=Math.min(T.length,st.s+8);e++){const seg=T.slice(st.s,e);if(seg.some(w=>w==='|'||/^\d+([.,]\d+)?$/.test(w)))break;
+  let best=null;for(const st of starts){for(let e=st.s+1;e<=Math.min(T.length,st.s+8);e++){const seg=T.slice(st.s,e);const lw=seg[seg.length-1];if(lw==='|')break;if(/^\d+([.,]\d+)?$/.test(lw)){const nx=T[e]||'';if(e===st.s+1||!nx||nx==='|'||VU[nx]||/^\d/.test(nx)||isNumW(nx))break;continue}
       const m=vMatchLoc(seg);if(m.sc<1)continue;const words=seg.filter(w=>!V_LFILL.test(w)).length;const sc=words*10+(m.sure?5:0)+(st.kw?3:0)-m.list.length*.1;if(!best||sc>best.sc)best={st,e,m,sc,seg}}}
   if(best&&(best.st.kw||best.seg.filter(w=>!V_LFILL.test(w)).length>=2)){out.loc={said:best.seg.join(' '),...best.m};T=T.slice(0,best.st.k).concat(['|'],T.slice(best.e))}
   else{const k=starts.find(x=>x.kw);if(k){let e=k.s;while(e<T.length&&T[e]!=='|'&&!/^\d+([.,]\d+)?$/.test(T[e])&&!isNumW(T[e]))e++;const seg=T.slice(k.s,e);if(seg.length){const m=vMatchLoc(seg);out.loc={said:seg.join(' '),...m};T=T.slice(0,k.k).concat(['|'],T.slice(e))}}}
@@ -1347,13 +1379,14 @@ function viewSettings(v){const s=ST(),ro=!R.isOwner;const F=(k,l,t)=>`<label cla
    <div class="sec">Tuyến giao</div><div id="rtEd" class="stack"></div>
    <div class="sec">Lương & hoa hồng</div><div class="card"><div class="fgrid">${F('saleBase','Lương cứng sale (đ/tháng)','number')}${F('saleAllow','Phụ cấp sale (đ/tháng)','number')}${F('saleStd','Công chuẩn (công/tháng)','number')}${F('saleComm','Hoa hồng sale (% doanh số)','number')}${F('coLoc','Vị trí công ty (vĩ độ, kinh độ)')}</div><div class="tiny muted" style="margin-top:8px">Mỗi ngày sale chụp 1 ảnh chấm công kèm vị trí = 1 công. Đi quá công chuẩn trả theo công thực tế. Hoa hồng tính trên đơn đã giao, giá sau khuyến mại, trước thuế, trừ hàng khách trả.</div></div>
    <div class="sec">Lương ship</div><div class="card"><div class="fgrid">${F('shipCC','Thưởng chuyên cần (đ/tháng)','number')}${F('shipCCOff','Trừ mỗi ngày nghỉ (đ)','number')}${F('shipKg','Hoa hồng chuối, dứa quả (đ/kg)','number')}${F('shipPct','Hoa hồng SP khác (% doanh số trước thuế)','number')}${F('shipSwapStd','Tỷ lệ hỗ trợ chuối tiêu chuẩn (%)','number')}${F('shipSwapPrice','Đơn giá chênh tỷ lệ hỗ trợ (đ/kg)','number')}${F('shipSupNeg','Vượt chuẩn bị trừ tiền (1 = có, 0 = không)','number')}${F('shipBepCodes','Khách tỉnh, kho, bếp – không tính tỷ lệ hỗ trợ (mã khách, cách nhau dấu phẩy)')}${F('shipFeeOut','Công đơn ship ngoài nội thành (đ/đơn, trả ngay)','number')}${F('shipFeeFar','Công đơn ship ngoài ngoại thành (đ/đơn, trả ngay)','number')}${F('shipFarCodes','Mã khu vực ngoại thành')}</div><div class="tiny muted" style="margin-top:8px">Ngày công = ngày có đơn giao thành công. Hoa hồng tính trên hàng bán (gồm hàng khách trả) + đổi + tặng, theo giá trước khuyến mại, trước thuế. Chuối gói/quả quy kg theo trọng lượng trên tên (gói 600g = 0,6 kg); dứa quả tính theo kg. Ngoại thành nhận theo mã đầu địa chỉ giao, VD (07.LB) Long Biên, (16.GL) Gia Lâm.</div></div>
+   <div class="sec">Đọc đơn bằng giọng nói</div><div class="card">${F('vAlias','Tên gọi khác của khách (cách đọc = tên chuẩn; mỗi nhóm cách nhau dấu chấm phẩy)')}<div class="tiny muted" style="margin-top:6px">App đã tự hiểu cách đọc: Coop (cốp, cúp, cô óp…), Tmart (ti mát, tê mát…), Winmart/VM (vin mát, win mát, vê em…), Aeon (a on, ê on, e oăn…), Ecomart, Leco Mart, BRG, Hapro, PT Mart, Big C, Lotte, Mega Mart. Thêm tên khác nếu cần, ví dụ: <b>háp pi mát, hép pi mát = happy mart; gờ rin mát = green mart</b></div></div>
    <div class="sec">Thông tin in phiếu</div><div class="card"><div class="fgrid">${F('company','Tên công ty')}${F('address','Địa chỉ')}${F('taxCode','Mã số thuế')}${F('dept','Bộ phận')}${F('whName','Tên kho')}${F('whCode','Mã kho (MISA)')}${F('whPlace','Địa điểm kho')}${F('keeper','Thủ kho')}${F('chiefAcc','Kế toán trưởng')}${F('director','Giám đốc')}</div>
    <div style="margin-top:12px">${F('circular','Dòng ghi chú mẫu chứng từ')}</div></div>
    <div class="sec">Khóa sổ</div><div class="card">${F('lockDate','Khóa sổ đến hết ngày','date')}<div class="tiny muted" style="margin-top:6px">Phiếu kho có ngày trong kỳ khóa không lập, sửa, xóa được.</div></div>
    ${ro?'':'<button class="btn block pri" id="sSave">Lưu cài đặt</button>'}
    <div class="tiny muted">Dữ liệu: ${R.products.size} sản phẩm · ${R.customers.size} khách · ${R.orders.length} đơn (3 tháng) · ${R.vouchers.length} phiếu kho.</div></div>`;
   staffPreEditor($('#spEd'),ro);routeEditor($('#rtEd'),ro);
-  const b=$('#sSave');if(b)b.onclick=async()=>{const NUMK=['saleBase','saleAllow','saleStd','saleComm','salePct','shipFee','shipFeeOut','shipFeeFar','shipCC','shipCCOff','shipKg','shipPct','shipSwapStd','shipSwapPrice','shipSupNeg'];const keys=['saleBase','saleAllow','saleStd','saleComm','coLoc','salePct','shipFee','shipFeeOut','shipFeeFar','shipFarCodes','shipCC','shipCCOff','shipKg','shipPct','shipSwapStd','shipSwapPrice','shipSupNeg','shipBepCodes','company','address','taxCode','dept','whName','whCode','whPlace','keeper','chiefAcc','director','circular','lockDate'];const d={};
+  const b=$('#sSave');if(b)b.onclick=async()=>{const NUMK=['saleBase','saleAllow','saleStd','saleComm','salePct','shipFee','shipFeeOut','shipFeeFar','shipCC','shipCCOff','shipKg','shipPct','shipSwapStd','shipSwapPrice','shipSupNeg'];const keys=['saleBase','saleAllow','saleStd','saleComm','coLoc','salePct','shipFee','shipFeeOut','shipFeeFar','shipFarCodes','shipCC','shipCCOff','shipKg','shipPct','shipSwapStd','shipSwapPrice','shipSupNeg','shipBepCodes','vAlias','company','address','taxCode','dept','whName','whCode','whPlace','keeper','chiefAcc','director','circular','lockDate'];const d={};
     keys.forEach(k=>{const el=$('#s_'+k);const v=el?el.value.trim():String(s[k]??'');d[k]=NUMK.includes(k)?toNum(v):v});try{await R.db.doc('config/main').set(d);R.settings=d;toast('Đã lưu cài đặt')}catch(e){toast('Không lưu được')}}}
 
 function routeEditor(box,ro){const L=R.ui.rtEdit||(R.ui.rtEdit=JSON.parse(JSON.stringify(RT())));const ships=[...R.staff.entries()].filter(([i,s])=>s.role==='ship'&&s.active!==false);
