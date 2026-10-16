@@ -366,6 +366,16 @@ function vMatchLoc(words){const qa=words.filter(w=>!V_LFILL.test(w));const q=qa.
   L.sort((a,b)=>b.sc-a.sc||b.ph-a.ph||a.ps-b.ps||a.len-b.len);const top=L[0],sec=L[1];
   return {list:L.slice(0,6),sc:top?top.sc:0,sure:!!top&&top.sc===1&&(!sec||sec.sc<1||top.ph>sec.ph||(top.ph===sec.ph&&top.ps<sec.ps-2))}}
 const V_LK=['giao hàng cho','giao hàng đến','giao hàng tới','giao hàng tại','giao cho','giao đến','giao tới','giao tại','giao','địa điểm','điểm giao','khách hàng','khách','cửa hàng','siêu thị'];
+const V_BRANDS=['tmart','vm','coop','aeon','ecomart','lecomart','brg','pt mart','bigc','lotte','mega mart','hapro','mvl'];
+function vLev(a,b){const m=a.length,n=b.length;if(!m)return n;if(!n)return m;let p=Array.from({length:n+1},(_,j)=>j);for(let i=1;i<=m;i++){const c=[i];for(let j=1;j<=n;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c}return p[n]}
+function vLocBrandSlot(T,starts){let out=null;const BR=new Set(V_BRANDS.map(b=>b.replace(/ /g,'')));
+  for(const st of starts){let e=st.s;while(e<T.length&&T[e]!=='|'&&!/^\d+([.,]\d+)?$/.test(T[e])&&e<st.s+8)e++;const seg=T.slice(st.s,e);if(seg.length<2)continue;if(vMatchProd(seg,'',true).sc>=.5)continue;
+    for(let k=1;k<=Math.min(3,seg.length-1);k++){const head=noAcc(seg.slice(0,k).join('')).replace(/[^a-z0-9]/g,'');if(!head||BR.has(head)||vMatchProd(seg.slice(0,k),'',true).sc>=.5)continue;const rest=seg.slice(k).filter(w=>!V_LFILL.test(w));if(!rest.length)continue;
+      const cands=[];for(const b of V_BRANDS){const m=vMatchLoc(b.split(' ').concat(rest));if(m.sc<1||!m.list.length)continue;const bb=b.replace(/ /g,'');cands.push({b,m,sim:1-vLev(head,bb)/Math.max(head.length,bb.length)})}
+      if(!cands.length)continue;cands.sort((x,y)=>y.sim-x.sim);const list=[];for(const c of cands)for(const y of c.m.list)if(list.length<8&&!list.includes(y))list.push(y);
+      const cov=1+rest.length,sc=cov*10+cands[0].sim*5+(st.kw?3:0);
+      if(!out||sc>out.sc)out={st,e,seg,cov,sc,m:{list,sc:1,sure:false}}}}
+  return out}
 function vParse(text){const out={loc:null,lines:[],unknown:[],note:'',paid:false};let t=String(text||'');
   const nm=t.match(/(ghi chú|ghi chu|lưu ý|luu y)\s*[:,]?\s*(.*)$/i);if(nm){out.note=nm[2].trim();t=t.slice(0,nm.index)}
   const PAID=/(^|[\s,.])(đã|da)\s+(thanh toán|thanh toan|chuyển khoản|chuyen khoan|ck|trả tiền|tra tien)(\s+rồi)?(?=$|[\s,.])|(^|[\s,.])(thanh toán|chuyển khoản) rồi(?=$|[\s,.])/i;
@@ -377,6 +387,7 @@ function vParse(text){const out={loc:null,lines:[],unknown:[],note:'',paid:false
   if(!starts.some(x=>x.k===0))starts.push({s:0,k:0,kw:false});/* v50: cho phép tên khách bắt đầu sau vài từ đệm ở đầu câu */for(let i=1;i<Math.min(T.length,4);i++){if(T[i]==='|'||/^\d/.test(T[i]))break;if(V_LFILL.test(T[i-1])||V_FILL.test(T[i-1])){if(!starts.some(x=>x.s===i))starts.push({s:i,k:0,kw:false})}else break}
   let best=null;for(const st of starts){for(let e=st.s+1;e<=Math.min(T.length,st.s+8);e++){const seg=T.slice(st.s,e);const lw=seg[seg.length-1];if(lw==='|')break;if(/^\d+([.,]\d+)?$/.test(lw)){const nx=T[e]||'';if(e===st.s+1||!nx||nx==='|'||VU[nx]||/^\d/.test(nx)||isNumW(nx))break;continue}
       const m=vMatchLoc(seg);if(m.sc<1)continue;const words=seg.filter(w=>!V_LFILL.test(w)).length;const sc=words*10+(m.sure?5:0)+(st.kw?3:0)-m.list.length*.1;if(!best||sc>best.sc)best={st,e,m,sc,seg}}}
+  {const fb=vLocBrandSlot(T,starts);const cov=best?best.seg.filter(w=>!V_LFILL.test(w)).length:0;if(fb&&fb.cov>cov)best=fb}
   if(best&&(best.st.kw||best.seg.filter(w=>!V_LFILL.test(w)).length>=2)){out.loc={said:best.seg.join(' '),...best.m};T=T.slice(0,best.st.k).concat(['|'],T.slice(best.e))}
   else{const k=starts.find(x=>x.kw);if(k){let e=k.s;while(e<T.length&&T[e]!=='|'&&!/^\d+([.,]\d+)?$/.test(T[e])&&!isNumW(T[e]))e++;const seg=T.slice(k.s,e);if(seg.length){const m=vMatchLoc(seg);out.loc={said:seg.join(' '),...m};T=T.slice(0,k.k).concat(['|'],T.slice(e))}}}
   /* 2) số đọc bằng chữ → số ("năm" ≠ "nam") */
@@ -434,6 +445,10 @@ async function msgImgText(blob,box){let ph;try{ph=await compress(blob)}catch(e){
   if(a.paid==='paid')L.push('đã thanh toán');
   st.className='alert g';st.innerHTML='✓ Đã đọc ảnh'+(a.unsure?' · <span class="tiny">chưa chắc: '+esc(a.unsure)+'</span>':'')+' – kiểm tra chữ ở ô dưới rồi xem kết quả.';
   return L.join('\n')}
+/* v53: Android (Chrome) gửi lại câu cộng dồn nhiều lần -> chỉ giữ bản dài nhất của mỗi đoạn */
+function vDedup(a){const out=[];const k=t=>noAcc(t).replace(/[^a-z0-9]+/g,' ').trim();
+  for(let t of a){t=String(t||'').trim();if(!t)continue;const last=out[out.length-1];if(last!=null){const kl=k(last),kt=k(t);if(kt.startsWith(kl)){out[out.length-1]=t;continue}if(kl.startsWith(kt)||kl.endsWith(kt))continue}out.push(t)}
+  return out.join(' ')}
 function vUnitWarn(l,msg){const p=l.list&&l.list[0]&&l.list[0].p;if(!l.unit||!p||!p.unit)return '';if(vUnit(p.unit)===l.unit)return '';return '⚠️ '+(msg?'Tin nhắn':'Câu đọc')+' ghi “'+esc(V_UN[l.unit]||l.unit)+'”, hàng tính theo '+esc(p.unit)+' · '}
 function voiceOrder(mode){const MSG=mode==='msg';const d=R.odraft||(R.odraft=newOrderDraft());const SR=MSG?null:(window.SpeechRecognition||window.webkitSpeechRecognition);let rec=null,on=false,P=null,base='',locC=[];const locOpts=()=>locC.map((x,i)=>`<option value="${i}">📍 ${esc(x.loc||'(chưa có địa điểm)')} — ${esc(x.c.name)}</option>`).join('')+'<option value="-1">— Không đổi khách —</option>';
   openSheet(MSG?'💬 Dán tin nhắn':'🎤 Đọc đơn',MSG?V_MSG:`<div class="tiny muted">Đọc <b>địa điểm giao</b> trước, rồi từng mặt hàng, ví dụ: “Giao VM Hà Đông, 10 gói bơ, 5 gói xoài, 20 quả chuối tiêu 170 gam, nem bùi 10 gói khuyến mại 1 gói, đã chuyển khoản, ghi chú giao trước 9 giờ”. Đọc “số + đơn vị + tên” hay “tên + số + đơn vị” đều được; nói rõ quy cách (300 gam, 1 ký…) nếu cùng loại có nhiều gói.</div>
@@ -464,7 +479,7 @@ function voiceOrder(mode){const MSG=mode==='msg';const d=R.odraft||(R.odraft=new
     const vi=b.querySelector('#vcImg');if(vi){const run=async f=>{if(!f)return;const t=await msgImgText(f,b.querySelector('#vcImgBox'));if(t){T.value=t;show()}};/* v52: mở thư viện ảnh NGAY trong lượt bấm (trước đây chờ đọc bộ nhớ tạm làm mất lượt bấm → phải bấm 2 lần) */vi.onclick=()=>{pickGallery().then(run)};
       T.addEventListener('paste',e=>{const f=[...((e.clipboardData&&e.clipboardData.items)||[])].find(x=>/^image\//.test(x.type));if(f){e.preventDefault();run(f.getAsFile())}})}
     if(mic){rec=new SR();rec.lang='vi-VN';rec.interimResults=true;rec.continuous=true;rec.maxAlternatives=1;try{if('phrases' in rec&&window.SpeechRecognitionPhrase)rec.phrases=['Aeon','Aeon Mall','MaxValu','Coopmart','Co.op Food','Tmart','Winmart','VM+','Ecomart','Leco Mart','BRG Mart','Hapro','PT Mart','Big C','Lotte','Mega Mart'].map(p=>new SpeechRecognitionPhrase(p,5))}catch(e){}
-      rec.onresult=e=>{let fin='',tmp='';for(let i=0;i<e.results.length;i++){const r=e.results[i];if(r.isFinal)fin+=r[0].transcript+' ';else tmp+=r[0].transcript}T.value=(base+' '+fin+tmp).trim()};
+      rec.onresult=e=>{const a=[];for(let i=0;i<e.results.length;i++)a.push(e.results[i][0].transcript);T.value=(base+' '+vDedup(a)).trim()};
       rec.onend=()=>{on=false;mic.textContent='🎤 Nói lại';if(T.value.trim())show()};
       rec.onerror=e=>{on=false;mic.textContent='🎤 Nói lại';if(e.error==='not-allowed'||e.error==='service-not-allowed'||e.error==='audio-capture'){Rb.innerHTML=permHTML('mic')+'<button class="btn block pri" id="vcRetry" style="margin-top:8px">Thử lại</button><div class="tiny muted" style="margin-top:6px">Trong lúc chưa bật được: bấm vào ô trên rồi dùng 🎤 của bàn phím điện thoại.</div>';const r=Rb.querySelector('#vcRetry');if(r)r.onclick=()=>mic.onclick();return}
         Rb.innerHTML=`<div class="alert r">${e.error==='no-speech'?'Không nghe thấy tiếng nói, thử lại.':'Lỗi nhận giọng nói ('+esc(e.error)+'). Có thể dùng 🎤 của bàn phím.'}</div>`};
@@ -1071,7 +1086,7 @@ function voiceVoucher(){const d=R.vdraft||(R.vdraft=newVoucher('N'));const SR=wi
         if(rec&&on)try{rec.abort()}catch(e){}closeSheet();render();toast('Đã điền '+n+' mặt hàng – kiểm tra rồi bấm Lưu phiếu')}};
     b.querySelector('#vvGo').onclick=show;
     if(mic){rec=new SR();rec.lang='vi-VN';rec.interimResults=true;rec.continuous=true;rec.maxAlternatives=1;try{if('phrases' in rec&&window.SpeechRecognitionPhrase)rec.phrases=['Aeon','Aeon Mall','MaxValu','Coopmart','Co.op Food','Tmart','Winmart','VM+','Ecomart','Leco Mart','BRG Mart','Hapro','PT Mart','Big C','Lotte','Mega Mart'].map(p=>new SpeechRecognitionPhrase(p,5))}catch(e){}
-      rec.onresult=e=>{let fin='',tmp='';for(let i=0;i<e.results.length;i++){const r=e.results[i];if(r.isFinal)fin+=r[0].transcript+' ';else tmp+=r[0].transcript}T.value=(base+' '+fin+tmp).trim()};
+      rec.onresult=e=>{const a=[];for(let i=0;i<e.results.length;i++)a.push(e.results[i][0].transcript);T.value=(base+' '+vDedup(a)).trim()};
       rec.onend=()=>{on=false;mic.textContent='🎤 Nói lại';if(T.value.trim())show()};
       rec.onerror=e=>{on=false;mic.textContent='🎤 Nói lại';if(e.error==='not-allowed'||e.error==='service-not-allowed'||e.error==='audio-capture'){Rb.innerHTML=permHTML('mic')+'<button class="btn block pri" id="vvRetry" style="margin-top:8px">Thử lại</button>';const r=Rb.querySelector('#vvRetry');if(r)r.onclick=()=>mic.onclick();return}
         Rb.innerHTML=`<div class="alert r">${e.error==='no-speech'?'Không nghe thấy tiếng nói, thử lại.':'Lỗi nhận giọng nói ('+esc(e.error)+'). Có thể dùng 🎤 của bàn phím.'}</div>`};
@@ -1528,7 +1543,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='52';
+const APP_BUILD='53';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
