@@ -303,7 +303,7 @@ const VBR=[
  ['coop','(?:co\\.? ?op|co-op|coop|cốp|cóp|cộp|cúp|cụp|côp|cô ốp|cô óp|cô ộp|cô op|cô-óp|kô óp|ko op|cô úp|co\\.? ?opmart|coopmart)(?: (?:mart|mát|mác|mạt))?'],
  ['pt mart','(?:pt|p t|pê tê|pi ti|bê tê|pê-tê|pi-ti|pê ti|bi ti|pi tê) ?(?:mart|mát|mác|mạt)|ptmart'],
  ['tmart','t-? ?mart|tmart|t mát|ti ?mart|tê ?mart|tê ?mát|ti ?mát|tí ?mát|tì ?mát|thi ?mát|tê ?mác|ti ?mác|tea ?mart|tee ?mart|tê-mát|ti-mát|tê ?mạt|ti ?mạt|tê mát'],
- ['aeon','(?:aeon|a eon|a on|e on|ê on|a ôn|e ôn|ê ôn|ê ông|e oăn|a oăn|ê oăn|i on|i ôn|ai on|ê-on|e-on|a-on|eon|iôn|a-ê-on|ê ôn)(?: (?:mall|mon|môn|mo|mol|moll|mau|mao))?'],
+ ['aeon','(?:aeon|a ?eon|a-ê-on|eon|aon|ion|iôn|yon|ayon|aion|(?:a|e|ê|i|y|ai|ay|ơ)[ -]?(?:on|ôn|ồn|ốn|ổn|oăn|oan|un)|(?:e|ê)[ -]?ông)(?: (?:mall|mon|môn|mo|mol|moll|mau|mao))?'],
  ['mvl','mvl|em vê eo|em vê lờ|em vi eo|em vê en|em vê el|mắc va lu|mắc xơ va lu|mắc xi va lu|max ?valu|maxvalu|mắc va liu|mác va lu|mắc va lư'],
  ['brg','(?:brg|b r g|bê rê giê|bê e rờ giê|bê rờ giê|bi a gi|bi rờ gi|bê rờ gờ|bê ê rờ giê|bê rê gờ|bờ rờ gờ|bi a ri|bê a giê)(?: ?(?:mart|mát|mác|mạt))?'],
  ['hapro food','(?:hapro|ha prô|ha pờ rô|ha phờ rô|ha pro|ha bờ rô|hắc prô|ha prồ|ha-prô) ?(?:food|phút|fút|phu|phúc|phut|fu)|haprofood'],
@@ -1502,5 +1502,12 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   setTimeout(async()=>{if(!myRole()&&!R.isOwner){try{const r=await db.doc('requests/'+R.uid).get();if(!r.exists)await db.doc('requests/'+R.uid).set({at:Date.now()})}catch(e){}}},2500);
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
+/* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
+const APP_BUILD='49';
+async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
+  if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
+    b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
+    b.onclick=()=>location.reload();document.body.appendChild(b)}}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)chkUpdate()});setInterval(chkUpdate,300000);setTimeout(chkUpdate,8000);
 init();
 })();
