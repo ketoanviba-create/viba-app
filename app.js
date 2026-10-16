@@ -178,11 +178,16 @@ function locIndex(){if(_locSrc===R.customers&&_locIdx)return _locIdx;const out=[
   for(const c of R.customers.values()){if(c.stopped)continue;const ls=[c.address,...String(c.alt||'').split('|')].map(x=>String(x||'').trim()).filter((x,i,a)=>x&&a.indexOf(x)===i);
     if(!ls.length)ls.push('');for(const l of ls)out.push({c,loc:l,n:noAcc(l||c.name)})}
   out.sort((x,y)=>(x.loc||x.c.name).localeCompare(y.loc||y.c.name,'vi'));_locSrc=R.customers;_locIdx=out;return out}
-function pickCustomer(onPick){let q='';let shown=[];const draw=b=>{const nq=noAcc(q);
-  shown=locIndex().filter(x=>wMatch(x.n,nq)).slice(0,80);
-    b.querySelector('#pcList').innerHTML=shown.length?shown.map((x,i)=>`<div class="row tap" data-i="${i}"><div class="grow"><div class="t ell">📍 ${esc(x.loc||'(chưa có địa điểm giao)')}</div><div class="s ell">${esc(x.c.name)}${x.c.phone?' · '+esc(x.c.phone):''}</div>${custPL(x.c).length?`<div class="tiny" style="color:var(--accent)">${esc(custPL(x.c).join(', '))}</div>`:''}</div><span class="chev">›</span></div>`).join(''):`<div class="empty">${R.customers.size?'Không tìm thấy địa điểm giao phù hợp.':'Chưa có khách hàng nào.'}</div>`;
+/* v44: app giao hàng – chọn khách đơn phát sinh mặc định chỉ hiện khách thuộc tuyến đang chọn ở mục Cần giao */
+function rtOfLoc(loc){if(R._rlcSrc!==R.routes){R._rlc=new Map();R._rlcSrc=R.routes}let v=R._rlc.get(loc);if(v===undefined){v=routeOf({address:loc})||'none';R._rlc.set(loc,v)}return v}
+function shipLocFilter(){const s=shipRtSel();if(s.mode==='all')return null;return loc=>s.ids.includes(rtOfLoc(loc||''))}
+function pickCustomer(onPick){let q='';let shown=[];let allRt=false;const draw=b=>{const nq=noAcc(q);
+  const rf=R.mode==='ship'&&!allRt?shipLocFilter():null;
+  shown=locIndex().filter(x=>(!rf||rf(x.loc))&&wMatch(x.n,nq)).slice(0,80);
+  const rb=b.querySelector('#pcRt');if(rb){const s=shipRtSel();const nm=s.mode==='all'?'Tất cả tuyến':s.ids.map(rtLabel).join(' + ');rb.innerHTML=s.mode==='all'?`<div class="tiny muted">🛣️ Đang hiện khách tất cả tuyến (theo mục Cần giao)</div>`:`<div class="row" style="gap:8px;align-items:center"><div class="grow tiny" style="color:var(--accent)">🛣️ ${allRt?'Đang hiện khách tất cả tuyến':'Khách tuyến: <b>'+esc(nm)+'</b>'}<br><span class="muted">Chọn thêm tuyến ở mục Cần giao</span></div><button class="btn" id="pcAll" style="padding:6px 10px;font-size:13px">${allRt?'Chỉ khách tuyến':'Xem tất cả'}</button></div>`;const ab=rb.querySelector('#pcAll');if(ab)ab.onclick=()=>{allRt=!allRt;draw(b)}}
+    b.querySelector('#pcList').innerHTML=shown.length?shown.map((x,i)=>`<div class="row tap" data-i="${i}"><div class="grow"><div class="t ell">📍 ${esc(x.loc||'(chưa có địa điểm giao)')}</div><div class="s ell">${esc(x.c.name)}${x.c.phone?' · '+esc(x.c.phone):''}</div>${custPL(x.c).length?`<div class="tiny" style="color:var(--accent)">${esc(custPL(x.c).join(', '))}</div>`:''}</div><span class="chev">›</span></div>`).join(''):`<div class="empty">${R.customers.size?(rf?'Không có khách phù hợp trong tuyến đang chọn – bấm "Xem tất cả" để tìm ở tuyến khác.':'Không tìm thấy địa điểm giao phù hợp.'):'Chưa có khách hàng nào.'}</div>`;
     $$('[data-i]',b).forEach(r=>r.onclick=()=>{const x=shown[+r.dataset.i];closeSheet();onPick(x.c,x.loc||'')})};
-  openSheet('Chọn địa điểm giao',`<input id="pcQ" placeholder="Tìm địa điểm giao hàng (vd: vm ha dong)" autocomplete="off"><button class="btn" id="pcNew">${ICON.plus.replace('<svg','<svg width="18" height="18"')} Thêm khách mới</button><div class="group pick" id="pcList"></div>`,b=>{
+  openSheet('Chọn địa điểm giao',`<input id="pcQ" placeholder="Tìm địa điểm giao hàng (vd: vm ha dong)" autocomplete="off"><button class="btn" id="pcNew">${ICON.plus.replace('<svg','<svg width="18" height="18"')} Thêm khách mới</button>${R.mode==='ship'?'<div id="pcRt"></div>':''}<div class="group pick" id="pcList"></div>`,b=>{
     draw(b);const i=b.querySelector('#pcQ');let dT;i.oninput=()=>{clearTimeout(dT);dT=setTimeout(()=>{q=i.value;draw(b)},150)};setTimeout(()=>i.focus(),50);
     b.querySelector('#pcNew').onclick=()=>{closeSheet();editCustomer(null,c=>onPick(c),q)}})}
 /* chọn sản phẩm */
