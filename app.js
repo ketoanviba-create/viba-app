@@ -461,7 +461,7 @@ function voiceOrder(mode){const MSG=mode==='msg';const d=R.odraft||(R.odraft=new
       if(P.paid){d.paid=true;if(P.pm)d.payMethod=P.pm}if(P.note)d.note=(d.note?d.note+'; ':'')+P.note;
       if(rec&&on)try{rec.abort()}catch(e){}closeSheet();render();toast('Đã điền '+n+' mặt hàng – kiểm tra rồi bấm Gửi đơn')};
     b.querySelector('#vcGo').onclick=show;const vp=b.querySelector('#vcPaste');if(vp)vp.onclick=async()=>{const im=await clipImage();if(im){const t=await msgImgText(im,b.querySelector('#vcImgBox'));if(t){T.value=t;show()}return}try{const t=await navigator.clipboard.readText();if(t&&t.trim()){T.value=t.trim();show();return}}catch(e){}T.focus();toast('Bấm giữ vào ô trống rồi chọn Dán')};
-    const vi=b.querySelector('#vcImg');if(vi){const run=async f=>{if(!f)return;const t=await msgImgText(f,b.querySelector('#vcImgBox'));if(t){T.value=t;show()}};vi.onclick=async()=>{const im=await clipImage();run(im||await pickGallery())};
+    const vi=b.querySelector('#vcImg');if(vi){const run=async f=>{if(!f)return;const t=await msgImgText(f,b.querySelector('#vcImgBox'));if(t){T.value=t;show()}};/* v52: mở thư viện ảnh NGAY trong lượt bấm (trước đây chờ đọc bộ nhớ tạm làm mất lượt bấm → phải bấm 2 lần) */vi.onclick=()=>{pickGallery().then(run)};
       T.addEventListener('paste',e=>{const f=[...((e.clipboardData&&e.clipboardData.items)||[])].find(x=>/^image\//.test(x.type));if(f){e.preventDefault();run(f.getAsFile())}})}
     if(mic){rec=new SR();rec.lang='vi-VN';rec.interimResults=true;rec.continuous=true;rec.maxAlternatives=1;try{if('phrases' in rec&&window.SpeechRecognitionPhrase)rec.phrases=['Aeon','Aeon Mall','MaxValu','Coopmart','Co.op Food','Tmart','Winmart','VM+','Ecomart','Leco Mart','BRG Mart','Hapro','PT Mart','Big C','Lotte','Mega Mart'].map(p=>new SpeechRecognitionPhrase(p,5))}catch(e){}
       rec.onresult=e=>{let fin='',tmp='';for(let i=0;i<e.results.length;i++){const r=e.results[i];if(r.isFinal)fin+=r[0].transcript+' ';else tmp+=r[0].transcript}T.value=(base+' '+fin+tmp).trim()};
@@ -1528,7 +1528,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='51';
+const APP_BUILD='52';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
