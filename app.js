@@ -404,6 +404,7 @@ function vParse(text){const out={loc:null,lines:[],unknown:[],note:'',paid:false
 /* v47: LÊN ĐƠN BẰNG ĐOẠN TIN NHẮN (Zalo): dòng đầu = khách / địa điểm giao, mỗi dòng sau = 1 mặt hàng; dùng chung bộ phân tích vParse */
 const V_MSG=`<div class="tiny muted">Dán nguyên tin nhắn Zalo: <b>tên khách / địa điểm giao ở dòng đầu hoặc dòng cuối</b>, các dòng còn lại mỗi dòng 1 mặt hàng (“số + đơn vị + tên”, hoặc “tên + số”). Có thể viết “tặng 10”, “KM 2”, “đổi 1”, “trả 2”, “đã CK”, “ghi chú …”.</div>
    <button class="btn block" id="vcPaste" style="font-size:16px;padding:12px">📋 Dán từ Zalo</button>
+   <button class="btn block" id="vcImg" style="font-size:16px;padding:12px">🖼️ Dán / chọn ảnh đơn hàng</button><div id="vcImgBox"></div>
    <textarea id="vcT" rows="6" style="font-size:16px;line-height:1.45" placeholder="Dán tin nhắn đơn hàng vào đây"></textarea>
    <button class="btn block" id="vcGo">Phân tích</button><div id="vcR"></div>`;
 /* v48: tên khách có thể ở DÒNG ĐẦU hoặc DÒNG CUỐI: dòng nào giống địa điểm hơn (ít giống tên hàng, không bắt đầu bằng số) thì là khách */
@@ -416,6 +417,23 @@ function vMsgPrep(t){const L=String(t||'').replace(/\r/g,'').split('\n').map(x=>
   const v=vLow(L[k]);if(/^\d/.test(v)&&!isKw(v))return L.join('\n');
   const loc=L.splice(k,1)[0];return [(isKw(v)?'':'giao ')+loc,...L].join('\n')}
 const V_UN={kg:'ký',goi:'gói',hop:'hộp',qua:'quả',khay:'khay',thung:'thùng',tui:'túi',chai:'chai',lo:'lọ',hu:'hũ',nai:'nải',bo:'bó',cai:'cái',kien:'kiện',bao:'bao',cu:'củ',me:'mẹt',bat:'bát',cay:'cây',lon:'lon',set:'set',vi:'vỉ',mieng:'miếng',coc:'cốc'};
+/* v51: ĐỌC ẢNH ĐƠN HÀNG ở mục Dán tin nhắn (ảnh chụp tin nhắn Zalo, giấy viết tay): AI máy chủ (Gemini, chung hạn mức chi phí với đọc phiếu) đọc ra khách + dòng hàng → đổi thành chữ → bộ phân tích tin nhắn */
+function pickGallery(){return new Promise(res=>{const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.style.display='none';document.body.appendChild(inp);
+  inp.onchange=()=>{const f=inp.files[0];inp.remove();res(f||null)};inp.click()})}
+async function clipImage(){try{if(!navigator.clipboard||!navigator.clipboard.read)return null;const it=await navigator.clipboard.read();for(const x of it){const t=x.types.find(y=>/^image\//.test(y));if(t)return await x.getType(t)}}catch(e){}return null}
+async function msgImgText(blob,box){let ph;try{ph=await compress(blob)}catch(e){box.innerHTML='<div class="alert r">Không đọc được ảnh này.</div>';return null}
+  box.innerHTML=`<img src="${ph}" style="width:100%;max-height:200px;object-fit:contain;border-radius:12px;background:#fff;border:1px solid var(--line,#e3e8ef)"><div class="alert" id="vcImgSt">🤖 Đang đọc ảnh… (khoảng 5–15 giây)</div>`;const st=box.querySelector('#vcImgSt');
+  if(!window.vibaAI){st.className='alert w';st.textContent='Máy chủ chưa bật đọc ảnh.';return null}
+  const prods=sortedProducts().filter(p=>/^(HH|TP)/i.test(p.code)&&!PROD_HIDE.test(' '+noAcc(p.name)+' ')).slice(0,90).map(p=>p.code+'|'+p.name).join('\n');
+  let r;try{r=await Promise.race([window.vibaAI.slipRead({image:ph,products:prods,kind:'msg'}),new Promise(res=>setTimeout(()=>res({skip:'timeout'}),40000))])}catch(e){r={skip:'conn'}}
+  if(!r||!r.ok||!r.data){const why={nokey:'chưa cài mã AI',budget:'đã dùng hết hạn mức chi phí tháng',daily:'đã dùng hết hạn mức hôm nay',quota:'Google báo hết lượt',timeout:'mạng chậm',error:'AI báo lỗi',conn:'lỗi kết nối'}[r&&r.skip]||'AI không đọc được';
+    st.className='alert w';st.textContent='Không đọc được ảnh ('+why+'). Gõ hoặc dán chữ vào ô dưới.';return null}
+  const a=r.data,L=[];if(a.customer)L.push(String(a.customer).replace(/\s+/g,' ').trim());
+  for(const x of a.lines||[]){const q=toNum(x.qty);if(!(q>0))continue;const p=x.code&&findProd(String(x.code).trim());const nm=p?p.name:String(x.name||'').trim();if(!nm)continue;
+    L.push(q+' '+(x.unit?String(x.unit).trim()+' ':'')+nm+(toNum(x.gift)>0?' tặng '+toNum(x.gift):''))}
+  if(a.paid==='paid')L.push('đã thanh toán');
+  st.className='alert g';st.innerHTML='✓ Đã đọc ảnh'+(a.unsure?' · <span class="tiny">chưa chắc: '+esc(a.unsure)+'</span>':'')+' – kiểm tra chữ ở ô dưới rồi xem kết quả.';
+  return L.join('\n')}
 function vUnitWarn(l,msg){const p=l.list&&l.list[0]&&l.list[0].p;if(!l.unit||!p||!p.unit)return '';if(vUnit(p.unit)===l.unit)return '';return '⚠️ '+(msg?'Tin nhắn':'Câu đọc')+' ghi “'+esc(V_UN[l.unit]||l.unit)+'”, hàng tính theo '+esc(p.unit)+' · '}
 function voiceOrder(mode){const MSG=mode==='msg';const d=R.odraft||(R.odraft=newOrderDraft());const SR=MSG?null:(window.SpeechRecognition||window.webkitSpeechRecognition);let rec=null,on=false,P=null,base='',locC=[];const locOpts=()=>locC.map((x,i)=>`<option value="${i}">📍 ${esc(x.loc||'(chưa có địa điểm)')} — ${esc(x.c.name)}</option>`).join('')+'<option value="-1">— Không đổi khách —</option>';
   openSheet(MSG?'💬 Dán tin nhắn':'🎤 Đọc đơn',MSG?V_MSG:`<div class="tiny muted">Đọc <b>địa điểm giao</b> trước, rồi từng mặt hàng, ví dụ: “Giao VM Hà Đông, 10 gói bơ, 5 gói xoài, 20 quả chuối tiêu 170 gam, nem bùi 10 gói khuyến mại 1 gói, đã chuyển khoản, ghi chú giao trước 9 giờ”. Đọc “số + đơn vị + tên” hay “tên + số + đơn vị” đều được; nói rõ quy cách (300 gam, 1 ký…) nếu cùng loại có nhiều gói.</div>
@@ -442,7 +460,9 @@ function voiceOrder(mode){const MSG=mode==='msg';const d=R.odraft||(R.odraft=new
         else{const dp=defaultPrice(d.cust,p.code);d.lines.push({code:p.code,name:p.name,unit:p.unit,qty:q,promo:0,gift:k,swap:toNum(l.swap),ret:toNum(l.ret),price:dp.p,listPrice:dp.p,src:dp.src,g:1})}n++});
       if(P.paid){d.paid=true;if(P.pm)d.payMethod=P.pm}if(P.note)d.note=(d.note?d.note+'; ':'')+P.note;
       if(rec&&on)try{rec.abort()}catch(e){}closeSheet();render();toast('Đã điền '+n+' mặt hàng – kiểm tra rồi bấm Gửi đơn')};
-    b.querySelector('#vcGo').onclick=show;const vp=b.querySelector('#vcPaste');if(vp)vp.onclick=async()=>{try{const t=await navigator.clipboard.readText();if(t&&t.trim()){T.value=t.trim();show();return}}catch(e){}T.focus();toast('Bấm giữ vào ô trống rồi chọn Dán')};
+    b.querySelector('#vcGo').onclick=show;const vp=b.querySelector('#vcPaste');if(vp)vp.onclick=async()=>{const im=await clipImage();if(im){const t=await msgImgText(im,b.querySelector('#vcImgBox'));if(t){T.value=t;show()}return}try{const t=await navigator.clipboard.readText();if(t&&t.trim()){T.value=t.trim();show();return}}catch(e){}T.focus();toast('Bấm giữ vào ô trống rồi chọn Dán')};
+    const vi=b.querySelector('#vcImg');if(vi){const run=async f=>{if(!f)return;const t=await msgImgText(f,b.querySelector('#vcImgBox'));if(t){T.value=t;show()}};vi.onclick=async()=>{const im=await clipImage();run(im||await pickGallery())};
+      T.addEventListener('paste',e=>{const f=[...((e.clipboardData&&e.clipboardData.items)||[])].find(x=>/^image\//.test(x.type));if(f){e.preventDefault();run(f.getAsFile())}})}
     if(mic){rec=new SR();rec.lang='vi-VN';rec.interimResults=true;rec.continuous=true;rec.maxAlternatives=1;try{if('phrases' in rec&&window.SpeechRecognitionPhrase)rec.phrases=['Aeon','Aeon Mall','MaxValu','Coopmart','Co.op Food','Tmart','Winmart','VM+','Ecomart','Leco Mart','BRG Mart','Hapro','PT Mart','Big C','Lotte','Mega Mart'].map(p=>new SpeechRecognitionPhrase(p,5))}catch(e){}
       rec.onresult=e=>{let fin='',tmp='';for(let i=0;i<e.results.length;i++){const r=e.results[i];if(r.isFinal)fin+=r[0].transcript+' ';else tmp+=r[0].transcript}T.value=(base+' '+fin+tmp).trim()};
       rec.onend=()=>{on=false;mic.textContent='🎤 Nói lại';if(T.value.trim())show()};
@@ -1508,7 +1528,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='50';
+const APP_BUILD='51';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
