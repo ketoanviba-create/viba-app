@@ -343,8 +343,9 @@ function vWordHit(w,acc,flat,flatStr,noAccMode){if(acc.includes(w))return 1;cons
 let _vP=null,_vPsrc=null,_vPa=null;
 function vProdIdx(){if(_vPsrc===R.products&&_vPa===R.palias&&_vP)return _vP;_vP=[];const mk=(p,txt,al)=>{const src=vAliasNorm(' '+vLow(txt).replace(/(\d+)\s*(gam|gram|gr|g)\b/g,'$1g')+' ');const acc=src.split(/[^\p{L}\p{N}]+/u).filter(Boolean);const flat=acc.map(noAcc);_vP.push({p,acc,flat,str:flat.join(' '),u:vUnit(p.unit||''),al})};
   for(const p of R.products.values()){if(p.active===false)continue;mk(p,p.name+' '+p.code,0);for(const a of pAlias(p))mk(p,a,1)}_vPsrc=R.products;_vPa=R.palias;return _vP}
-const V_FILL=/^(lấy|cho|thêm|sản|phẩm|mặt|hàng|loại|của|là|thì|nữa|với|và|em|anh|chị|ơi|nhé|nha|ạ|à)$/;
-function vMatchProd(words,unit,noAccMode){const q=words.filter(w=>!V_FILL.test(w));if(!q.length)return {list:[],q,sc:0};
+const V_FILL=/^(lấy|cho|thêm|sản|phẩm|mặt|hàng|loại|của|là|thì|nữa|với|và|em|anh|chị|ơi|nhé|nha|ạ|à|đặt|order|đơn|gồm|ship|giao)$/;
+function vMatchProd(words,unit,noAccMode){const q0=words.filter(w=>!V_FILL.test(w));if(!q0.length)return {list:[],q:q0,sc:0};
+  /* v48: bỏ từ không có trong tên hàng nào (vd “sắn times đặt”) để không làm tụt điểm */const qk=q0.filter(w=>vProdIdx().some(x=>vWordHit(w,x.acc,x.flat,x.str,noAccMode)>0));const q=qk.length?qk:q0;
   const L=vProdIdx().map(x=>{let m=0;for(const w of q)m+=vWordHit(w,x.acc,x.flat,x.str,noAccMode);let cov=0;for(const t of x.flat)if(q.some(w=>noAcc(w)===t))cov++;
     return {p:x.p,sc:m/q.length,ub:unit&&x.u===unit?1:0,cov:cov/Math.max(1,x.flat.length-1),sold:toNum(x.p.soldQty)}}).filter(x=>x.sc>=.5)
    .sort((a,b)=>b.sc-a.sc||b.ub-a.ub||(b.cov>=.99)-(a.cov>=.99)||b.sold-a.sold||b.cov-a.cov).filter((x,i,a)=>a.findIndex(y=>y.p===x.p)===i);
@@ -396,12 +397,19 @@ function vParse(text){const out={loc:null,lines:[],unknown:[],note:'',paid:false
   return out}
 
 /* v47: LÊN ĐƠN BẰNG ĐOẠN TIN NHẮN (Zalo): dòng đầu = khách / địa điểm giao, mỗi dòng sau = 1 mặt hàng; dùng chung bộ phân tích vParse */
-const V_MSG=`<div class="tiny muted">Dán nguyên tin nhắn Zalo: <b>dòng đầu là khách / địa điểm giao</b>, mỗi dòng sau là 1 mặt hàng (“số + đơn vị + tên”, hoặc “tên + số”). Có thể viết “tặng 10”, “KM 2”, “đổi 1”, “trả 2”, “đã CK”, “ghi chú …”.</div>
+const V_MSG=`<div class="tiny muted">Dán nguyên tin nhắn Zalo: <b>tên khách / địa điểm giao ở dòng đầu hoặc dòng cuối</b>, các dòng còn lại mỗi dòng 1 mặt hàng (“số + đơn vị + tên”, hoặc “tên + số”). Có thể viết “tặng 10”, “KM 2”, “đổi 1”, “trả 2”, “đã CK”, “ghi chú …”.</div>
    <button class="btn block" id="vcPaste" style="font-size:16px;padding:12px">📋 Dán từ Zalo</button>
    <textarea id="vcT" rows="6" style="font-size:16px;line-height:1.45" placeholder="Dán tin nhắn đơn hàng vào đây"></textarea>
    <button class="btn block" id="vcGo">Phân tích</button><div id="vcR"></div>`;
+/* v48: tên khách có thể ở DÒNG ĐẦU hoặc DÒNG CUỐI: dòng nào giống địa điểm hơn (ít giống tên hàng, không bắt đầu bằng số) thì là khách */
 function vMsgPrep(t){const L=String(t||'').replace(/\r/g,'').split('\n').map(x=>x.replace(/^\s*[-•*+·]+\s*/,'').trim()).filter(Boolean);if(!L.length)return '';
-  const f=vLow(L[0]);if(!/^\d/.test(f)&&!V_LK.some(k=>f.startsWith(k+' ')))L[0]='giao '+L[0];return L.join('\n')}
+  const isKw=s=>V_LK.some(k=>s===k||s.startsWith(k+' ')||s.startsWith(k+':'));
+  const words=s=>vTokens(s).filter(w=>w!=='|'&&!/^\d+([.,]\d+)?$/.test(w)&&!VU[w]);
+  const sc=s=>{const v=vLow(s);if(isKw(v))return 99;if(/^\d/.test(v))return -99;const W=words(s);if(!W.length)return -99;
+    const lw=W.filter(w=>!V_LFILL.test(w));const lm=lw.length?vMatchLoc(lw):{sc:0};const pm=vMatchProd(W,'',!vHasAcc(s));return lm.sc+(lm.sure?.5:0)-(pm.sc||0)-(/\d/.test(v)&&!lm.sure?.3:0)};
+  let k=0;if(L.length>1){const a=sc(L[0]),b=sc(L[L.length-1]);if(b>a)k=L.length-1}
+  const v=vLow(L[k]);if(/^\d/.test(v)&&!isKw(v))return L.join('\n');
+  const loc=L.splice(k,1)[0];return [(isKw(v)?'':'giao ')+loc,...L].join('\n')}
 const V_UN={kg:'ký',goi:'gói',hop:'hộp',qua:'quả',khay:'khay',thung:'thùng',tui:'túi',chai:'chai',lo:'lọ',hu:'hũ',nai:'nải',bo:'bó',cai:'cái',kien:'kiện',bao:'bao',cu:'củ',me:'mẹt',bat:'bát',cay:'cây',lon:'lon',set:'set',vi:'vỉ',mieng:'miếng',coc:'cốc'};
 function vUnitWarn(l,msg){const p=l.list&&l.list[0]&&l.list[0].p;if(!l.unit||!p||!p.unit)return '';if(vUnit(p.unit)===l.unit)return '';return '⚠️ '+(msg?'Tin nhắn':'Câu đọc')+' ghi “'+esc(V_UN[l.unit]||l.unit)+'”, hàng tính theo '+esc(p.unit)+' · '}
 function voiceOrder(mode){const MSG=mode==='msg';const d=R.odraft||(R.odraft=newOrderDraft());const SR=MSG?null:(window.SpeechRecognition||window.webkitSpeechRecognition);let rec=null,on=false,P=null,base='',locC=[];const locOpts=()=>locC.map((x,i)=>`<option value="${i}">📍 ${esc(x.loc||'(chưa có địa điểm)')} — ${esc(x.c.name)}</option>`).join('')+'<option value="-1">— Không đổi khách —</option>';
