@@ -164,7 +164,7 @@ let sheetClose=null;
 function openSheet(title,html,bind,opts){const s=$('#sheet');opts=opts||{};
   s.innerHTML=`<div class="pane" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="bar"><button class="btn ghost" data-close>${opts.cancel||'Đóng'}</button><h3>${esc(title)}</h3>${opts.action?`<button class="btn ghost" data-act style="font-weight:700">${esc(opts.action)}</button>`:'<span style="width:64px"></span>'}</div><div class="body">${html}</div></div>`;
   s.hidden=false;document.body.style.overflow='hidden';sheetClose=opts.onClose||null;
-  s.onclick=e=>{if(e.target===s&&!s.querySelector('input:not([type=checkbox]),textarea,select'))closeSheet()};s.querySelector('[data-close]').onclick=closeSheet;
+  s.onclick=e=>{if(e.target===s&&!s.querySelector('input:not([type=checkbox]),textarea,select,[contenteditable]'))closeSheet()};s.querySelector('[data-close]').onclick=closeSheet;
   const a=s.querySelector('[data-act]');if(a&&opts.onAction)a.onclick=opts.onAction;bind&&bind(s.querySelector('.body'),s)}
 function closeSheet(){const s=$('#sheet');s.hidden=true;s.innerHTML='';document.body.style.overflow='';const f=sheetClose;sheetClose=null;f&&f()}
 function confirmSheet(title,text,ok,danger){return new Promise(res=>{openSheet(title,`<p style="margin:0">${text}</p><button class="btn block ${danger?'danger':'pri'}" data-ok>${esc(ok)}</button><button class="btn block" data-no>Thôi</button>`,b=>{
@@ -413,10 +413,16 @@ function vParse(text){const out={loc:null,lines:[],unknown:[],note:'',paid:false
   return out}
 
 /* v47: LÊN ĐƠN BẰNG ĐOẠN TIN NHẮN (Zalo): dòng đầu = khách / địa điểm giao, mỗi dòng sau = 1 mặt hàng; dùng chung bộ phân tích vParse */
-const V_MSG=`<div class="tiny muted">Dán nguyên tin nhắn Zalo: <b>tên khách / địa điểm giao ở dòng đầu hoặc dòng cuối</b>, các dòng còn lại mỗi dòng 1 mặt hàng (“số + đơn vị + tên”, hoặc “tên + số”). Có thể viết “tặng 10”, “KM 2”, “đổi 1”, “trả 2”, “đã CK”, “ghi chú …”.</div>
-   <button class="btn block" id="vcPaste" style="font-size:16px;padding:12px">📋 Dán từ Zalo</button>
-   <button class="btn block" id="vcImg" style="font-size:16px;padding:12px">🖼️ Dán / chọn ảnh đơn hàng</button><div id="vcImgBox"></div>
-   <textarea id="vcT" rows="6" style="font-size:16px;line-height:1.45" placeholder="Dán tin nhắn đơn hàng vào đây"></textarea>
+const V_MSG=`<style>.vcComp{background:var(--card,#fff);border:2px solid var(--accent,#1b6aa5);border-radius:16px;padding:8px 10px}
+.vcEd{min-height:120px;max-height:45vh;overflow:auto;font-size:16px;line-height:1.45;outline:none;white-space:pre-wrap;word-break:break-word;-webkit-user-select:text;user-select:text;padding:2px}
+.vcEd:empty:before{content:attr(data-ph);color:var(--faint,#97a3b1)}.vcEd img{max-width:80px;max-height:80px}
+.vcTh{display:flex;gap:10px;align-items:center;background:var(--sunk,#e9eef4);border-radius:12px;padding:6px;margin-bottom:6px}.vcTh img{height:84px;max-width:70px;object-fit:cover;border-radius:8px;background:#fff;border:1px solid var(--line,#dbe3ec)}
+.vcTh .alert{margin:0;flex:1;font-size:13px;padding:6px 8px}.vcX{border:0;background:none;font-size:18px;padding:4px 6px;color:var(--muted,#5f6d7d)}
+.vcMenu{position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center}.vcMenu .m{background:var(--card,#fff);border-radius:16px;margin:12px;width:100%;max-width:480px;overflow:hidden}
+.vcMenu button{display:block;width:100%;border:0;border-bottom:1px solid var(--line,#dbe3ec);background:none;padding:15px 16px;font-size:16px;text-align:left;color:var(--fg,#0f1b29)}.vcMenu button:last-child{border:0;text-align:center;color:var(--accent,#1b6aa5);font-weight:700}</style>
+   <div class="tiny muted">Gõ, đọc bằng 🎤 bàn phím, hoặc <b>chạm giữ vào ô → Dán</b> (chữ hoặc ảnh copy từ Zalo, Facebook, Messenger…). Tên khách / địa điểm ở dòng đầu hoặc dòng cuối, mỗi dòng 1 mặt hàng; có thể viết “tặng 10”, “KM 2”, “đổi 1”, “trả 2”, “đã CK”, “ghi chú …”.</div>
+   <div class="vcComp"><div id="vcImgBox"></div><div id="vcT" class="vcEd" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Nội dung tin nhắn đơn hàng" spellcheck="false" autocapitalize="sentences" data-ph="Gõ / dán tin nhắn hoặc ảnh đơn hàng…"></div></div>
+   <div class="row" style="gap:8px;padding:0"><button class="btn grow" id="vcAtt" type="button">📎 Ảnh / Chụp / Tệp</button><button class="btn" id="vcClr" type="button">Xoá</button></div>
    <button class="btn block" id="vcGo">Phân tích</button><div id="vcR"></div>`;
 /* v48: tên khách có thể ở DÒNG ĐẦU hoặc DÒNG CUỐI: dòng nào giống địa điểm hơn (ít giống tên hàng, không bắt đầu bằng số) thì là khách */
 function vMsgPrep(t){const L=String(t||'').replace(/\r/g,'').split('\n').map(x=>x.replace(/^\s*[-•*+·]+\s*/,'').trim()).filter(Boolean);if(!L.length)return '';
@@ -429,21 +435,21 @@ function vMsgPrep(t){const L=String(t||'').replace(/\r/g,'').split('\n').map(x=>
   const loc=L.splice(k,1)[0];return [(isKw(v)?'':'giao ')+loc,...L].join('\n')}
 const V_UN={kg:'ký',goi:'gói',hop:'hộp',qua:'quả',khay:'khay',thung:'thùng',tui:'túi',chai:'chai',lo:'lọ',hu:'hũ',nai:'nải',bo:'bó',cai:'cái',kien:'kiện',bao:'bao',cu:'củ',me:'mẹt',bat:'bát',cay:'cây',lon:'lon',set:'set',vi:'vỉ',mieng:'miếng',coc:'cốc'};
 /* v51: ĐỌC ẢNH ĐƠN HÀNG ở mục Dán tin nhắn (ảnh chụp tin nhắn Zalo, giấy viết tay): AI máy chủ (Gemini, chung hạn mức chi phí với đọc phiếu) đọc ra khách + dòng hàng → đổi thành chữ → bộ phân tích tin nhắn */
-function pickGallery(){return new Promise(res=>{const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.style.display='none';document.body.appendChild(inp);
+function pickGallery(acc,cap){return new Promise(res=>{const inp=document.createElement('input');inp.type='file';inp.accept=acc==null?'image/*':acc;if(cap)inp.setAttribute('capture',cap);inp.style.display='none';document.body.appendChild(inp);
   inp.onchange=()=>{const f=inp.files[0];inp.remove();res(f||null)};inp.click()})}
 async function clipImage(){try{if(!navigator.clipboard||!navigator.clipboard.read)return null;const it=await navigator.clipboard.read();for(const x of it){const t=x.types.find(y=>/^image\//.test(y));if(t)return await x.getType(t)}}catch(e){}return null}
 async function msgImgText(blob,box){let ph;try{ph=await compress(blob)}catch(e){box.innerHTML='<div class="alert r">Không đọc được ảnh này.</div>';return null}
-  box.innerHTML=`<img src="${ph}" style="width:100%;max-height:200px;object-fit:contain;border-radius:12px;background:#fff;border:1px solid var(--line,#e3e8ef)"><div class="alert" id="vcImgSt">🤖 Đang đọc ảnh… (khoảng 5–15 giây)</div>`;const st=box.querySelector('#vcImgSt');
+  box.innerHTML=`<div class="vcTh"><img src="${ph}" alt="Ảnh đơn hàng"><div class="alert" id="vcImgSt">🤖 Đang đọc ảnh… (khoảng 5–15 giây)</div><button class="vcX" type="button" aria-label="Bỏ ảnh" onclick="this.closest('.vcTh').remove()">✕</button></div>`;const st=box.querySelector('#vcImgSt');
   if(!window.vibaAI){st.className='alert w';st.textContent='Máy chủ chưa bật đọc ảnh.';return null}
   const prods=sortedProducts().filter(p=>/^(HH|TP)/i.test(p.code)&&!PROD_HIDE.test(' '+noAcc(p.name)+' ')).slice(0,90).map(p=>p.code+'|'+p.name).join('\n');
   let r;try{r=await Promise.race([window.vibaAI.slipRead({image:ph,products:prods,kind:'msg'}),new Promise(res=>setTimeout(()=>res({skip:'timeout'}),40000))])}catch(e){r={skip:'conn'}}
   if(!r||!r.ok||!r.data){const why={nokey:'chưa cài mã AI',budget:'đã dùng hết hạn mức chi phí tháng',daily:'đã dùng hết hạn mức hôm nay',quota:'Google báo hết lượt',timeout:'mạng chậm',error:'AI báo lỗi',conn:'lỗi kết nối'}[r&&r.skip]||'AI không đọc được';
-    st.className='alert w';st.textContent='Không đọc được ảnh ('+why+'). Gõ hoặc dán chữ vào ô dưới.';return null}
+    st.className='alert w';st.textContent='Không đọc được ảnh ('+why+'). Gõ hoặc dán chữ vào ô.';return null}
   const a=r.data,L=[];if(a.customer)L.push(String(a.customer).replace(/\s+/g,' ').trim());
   for(const x of a.lines||[]){const q=toNum(x.qty);if(!(q>0))continue;const p=x.code&&findProd(String(x.code).trim());const nm=p?p.name:String(x.name||'').trim();if(!nm)continue;
     L.push(q+' '+(x.unit?String(x.unit).trim()+' ':'')+nm+(toNum(x.gift)>0?' tặng '+toNum(x.gift):''))}
   if(a.paid==='paid')L.push('đã thanh toán');
-  st.className='alert g';st.innerHTML='✓ Đã đọc ảnh'+(a.unsure?' · <span class="tiny">chưa chắc: '+esc(a.unsure)+'</span>':'')+' – kiểm tra chữ ở ô dưới rồi xem kết quả.';
+  st.className='alert g';st.innerHTML='✓ Đã đọc ảnh'+(a.unsure?' · <span class="tiny">chưa chắc: '+esc(a.unsure)+'</span>':'')+' – kiểm tra chữ trong ô rồi xem kết quả.';
   return L.join('\n')}
 /* v53: Android (Chrome) gửi lại câu cộng dồn nhiều lần -> chỉ giữ bản dài nhất của mỗi đoạn */
 function vDedup(a){const out=[];const k=t=>noAcc(t).replace(/[^a-z0-9]+/g,' ').trim();
@@ -489,6 +495,24 @@ function voiceOrder(mode){const MSG=mode==='msg';const d=R.odraft||(R.odraft=new
    <textarea id="vcT" rows="3" placeholder="Nội dung đọc sẽ hiện ở đây (có thể sửa hoặc gõ tay)"></textarea>
    <button class="btn block" id="vcGo">Phân tích</button><div id="vcR"></div>`,b=>{
     const T=b.querySelector('#vcT'),Rb=b.querySelector('#vcR'),mic=b.querySelector('#vcMic');
+    /* v56: ô soạn tin kiểu ô chat (contenteditable) – chạm giữ → Dán được cả CHỮ và ẢNH (Zalo, Facebook…), 🎤 bàn phím đọc vào được */
+    if(MSG){const box=b.querySelector('#vcImgBox');
+      Object.defineProperty(T,'value',{get:()=>String(T.innerText||'').replace(/ /g,' ').replace(/\n{3,}/g,'\n\n').trim(),set:v=>{T.textContent=String(v||'');if(!T.textContent)T.innerHTML=''}});
+      const run=async f=>{if(!f)return;if(!/^image\//.test(f.type||'')&&!/\.(jpe?g|png|heic|heif|webp|gif|bmp)$/i.test(f.name||'')){box.innerHTML='<div class="alert w">Chỉ đọc được tệp ảnh (chụp màn hình, ảnh đơn, ảnh phiếu).</div>';return}
+        const t=await msgImgText(f,box);if(t){T.value=(T.value?T.value+'\n':'')+t;show()}};
+      const ins=t=>{T.focus();if(!document.execCommand||!document.execCommand('insertText',false,t)){T.textContent+=t}};
+      T.addEventListener('paste',e=>{const cd=e.clipboardData;if(!cd)return;const f=[...(cd.items||[])].find(x=>x.kind==='file'&&/^image\//.test(x.type))||null;
+        if(f){e.preventDefault();run(f.getAsFile());return}const t=cd.getData('text/plain');if(t){e.preventDefault();ins(t);setTimeout(()=>{if(T.value)show()},30)}});
+      T.addEventListener('drop',e=>{const f=e.dataTransfer&&[...e.dataTransfer.files].find(x=>/^image\//.test(x.type));if(f){e.preventDefault();run(f)}});
+      /* bàn phím Android (Gboard, Samsung) chèn ảnh trực tiếp: lấy ảnh ra để AI đọc */
+      T.addEventListener('beforeinput',e=>{const dt=e.dataTransfer;const f=dt&&[...(dt.files||[])].find(x=>/^image\//.test(x.type));if(f){e.preventDefault();run(f)}});
+      new MutationObserver(()=>{T.querySelectorAll('img').forEach(im=>{const src=im.src;im.remove();if(src)fetch(src).then(r=>r.blob()).then(bl=>run(new File([bl],'anh.png',{type:bl.type||'image/png'}))).catch(()=>{box.innerHTML='<div class="alert w">Không lấy được ảnh vừa dán – bấm 📎 để chọn ảnh.</div>'})});if(!T.textContent.trim()&&!T.querySelector('img')&&T.innerHTML!=='')T.innerHTML=''}).observe(T,{childList:true,subtree:true});
+      const att=b.querySelector('#vcAtt');att.onclick=()=>{const m=document.createElement('div');m.className='vcMenu';m.innerHTML='<div class="m"><button data-k="g">🖼️ Thư viện ảnh</button><button data-k="c">📷 Chụp ảnh</button><button data-k="f">📁 Chọn tệp</button><button data-k="x">Huỷ</button></div>';document.body.appendChild(m);
+        m.onclick=e=>{const k=(e.target.closest('[data-k]')||{}).dataset?.k;if(!k&&e.target!==m)return;m.remove();
+          if(k==='g')pickGallery('image/*').then(run);else if(k==='c')pickGallery('image/*','environment').then(run);else if(k==='f')pickGallery('').then(run)}};
+      b.querySelector('#vcClr').onclick=()=>{T.value='';box.innerHTML='';Rb.innerHTML='';T.focus()};
+      /* bật bàn phím ngay trong lượt bấm mở khung (iPhone chỉ cho bật bàn phím khi focus trong lượt chạm) */
+      try{T.focus();const r=document.createRange();r.selectNodeContents(T);r.collapse(false);const sl=getSelection();sl.removeAllRanges();sl.addRange(r)}catch(e){}}
     const show=()=>{P=vParse(MSG?vMsgPrep(T.value):T.value);const L=P.loc;
       locC=L?L.list.map(y=>y.x):[];const locSel=`<select id="vcLoc">${locOpts()}</select><input id="vcLocQ" placeholder="🔍 Gõ tìm địa điểm giao khác…" autocomplete="off" style="margin-top:6px">`;
       Rb.innerHTML=`<div class="sec">Kết quả – kiểm tra trước khi điền</div><div class="stack">
@@ -1579,7 +1603,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='55';
+const APP_BUILD='56';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
