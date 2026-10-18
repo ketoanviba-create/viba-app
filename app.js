@@ -461,12 +461,24 @@ function vDedup(a){const out=[];const k=t=>noAcc(t).replace(/[^a-z0-9]+/g,' ').t
 let _vAR=null;
 function vAiRecOK(){const s=ST();return !!(window.vibaAI&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&(window.AudioContext||window.webkitAudioContext))&&String(s.voiceAI??'1')!=='0'&&!(window._vAiOff&&Date.now()-window._vAiOff<6e5)}
 function vAiStop(){if(_vAR){try{_vAR.cancel()}catch(e){}_vAR=null}}
-function vRecStart(){const AC=window.AudioContext||window.webkitAudioContext;const ac=new AC();try{if(ac.state==='suspended')ac.resume()}catch(e){}
+/* v57: iPhone (Safari) – sau khi cấp micro, bộ xử lý âm thanh có lúc KHÔNG nhận được mẫu nào → app báo "Chưa nghe thấy gì".
+   Ghi song song bằng MediaRecorder (audio/webm hoặc audio/mp4 tuỳ máy – đã thử Gemini nghe được cả 2) làm dự phòng; còn PCM thì gửi WAV như cũ. */
+function vRecStart(){const AC=window.AudioContext||window.webkitAudioContext;const ac=new AC();try{if(ac.state!=='running')ac.resume()}catch(e){}
   return navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}}).then(st=>{
-    const src=ac.createMediaStreamSource(st);const pr=ac.createScriptProcessor(4096,1,1);const buf=[];let n=0;
+    try{if(ac.state!=='running')ac.resume()}catch(e){}
+    const src=ac.createMediaStreamSource(st);const pr=ac.createScriptProcessor(4096,1,1);const buf=[];let n=0;const sr=ac.sampleRate;
     pr.onaudioprocess=e=>{const d=e.inputBuffer.getChannelData(0);buf.push(new Float32Array(d));n+=d.length};src.connect(pr);pr.connect(ac.destination);
-    const end=()=>{try{pr.disconnect();src.disconnect()}catch(e){}st.getTracks().forEach(t=>t.stop());try{ac.close()}catch(e){}};
-    return {secs:()=>n/ac.sampleRate,cancel:end,stop:()=>{end();return vWav16(buf,n,ac.sampleRate)}}},e=>{try{ac.close()}catch(x){}throw e})}
+    let mr=null;const ch=[];const t0=Date.now();
+    try{if(window.MediaRecorder){const opt=['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg;codecs=opus'].find(t=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t));
+      mr=new MediaRecorder(st,opt?{mimeType:opt,audioBitsPerSecond:32000}:undefined);mr.ondataavailable=e=>{if(e.data&&e.data.size)ch.push(e.data)};mr.start(1000)}}catch(e){mr=null}
+    let ended=false;const end=()=>{if(ended)return;ended=true;try{pr.disconnect();src.disconnect()}catch(e){}st.getTracks().forEach(t=>t.stop());try{ac.close()}catch(e){}};
+    const pcmOK=()=>n>=sr*0.7;
+    return {secs:()=>pcmOK()?n/sr:(mr?(Date.now()-t0)/1000:n/sr),
+      cancel:()=>{try{if(mr&&mr.state!=='inactive')mr.stop()}catch(e){}end()},
+      stop:()=>new Promise(res=>{const fin=()=>{end();if(pcmOK())return res(vWav16(buf,n,sr));if(!ch.length)return res('');
+          const mt=String((mr&&mr.mimeType)||ch[0].type||'audio/mp4').split(';')[0]||'audio/mp4';const fr=new FileReader();
+          fr.onload=()=>res(String(fr.result).replace(/^data:[^,]*?;base64,/,'data:'+mt+';base64,'));fr.onerror=()=>res('');fr.readAsDataURL(new Blob(ch,{type:mt}))};
+        if(mr&&mr.state!=='inactive'){let done=false;const f1=()=>{if(!done){done=true;fin()}};mr.onstop=f1;setTimeout(f1,1500);try{mr.stop()}catch(e){f1()}}else fin()})}},e=>{try{ac.close()}catch(x){}throw e})}
 function vWav16(buf,n,sr){const R2=16000,ratio=sr/R2,m=Math.floor(n/ratio);const all=new Float32Array(n);let o=0;for(const b of buf){all.set(b,o);o+=b.length}
   const pcm=new Int16Array(m);for(let i=0;i<m;i++){const a=Math.floor(i*ratio),b=Math.min(n,Math.max(a+1,Math.floor((i+1)*ratio)));let s=0;for(let j=a;j<b;j++)s+=all[j];pcm[i]=Math.max(-1,Math.min(1,s/(b-a)))*0x7fff}
   const bytes=new Uint8Array(44+m*2),dv=new DataView(bytes.buffer);const w=(p,t)=>{for(let i=0;i<t.length;i++)dv.setUint8(p+i,t.charCodeAt(i))};
@@ -476,13 +488,13 @@ function vAiHints(){const h=[...new Set((R.orders||[]).slice(0,400).map(o=>Strin
   const p=sortedProducts().filter(p=>/^(HH|TP)/i.test(p.code)&&!PROD_HIDE.test(' '+noAcc(p.name)+' ')).slice(0,60).map(p=>p.name).join('; ');return {hints:h,products:p}}
 function vAiMic(mic,T,Rb,show,fb){let on=false,timer=null,busy=false;const idle=t=>{mic.textContent=t||'🎤 Nói lại'};
   const go=()=>{if(busy)return;
-    if(on){on=false;clearInterval(timer);const r=_vAR;_vAR=null;if(!r){idle();return}const secs=r.secs();const au=r.stop();
-      if(secs<0.7){idle();Rb.innerHTML='<div class="alert w">Chưa nghe thấy gì, bấm 🎤 và nói lại.</div>';return}
-      busy=true;mic.textContent='🤖 AI đang chép lời…';Rb.innerHTML='<div class="alert">🤖 AI đang chép lời (khoảng 3–10 giây)…</div>';
-      Promise.race([window.vibaAI.slipRead(Object.assign({kind:'voice',audio:au},vAiHints())),new Promise(z=>setTimeout(()=>z({skip:'timeout'}),45000))]).catch(()=>({skip:'conn'})).then(res=>{busy=false;idle();
+    if(on){on=false;clearInterval(timer);const r=_vAR;_vAR=null;if(!r){idle();return}const secs=r.secs();
+      if(secs<0.7){r.cancel();idle();Rb.innerHTML='<div class="alert w">Chưa nghe thấy gì, bấm 🎤 và nói lại.</div>';return}
+      busy=true;mic.textContent='🤖 AI đang chép lời…';Rb.innerHTML='<div class="alert">🤖 AI đang chép lời (khoảng 2–4 giây)…</div>';
+      Promise.race([r.stop().then(au=>au?window.vibaAI.slipRead(Object.assign({kind:'voice',audio:au},vAiHints())):{skip:'noaudio'}),new Promise(z=>setTimeout(()=>z({skip:'timeout'}),45000))]).catch(()=>({skip:'conn'})).then(res=>{busy=false;idle();
         if(res&&res.ok&&res.data&&String(res.data.text||'').trim()){const t=String(res.data.text).trim();T.value=(T.value.trim()?T.value.trim()+' ':'')+t;show()}
         else if(res&&res.ok){Rb.innerHTML='<div class="alert w">AI không nghe rõ lời, bấm 🎤 và nói lại to, rõ hơn.</div>'}
-        else{const why={nokey:'chưa cài mã AI',budget:'hết hạn mức chi phí AI tháng',daily:'hết hạn mức AI hôm nay',quota:'Google báo hết lượt',timeout:'mạng chậm',error:'AI báo lỗi',conn:'lỗi kết nối'}[res&&res.skip]||'AI không nghe được';
+        else{const why={nokey:'chưa cài mã AI',budget:'hết hạn mức chi phí AI tháng',daily:'hết hạn mức AI hôm nay',quota:'Google báo hết lượt',timeout:'mạng chậm',error:'AI báo lỗi',conn:'lỗi kết nối',noaudio:'máy chưa ghi được âm thanh'}[res&&res.skip]||'AI không nghe được';
           if(fb){window._vAiOff=Date.now();fb();mic.textContent='🎤 Nói lại';Rb.innerHTML='<div class="alert w">AI tạm thời không chép được lời ('+esc(why)+'). Đã chuyển sang giọng nói của điện thoại: bấm 🎤 Nói lại để đọc lại đơn.</div>';return}
           Rb.innerHTML='<div class="alert w">Không chép được lời ('+esc(why)+'). Bấm 🎤 nói lại, hoặc bấm vào ô trên rồi dùng 🎤 của bàn phím điện thoại.</div>'}});return}
     Rb.innerHTML='';idle('⏳ Đang bật micro…');vRecStart().then(r=>{_vAR=r;on=true;const t0=Date.now();const tick=()=>{if(!on)return;const s=Math.floor((Date.now()-t0)/1000);mic.textContent='🔴 Đang ghi âm '+s+'s – nói xong bấm vào đây';if(s>=45)go()};tick();timer=setInterval(tick,500)},
@@ -1603,7 +1615,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='56';
+const APP_BUILD='57';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
