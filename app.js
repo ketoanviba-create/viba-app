@@ -1531,7 +1531,7 @@ function render(){const role=myRole();const who=$('#who');
   if(!R.db){who.innerHTML=R.checked?'<span class="chip r">Chưa kết nối</span>':'<span class="chip">Đang kết nối…</span>';
     $('#view').innerHTML=R.checked?'<h1 class="big">VIBA FOOD</h1><div class="alert r">Không kết nối được máy chủ dữ liệu. Kiểm tra mạng rồi tải lại trang.</div>':'<div class="empty">Đang tải…</div>';$('#tabbar').hidden=true;return}
   if(!role){who.innerHTML=`<span class="chip">${esc(R.names[R.uid]||'Tài khoản mới')}</span>${window.vibaChangePw?'<button class="btn sm" onclick="vibaChangePw()">Đổi MK</button>':''}<button class="btn sm" onclick="vibaLogout()">Đăng xuất</button>`;$('#tabbar').hidden=true;$('#modeSw').innerHTML='';
-    $('#view').innerHTML=`<h1 class="big">Xin chào</h1><div class="card stack"><div style="font-weight:700;font-size:17px">Tài khoản chưa được phân quyền</div><div class="muted">App đã gửi yêu cầu tới quản lý. Khi được giao vai trò (Bán hàng, Giao hàng hoặc Thủ kho), màn hình làm việc sẽ tự hiện ra.</div>${R.staff.get(R.uid)&&R.staff.get(R.uid).active===false?'<div class="alert r">Tài khoản đang bị khóa.</div>':''}</div>`;return}
+    $('#view').innerHTML=`<h1 class="big">Xin chào</h1><div class="card stack"><div style="font-weight:700;font-size:17px">Tài khoản chưa được phân quyền</div><div class="muted">App đã gửi yêu cầu tới quản lý. Khi được giao vai trò (Bán hàng, Giao hàng hoặc Thủ kho), màn hình làm việc sẽ tự hiện ra.</div>${R.staff.get(R.uid)&&R.staff.get(R.uid).active===false?'<div class="alert r">Tài khoản đang bị khóa. Nếu bạn đã có tài khoản khác (đăng nhập bằng số điện thoại), bấm nút dưới để đăng nhập lại.</div>':''}<button class="btn block pri" onclick="vibaLogout()">🔄 Đăng xuất – đăng nhập tài khoản khác</button></div>`;return}
   if(role!=='admin')R.mode=role;else if(!R.mode)R.mode='admin';
   const tabs=TABS[R.mode];if(!tabs.some(t=>t[0]===R.tab))R.tab=tabs[0][0];
   who.innerHTML=`<span class="chip g">${ROLE_NAME[role]}</span><span>${esc(staffName(R.uid))}</span>${window.vibaChangePw?'<button class="btn sm" onclick="vibaChangePw()">Đổi MK</button>':''}<button class="btn sm" onclick="vibaLogout()">Đăng xuất</button>`;
@@ -1579,7 +1579,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='54';
+const APP_BUILD='55';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
