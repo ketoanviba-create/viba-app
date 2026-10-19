@@ -1100,6 +1100,7 @@ function viewKhoNew(v){if(!R.vdraft)R.vdraft=newVoucher('N');const d=R.vdraft,N=
    ${d.orderIds.length?`<div class="alert b">${N?'Nhập hàng đổi trả':'Xuất kho'} theo ${d.orderIds.length} đơn: ${esc(d.orderIds.join(', '))}</div>`:''}
    ${lk?`<div class="alert r">Kỳ đến ${dmy(ST().lockDate)} đã khóa sổ.</div>`:''}
    <button class="btn block" id="vVoice" style="font-size:16px">🎤 Đọc phiếu bằng giọng nói</button>
+   <button class="btn block" id="vPaste" style="font-size:16px;border:2px solid var(--accent,#1b6aa5);color:var(--accent,#1b6aa5);font-weight:700">💬 Dán tin nhắn phiếu</button>
    <div class="card stack" style="gap:12px">
     <div><div class="tiny muted" style="font-weight:700;margin-bottom:6px">${N?'Lý do nhập':'Lý do xuất'}</div><div class="seg">${V_REASON[d.type].map(t=>`<button data-vr="${esc(t)}" class="${d.reason===t?'on':''}">${t}</button>`).join('')}</div>${d.reason&&!V_REASON[d.type].includes(d.reason)?`<div class="tiny muted" style="margin-top:4px">Lý do cũ: ${esc(d.reason)}</div>`:''}</div>
     <label class="f">${N?'Người giao hàng':'Nhân viên giao hàng / người nhận'}<input id="vd_person" list="dlShip" value="${esc(d.person)}" placeholder="Chọn hoặc gõ tên" autocomplete="off"></label>
@@ -1116,7 +1117,7 @@ function viewKhoNew(v){if(!R.vdraft)R.vdraft=newVoucher('N');const d=R.vdraft,N=
   $$('[data-vt]').forEach(b=>b.onclick=()=>{if(d.id)return;if(d.type!==b.dataset.vt){d.type=b.dataset.vt;d.reason=V_REASON[d.type][0]}render()});
   $$('[data-vr]').forEach(b=>b.onclick=()=>{d.reason=b.dataset.vr;render()});
   $$('[data-vp]').forEach(b=>b.onclick=()=>{d.person=b.dataset.vp;render()});
-  $('#vVoice').onclick=voiceVoucher;
+  $('#vVoice').onclick=()=>voiceVoucher();$('#vPaste').onclick=()=>voiceVoucher('msg');
   [['vd_person','person'],['vd_partner','partner']].forEach(([id,k])=>{const e=$('#'+id);e.oninput=()=>d[k]=e.value;if(id==='vd_person')e.onchange=()=>{d.person=e.value;render()}});
   $$('[data-vdel]').forEach(b=>b.onclick=()=>{d.lines.splice(+b.dataset.vdel,1);render()});
   $$('[data-vstep]').forEach(b=>b.onclick=()=>{const [i,s]=b.dataset.vstep.split(':');const l=d.lines[+i];l.qty=Math.max(0,r3(toNum(l.qty)+(+s)));render()});
@@ -1137,13 +1138,39 @@ function vvParse(text){let t=' '+String(text||'')+' ';const out={type:null,reaso
     const s0=idx[best.i],s1=idx[best.i+best.k-1];if(s0!=null&&s1!=null){ws.splice(s0,s1-s0+1,',');rest=ws.join(' ')}}
   rest=rest.replace(/phiếu\s+(nhập|xuất)|(^|\s)(nhập|xuất)(\s+kho)?(?=\s)|xuất\s+(hủy|huỷ)|(hủy|huỷ)\s+hàng|hàng\s+(hủy|huỷ)|(^|\s)(hủy|huỷ)(?=\s)|trả lại|trả về|hàng trả|khách trả|nhà cung cấp|(^|\s)ncc(?=\s)|(^|\s)bán(?=\s)|người nhận|người giao|giao cho|(^|\s)cho(?=\s)|(^|\s)(anh|chị|em)(?=\s)/g,' , ');
   const P=vParse(', '+rest);out.lines=P.lines;out.unknown=P.unknown;if(P.loc&&P.loc.list&&P.loc.list[0]&&P.loc.sure)out.partner=P.loc.list[0].x.c.name;return out}
-function voiceVoucher(){const d=R.vdraft||(R.vdraft=newVoucher('N'));const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null,on=false,P=null,base='';
-  openSheet('🎤 Đọc phiếu',`<div class="tiny muted">Ví dụ: “Xuất bán cho Huy, chuối tiêu 20 ký, nem bùi 10 gói” · “Nhập hàng nhà cung cấp, chuối tiêu 300 ký” · “Xuất huỷ chuối tiêu 5 ký”.</div>
+/* v58: ô soạn tin kiểu ô chat dùng chung (Dán tin nhắn đơn hàng + Dán tin nhắn phiếu kho) */
+function msgComposer(b,T,Rb,show){const box=b.querySelector('#vcImgBox');
+  Object.defineProperty(T,'value',{get:()=>String(T.innerText||'').replace(/ /g,' ').replace(/\n{3,}/g,'\n\n').trim(),set:v=>{T.textContent=String(v||'');if(!T.textContent)T.innerHTML=''}});
+  const run=async f=>{if(!f)return;if(!/^image\//.test(f.type||'')&&!/\.(jpe?g|png|heic|heif|webp|gif|bmp)$/i.test(f.name||'')){box.innerHTML='<div class="alert w">Chỉ đọc được tệp ảnh (chụp màn hình, ảnh đơn, ảnh phiếu).</div>';return}
+    const t=await msgImgText(f,box);if(t){T.value=(T.value?T.value+'\n':'')+t;show()}};
+  const ins=t=>{T.focus();if(!document.execCommand||!document.execCommand('insertText',false,t)){T.textContent+=t}};
+  T.addEventListener('paste',e=>{const cd=e.clipboardData;if(!cd)return;const f=[...(cd.items||[])].find(x=>x.kind==='file'&&/^image\//.test(x.type))||null;
+    if(f){e.preventDefault();run(f.getAsFile());return}const t=cd.getData('text/plain');if(t){e.preventDefault();ins(t);setTimeout(()=>{if(T.value)show()},30)}});
+  T.addEventListener('drop',e=>{const f=e.dataTransfer&&[...e.dataTransfer.files].find(x=>/^image\//.test(x.type));if(f){e.preventDefault();run(f)}});
+  /* bàn phím Android (Gboard, Samsung) chèn ảnh trực tiếp: lấy ảnh ra để AI đọc */
+  T.addEventListener('beforeinput',e=>{const dt=e.dataTransfer;const f=dt&&[...(dt.files||[])].find(x=>/^image\//.test(x.type));if(f){e.preventDefault();run(f)}});
+  new MutationObserver(()=>{T.querySelectorAll('img').forEach(im=>{const src=im.src;im.remove();if(src)fetch(src).then(r=>r.blob()).then(bl=>run(new File([bl],'anh.png',{type:bl.type||'image/png'}))).catch(()=>{box.innerHTML='<div class="alert w">Không lấy được ảnh vừa dán – bấm 📎 để chọn ảnh.</div>'})});if(!T.textContent.trim()&&!T.querySelector('img')&&T.innerHTML!=='')T.innerHTML=''}).observe(T,{childList:true,subtree:true});
+  const att=b.querySelector('#vcAtt');att.onclick=()=>{const m=document.createElement('div');m.className='vcMenu';m.innerHTML='<div class="m"><button data-k="g">🖼️ Thư viện ảnh</button><button data-k="c">📷 Chụp ảnh</button><button data-k="f">📁 Chọn tệp</button><button data-k="x">Huỷ</button></div>';document.body.appendChild(m);
+    m.onclick=e=>{const k=(e.target.closest('[data-k]')||{}).dataset?.k;if(!k&&e.target!==m)return;m.remove();
+      if(k==='g')pickGallery('image/*').then(run);else if(k==='c')pickGallery('image/*','environment').then(run);else if(k==='f')pickGallery('').then(run)}};
+  b.querySelector('#vcClr').onclick=()=>{T.value='';box.innerHTML='';Rb.innerHTML='';T.focus()};
+  /* bật bàn phím ngay trong lượt bấm mở khung (iPhone chỉ cho bật bàn phím khi focus trong lượt chạm) */
+  try{T.focus();const r=document.createRange();r.selectNodeContents(T);r.collapse(false);const sl=getSelection();sl.removeAllRanges();sl.addRange(r)}catch(e){}}
+/* v58: thủ kho dán tin nhắn (chữ hoặc ảnh) để lập phiếu – mỗi dòng 1 mặt hàng */
+function vvMsgPrep(t){return String(t||'').replace(/\r/g,'').split('\n').map(x=>x.replace(/^\s*[-•*+·]+\s*/,'').trim()).filter(Boolean).join(', ')}
+const V_VMSG=()=>V_MSG.split('</style>')[0]+`</style>
+   <div class="tiny muted">Gõ, đọc bằng 🎤 bàn phím, hoặc <b>chạm giữ vào ô → Dán</b> (chữ hoặc ảnh copy từ Zalo…). Dòng đầu có thể ghi loại phiếu / người nhận, ví dụ “Xuất bán cho Huy”, “Nhập hàng nhà cung cấp”, “Xuất huỷ”; các dòng sau mỗi dòng 1 mặt hàng: “Chuối tiêu 20 ký”, “Nem bùi 10 gói”.</div>
+   <div class="vcComp"><div id="vcImgBox"></div><div id="vvT" class="vcEd" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Nội dung tin nhắn phiếu kho" spellcheck="false" autocapitalize="sentences" data-ph="Gõ / dán tin nhắn hoặc ảnh phiếu…"></div></div>
+   <div class="row" style="gap:8px;padding:0"><button class="btn grow" id="vcAtt" type="button">📎 Ảnh / Chụp / Tệp</button><button class="btn" id="vcClr" type="button">Xoá</button></div>
+   <button class="btn block" id="vvGo">Phân tích</button><div id="vvR"></div>`;
+function voiceVoucher(mode){const MSG=mode==='msg';const d=R.vdraft||(R.vdraft=newVoucher('N'));const SR=MSG?null:(window.SpeechRecognition||window.webkitSpeechRecognition);let rec=null,on=false,P=null,base='';
+  openSheet(MSG?'💬 Dán tin nhắn phiếu':'🎤 Đọc phiếu',MSG?V_VMSG():`<div class="tiny muted">Ví dụ: “Xuất bán cho Huy, chuối tiêu 20 ký, nem bùi 10 gói” · “Nhập hàng nhà cung cấp, chuối tiêu 300 ký” · “Xuất huỷ chuối tiêu 5 ký”.</div>
    ${SR?'<button class="btn block" id="vvMic" style="font-size:16px;padding:14px">🔴 Đang nghe… (bấm để dừng)</button>':'<div class="alert w">Trình duyệt này chưa cho nhận giọng nói trực tiếp. Bấm vào ô dưới rồi bấm 🎤 trên bàn phím điện thoại để đọc.</div>'}
    <textarea id="vvT" rows="3" placeholder="Nội dung đọc sẽ hiện ở đây (có thể sửa hoặc gõ tay)"></textarea>
    <button class="btn block" id="vvGo">Phân tích</button><div id="vvR"></div>`,b=>{
     const T=b.querySelector('#vvT'),Rb=b.querySelector('#vvR'),mic=b.querySelector('#vvMic');
-    const show=()=>{P=vvParse(T.value);const ty=d.id?d.type:(P.type||d.type);const rs=V_REASON[ty];const rsn=P.reason&&rs.includes(P.reason)?P.reason:(rs.includes(d.reason)?d.reason:rs[0]);
+    if(MSG)msgComposer(b,T,Rb,()=>show());
+    const show=()=>{P=vvParse(MSG?vvMsgPrep(T.value):T.value);const ty=d.id?d.type:(P.type||d.type);const rs=V_REASON[ty];const rsn=P.reason&&rs.includes(P.reason)?P.reason:(rs.includes(d.reason)?d.reason:rs[0]);
       Rb.innerHTML=`<div class="stack" style="margin-top:8px">
        <div class="group"><div class="row"><div class="grow"><div class="t">${ty==='N'?'Phiếu nhập':'Phiếu xuất'} · <select id="vvRs" style="width:auto;min-height:0;padding:4px 8px;display:inline-block">${rs.map(x=>`<option ${x===rsn?'selected':''}>${x}</option>`).join('')}</select></div>
         <div class="s">${ty==='N'?'Người giao':'Người nhận'}: <input id="vvPs" list="dlShip" value="${esc(P.person||d.person||'')}" style="min-height:0;padding:4px 8px;margin-top:4px"></div></div></div></div>
@@ -1615,7 +1642,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='57';
+const APP_BUILD='58';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
