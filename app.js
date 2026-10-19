@@ -439,16 +439,18 @@ function vMsgPrep(t){_vMsgLine='';const L=String(t||'').replace(/\r/g,'').split(
    VD "Easy 136 hồ tùng mậu" → Easymart (09.BTL) E04. Diamond 136 Hồ Tùng Mậu, không nhầm sang PT mart Goldmark. */
 const V_LSTOP=new Set(['giao','cho','tai','den','toi','khach','hang','dia','diem','so','duong','pho','phuong','quan','tp','ha','noi','hn','viet','nam','sdt','dt','lh']);
 let _lliSrc=null,_lli=null;
-function vLocLineIdx(){const idx=locIndex();if(_lliSrc===idx&&_lli)return _lli;const df=new Map();const ent=[];
+function vLocLineIdx(){const idx=locIndex();if(_lliSrc===idx&&_lli)return _lli;const df=new Map();const ent=[];const nk=new Map(),nn=new Set();
   const tk=t=>{const a=noAcc(String(t||'').replace(/^\s*\(\s*\d{1,2}\s*\.[^)]*\)\s*/,'')).split(/[^a-z0-9]+/).filter(Boolean);const s=new Set(a);for(let i=0;i+1<a.length;i++)s.add(a[i]+a[i+1]);return s};
-  for(const x of idx){if(!x.loc)continue;const L=tk(x.loc);let N=tk(x.c.name);if([...N].every(w=>L.has(w)))N=new Set();/* khách lẻ: tên = địa chỉ → không cộng điểm tên */const u=new Set([...L,...N]);for(const w of u)df.set(w,(df.get(w)||0)+1);ent.push({x,L,N})}
-  _lliSrc=idx;_lli={df,ent,n:ent.length};return _lli}
+  for(const x of idx){if(!x.loc)continue;const L=tk(x.loc);let N=tk(x.c.name);if([...N].every(w=>L.has(w)))N=new Set();/* khách lẻ: tên = địa chỉ → không cộng điểm tên */const u=new Set([...L,...N]);for(const w of u)df.set(w,(df.get(w)||0)+1);const ck=x.c.code||x.c.name;for(const w of u){if(!nk.has(w))nk.set(w,new Set());nk.get(w).add(ck)}for(const w of N)nn.add(w);ent.push({x,L,N})}
+  /* v60: từ ĐẶC TRƯNG của tên khách (chỉ 1-2 khách có, vd "easymart", "tmart") */const nd=new Set();for(const [w,S] of nk)if(nn.has(w)&&S.size<=2&&w.length>=3&&!/^\d+$/.test(w))nd.add(w);
+  _lliSrc=idx;_lli={df,ent,n:ent.length,nd};return _lli}
 function vLocLineMatch(line){const raw=String(line||'').replace(/^\s*\(\s*\d{1,2}\s*\.[^)]*\)\s*/,'');const a=noAcc(raw).split(/[^a-z0-9]+/).filter(w=>w&&!V_LSTOP.has(w));if(!a.length)return null;
   const I=vLocLineIdx();const idf=w=>Math.log((I.n+1)/((I.df.get(w)||0)+1));const q=[...new Set(a)];for(let i=0;i+1<a.length;i++){const b=a[i]+a[i+1];if(I.df.has(b)&&!q.includes(b))q.push(b)}
   const qw=q.map(w=>[w,idf(w)]);const qmax=a.filter((w,i,s)=>s.indexOf(w)===i).reduce((t,w)=>t+idf(w),0)||1;
   const pre=(set,w)=>{if(w.length<4||/^\d+$/.test(w))return false;for(const y of set)if((y.length>=4&&y.startsWith(w))||(y.length>=5&&w.startsWith(y)))return true;return false};
-  const R=[];for(const e of I.ent){let sc=0;for(const [w,f] of qw){if(e.N.has(w))sc+=f*1.5;else if(e.L.has(w))sc+=f;else if(pre(e.N,w))sc+=f*1.2;else if(pre(e.L,w))sc+=f*.8}if(sc>0)R.push({x:e.x,sc,len:e.x.loc.length})}
-  R.sort((p,r)=>r.sc-p.sc||p.len-r.len);if(!R.length)return null;const top=R[0];const sec=R.find(y=>y.x.loc!==top.x.loc);const rel=top.sc/qmax;
+  const R=[];for(const e of I.ent){let sc=0,nm=0;for(const [w,f] of qw){if(e.N.has(w)){sc+=f*1.5;if(I.nd.has(w))nm+=f}else if(e.L.has(w))sc+=f;else if(pre(e.N,w)){sc+=f*1.2;if([...e.N].some(y=>I.nd.has(y)&&(y.startsWith(w)||w.startsWith(y))))nm+=f*.8}else if(pre(e.L,w))sc+=f*.8}if(sc>0)R.push({x:e.x,sc,nm,len:e.x.loc.length})}
+  /* v60: có tên khách đặc trưng (Easymart…) → ưu tiên các điểm giao của đúng khách đó, rồi mới xét địa chỉ */
+  R.sort((p,r)=>(r.nm>0)-(p.nm>0)||r.sc-p.sc||p.len-r.len);if(!R.length)return null;const top=R[0];const sec=R.find(y=>y.x.loc!==top.x.loc);const rel=top.sc/qmax;
   return {said:raw.trim(),list:R.slice(0,6).map(y=>({x:y.x,sc:y.sc})),sc:rel>=.5?1:rel,rel,sure:rel>=.9&&(!sec||top.sc>sec.sc*1.15)}}
 const V_UN={kg:'ký',goi:'gói',hop:'hộp',qua:'quả',khay:'khay',thung:'thùng',tui:'túi',chai:'chai',lo:'lọ',hu:'hũ',nai:'nải',bo:'bó',cai:'cái',kien:'kiện',bao:'bao',cu:'củ',me:'mẹt',bat:'bát',cay:'cây',lon:'lon',set:'set',vi:'vỉ',mieng:'miếng',coc:'cốc'};
 /* v51: ĐỌC ẢNH ĐƠN HÀNG ở mục Dán tin nhắn (ảnh chụp tin nhắn Zalo, giấy viết tay): AI máy chủ (Gemini, chung hạn mức chi phí với đọc phiếu) đọc ra khách + dòng hàng → đổi thành chữ → bộ phân tích tin nhắn */
@@ -1661,7 +1663,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='59';
+const APP_BUILD='60';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
