@@ -760,7 +760,7 @@ function deliverSheet(o){const d={lines:o.lines.map(l=>Object.assign({},l,{src:'
         await R.db.doc('orders/'+o.id).update(up);gpL.then(c=>learnLoc(o,c)).catch(()=>{});toast('Đã giao đơn '+o.no);closeSheet()}catch(x){e.target.disabled=false;m.innerHTML='<div class="alert r">Không lưu được ('+esc(x.code||'lỗi')+').</div>'}}};
   openSheet('Giao đơn '+o.no,'',draw)}
 function viewShipTodo(v){const L=R.orders.filter(o=>(o.status==='new'&&!o.shipId)||(o.status==='shipping'&&o.shipId===R.uid)||(o.status==='new'&&o.shipId===R.uid));
-  const mine=L.filter(o=>o.shipId===R.uid),free0=L.filter(o=>!o.shipId),free=free0.filter(o=>inRt(o)&&inDay(o));const sortF=(a,b)=>((a.dlvDate||a.date)+a.no).localeCompare((b.dlvDate||b.date)+b.no);
+  const mine=L.filter(o=>o.shipId===R.uid),free0=L.filter(o=>!o.shipId),free=free0.filter(o=>inRt(o)&&inDay(o));/* v63: đơn cũ nhất lên trước – theo ngày lên đơn, rồi giờ tạo, rồi số đơn */const sortF=(a,b)=>String(a.date||'').localeCompare(String(b.date||''))||(toNum(a.createdAt)||0)-(toNum(b.createdAt)||0)||String(a.no).localeCompare(String(b.no));
   const sel=shipRtSel(),mr=myRoutes(),fd=free0.filter(inDay),nMine=fd.filter(o=>mr.includes(routeOf(o)||'none')).length;
   const rtNames=sel.mode==='all'?'Tất cả tuyến':sel.ids.map(rtLabel).join(' + '),rtCodes=sel.mode==='all'?'':sel.ids.map(id=>((routeById(id)||{}).codes||[]).join(' · ')).filter(Boolean).join(' · ');
   const dayTxt=!R.ui.shipDay?'Tất cả ngày':(R.ui.shipDay===today()?'Hôm nay · ':R.ui.shipDay===isoAdd(today(),1)?'Ngày mai · ':'')+wdName(R.ui.shipDay)+' '+dmy(R.ui.shipDay);
@@ -1719,7 +1719,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='62';
+const APP_BUILD='63';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
