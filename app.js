@@ -1626,19 +1626,22 @@ function vdDay(){return R.ui.vdDay||today()}
 function vdStat(o){if(o.status==='done')return o.paid?['g','Đã giao · '+(o.payMethod==='transfer'?'CK':o.payMethod==='cash'?'TM':'đã thu')]:['r','Đã giao · Nợ'];if(o.status==='shipping'||o.shipId)return['b','Đang giao'];return['w','Chờ nhận']}
 function viewVanDon(v){const day=vdDay();const L=R.orders.filter(o=>o.status!=='cancel'&&(o.dlvDate||o.date)===day);
   const wait=L.filter(o=>o.status==='new'&&!o.shipId),ing=L.filter(o=>o.status!=='done'&&o.status!=='new'||o.status==='new'&&o.shipId),done=L.filter(o=>o.status==='done'),owe=done.filter(o=>!o.paid);
-  const groups=new Map();for(const o of L){const k=o.status==='new'&&!o.shipId?'':o.shipId||'';if(!groups.has(k))groups.set(k,[]);groups.get(k).push(o)}
+  const vf=R.ui.vdF||'',FL={wait:['Chờ nhận',wait],ing:['Đang giao',ing],done:['Đã giao',done],owe:['Chưa thu',owe]},LF=vf&&FL[vf]?FL[vf][1]:L;
+  const groups=new Map();for(const o of LF){const k=o.status==='new'&&!o.shipId?'':o.shipId||'';if(!groups.has(k))groups.set(k,[]);groups.get(k).push(o)}
   const keys=[...groups.keys()].sort((a,b)=>(a===''?1:0)-(b===''?1:0)||staffName(a).localeCompare(staffName(b),'vi'));
   const rtOf=sid=>RT().filter(r=>r.ship===sid).map(r=>'T'+r.id).join(', ');
   const tm=isoAdd(today(),1);
   v.innerHTML=`<h1 class="big">Vận đơn</h1><div class="stack">
    <div class="seg"><button data-vdd="${today()}" class="${day===today()?'on':''}">Hôm nay ${dm(today())}</button><button data-vdd="${tm}" class="${day===tm?'on':''}">Ngày mai</button><button id="vdPick" class="${day!==today()&&day!==tm?'on':''}">${day!==today()&&day!==tm?dmy(day):'Chọn ngày'}</button></div>
-   <div class="kpis"><div class="kpi w"><div class="l">Chờ nhận</div><div class="v">${wait.length}</div></div><div class="kpi"><div class="l">Đang giao</div><div class="v">${ing.length}</div></div><div class="kpi g"><div class="l">Đã giao</div><div class="v">${done.length}</div></div><div class="kpi ${owe.length?'r':''}"><div class="l">Chưa thu</div><div class="v">${owe.length}</div></div></div>
+   <div class="kpis">${[['wait','w'],['ing',''],['done','g'],['owe',owe.length?'r':'']].map(([k,c])=>`<div class="kpi ${c} tap" data-vdf="${k}" role="button" style="cursor:pointer;${vf===k?'outline:2px solid var(--pri,#2b7de9);outline-offset:-2px':''}"><div class="l">${FL[k][0]}${vf===k?' ✓':''}</div><div class="v">${FL[k][1].length}</div></div>`).join('')}</div>
+   ${vf&&FL[vf]?`<div class="hrow" style="justify-content:space-between"><span class="small">Đang lọc: <b>${FL[vf][0]}</b> · ${LF.length} đơn · ${vnd(LF.reduce((s,o)=>s+orderTotal(o),0))}</span><button class="btn sm" id="vdFx">✕ Xem tất cả</button></div>`:''}
    ${keys.length?keys.map(k=>{const G=groups.get(k).sort((a,b)=>(a.status==='done')-(b.status==='done')||String(a.custName).localeCompare(String(b.custName),'vi'));const nI=G.filter(o=>o.status!=='done').length,nD=G.filter(o=>o.status==='done').length,nO=G.filter(o=>o.status==='done'&&!o.paid).length;const sum=G.reduce((s,o)=>s+orderTotal(o),0);
      return `<div class="card stack" style="gap:6px"><div class="hrow" style="justify-content:space-between"><b>${k?'🚚 '+esc(staffName(k))+(rtOf(k)?' · '+rtOf(k):''):'⏳ Chưa có ship nhận'}</b><span class="tiny muted">${G.length} đơn · ${vnd(sum)}</span></div>
       ${k?`<div class="hrow">${nI?`<span class="chip b">Đang giao ${nI}</span>`:''}${nD?`<span class="chip g">Đã giao ${nD}</span>`:''}${nO?`<span class="chip r">Chưa thu ${nO}</span>`:''}</div>`:''}
-      ${G.map(o=>{const [c,l]=vdStat(o);const rt=routeOf(o);return `<div class="row tap" data-vdo="${esc(o.id)}" style="padding:6px 0;min-height:0;border-top:1px solid var(--line,#eef2f6)"><div class="grow"><div style="font-size:14px">${esc(o.custName)}</div><div class="tiny muted ell">${esc(o.address||'')}${!k&&rt?' · T'+esc(rt):''} · ${esc(o.no)}</div></div><div style="text-align:right"><span class="chip ${c}">${l}</span><div class="tiny">${vnd(orderTotal(o))}</div></div></div>`}).join('')}</div>`}).join(''):'<div class="empty"><b>Không có đơn giao ngày '+dmy(day)+'</b></div>'}
+      ${G.map(o=>{const [c,l]=vdStat(o);const rt=routeOf(o);return `<div class="row tap" data-vdo="${esc(o.id)}" style="padding:6px 0;min-height:0;border-top:1px solid var(--line,#eef2f6)"><div class="grow"><div style="font-size:14px">${esc(o.custName)}</div><div class="tiny muted ell">${esc(o.address||'')}${!k&&rt?' · T'+esc(rt):''} · ${esc(o.no)}</div></div><div style="text-align:right"><span class="chip ${c}">${l}</span><div class="tiny">${vnd(orderTotal(o))}</div></div></div>`}).join('')}</div>`}).join(''):'<div class="empty"><b>'+(vf&&FL[vf]?'Không có đơn "'+FL[vf][0]+'" ngày ':'Không có đơn giao ngày ')+dmy(day)+'</b></div>'}
    <div class="tiny muted">Bấm vào đơn để xem mặt hàng, số lượng. Thủ kho chỉ xem, không sửa đơn.</div></div>`;
   $$('[data-vdd]').forEach(b=>b.onclick=()=>{R.ui.vdDay=b.dataset.vdd;render()});
+  $$('[data-vdf]').forEach(b=>b.onclick=()=>{R.ui.vdF=R.ui.vdF===b.dataset.vdf?'':b.dataset.vdf;render()});{const x=$('#vdFx');if(x)x.onclick=()=>{R.ui.vdF='';render()}}
   $('#vdPick').onclick=()=>{const i=document.createElement('input');i.type='date';i.value=day;i.style.cssText='position:fixed;opacity:0;top:0;left:0';document.body.appendChild(i);i.onchange=()=>{if(i.value){R.ui.vdDay=i.value;render()}i.remove()};i.onblur=()=>setTimeout(()=>i.remove(),500);try{i.showPicker?i.showPicker():i.click()}catch(e){i.click()}};
   $$('[data-vdo]').forEach(r=>r.onclick=()=>vdDetail(L.find(o=>o.id===r.dataset.vdo)))}
 function vdDetail(o){if(!o)return;const [c,l]=vdStat(o);
@@ -1719,7 +1722,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='64';
+const APP_BUILD='65';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
