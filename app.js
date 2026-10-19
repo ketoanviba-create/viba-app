@@ -665,11 +665,11 @@ async function saveOrder(){const d=R.odraft,msg=$('#oMsg');d._err='';const err=t
   if(d.id){const o=R.orders.find(x=>x.id===d.id);if(!o||o.status!=='new'){btn.disabled=false;return err('Đơn đã được nhận giao, không sửa được nữa.')}}
   /* GỬI NỀN: màn hình chuyển ngay, đơn hiện ngay trong danh sách; máy chủ ghi phía sau. Lỗi mạng → trả lại đơn nháp để bấm Gửi lại. */
   const mode=R.mode,wasShip=mode==='ship',arise=wasShip&&!d.id,dv=arise&&d.delivered!==false;
-  const jobs=[];const pre=(list,oid)=>list.map(p=>{if(p.id)return p.id;const id=oid+'-pay-'+uidShort();jobs.push(()=>R.db.doc('photos/'+id).set({data:p.data,orderId:oid,kind:'pay',by:R.uid,at:Date.now()}).then(()=>R.photoCache.set(id,p.data)));return id});
+  const jobs=[];const pre=(list,oid,kd)=>list.map(p=>{if(p.id)return p.id;kd=kd||'pay';const id=oid+'-'+kd+'-'+uidShort();jobs.push(()=>R.db.doc('photos/'+id).set({data:p.data,orderId:oid,kind:kd,by:R.uid,at:Date.now()}).then(()=>R.photoCache.set(id,p.data)));return id});
   R.odraft=newOrderDraft();R.tab=wasShip?(dv||d.id?'done':'todo'):'orders';render();toast(d.id?'Đang lưu đơn…':'Đang gửi đơn…');
   (async()=>{try{
     if(d.id){base.payPhotos=pre(d.payPhotos,d.id);await Promise.all(jobs.map(f=>f()));await R.db.doc('orders/'+d.id).update(Object.assign(base,{updatedAt:Date.now(),updatedBy:R.uid}));toast('✓ Đã lưu đơn '+(d.no||''))}
-    else{let no=nextNo('DH',d.date,R.orders);base.payPhotos=pre(d.payPhotos,no);if(d.slipPhotos&&d.slipPhotos.length)base.slipPhotos=pre(d.slipPhotos,no);const now=Date.now();
+    else{let no=nextNo('DH',d.date,R.orders);base.payPhotos=pre(d.payPhotos,no);if(d.slipPhotos&&d.slipPhotos.length)base.slipPhotos=pre(d.slipPhotos,no,'slip');const now=Date.now();
       const mk=async()=>{for(let k=0;k<40;k++){while(R.orders.some(o=>o.id===no))no=bumpNo(no);
           try{await R.db.doc('orders/'+no).create(Object.assign({},base,{no,date:d.date,saleId:R.uid,status:arise?(dv?'done':'shipping'):'new',shipId:arise?R.uid:null,outside:false,retPhotos:[],createdAt:now},arise?{arising:true,saleLines:lines,shipAt:now}:{},dv?{doneAt:now}:{}));return}
           catch(e){if(e.code!=='exists')throw e;no=bumpNo(no)}}throw{message:'không cấp được số đơn'}};
@@ -1719,7 +1719,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='63';
+const APP_BUILD='64';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
