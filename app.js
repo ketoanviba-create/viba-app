@@ -219,7 +219,9 @@ function nextCustNo(prefix,ym){const re=new RegExp('^'+prefix+ym+'(\\d{2,})$','i
 function newCustomer(after,preName){const S={pl:'',pay:'tt',rt:'',rt2:'',inv:false,mst:'',name:'',bill:'',email:'',loc:preName||'',phone:'',grp:undefined,mstMsg:'',busy:false};
   const prefix=()=>S.pay==='cn'?'KH':(S.rt==='20.TỈNH'?'NLT':'TTL');const ym=()=>{const d=today();return d.slice(0,4)+d.slice(5,7)};
   const locFull=()=>{const l=S.loc.trim();if(!l)return'';if(/^\s*\(\s*\d{2}\./.test(l)||!S.rt)return l;if(S.rt==='20.TỈNH')return '(20.TỈNH)'+(S.rt2?'('+S.rt2+')':'')+' '+l;return '('+S.rt+') '+l};
-  const code=()=>S.inv?(S.mst.trim()?prefix()+S.mst.trim().replace(/\s+/g,''):''):nextCustNo(prefix(),ym());
+  /* v67: cùng tên, cùng MST nhưng điểm giao khác → mã MST đã có thì tạo mã mới đầu mã + năm + tháng + STT */
+  const mstCode=()=>S.inv&&S.mst.trim()?prefix()+S.mst.trim().replace(/\s+/g,''):'';const mstDup=()=>{const m=mstCode();return m?findCust(m):null};
+  const code=()=>S.inv?(S.mst.trim()?(mstDup()?nextCustNo(prefix(),ym()):mstCode()):''):nextCustNo(prefix(),ym());
   const auto=()=>S.grp===undefined?autoGroup((S.inv?S.name+' ':'')+S.loc):S.grp;
   const draw=b=>{const g=auto(),c=code(),ex=c&&findCust(c);
     b.innerHTML=`<div class="stack">
@@ -246,7 +248,8 @@ function newCustomer(after,preName){const S={pl:'',pay:'tt',rt:'',rt2:'',inv:fal
       <label class="f">Số điện thoại<input id="nc_phone" value="${esc(S.phone)}" inputmode="tel"></label>
      </div>
      <div style="background:var(--blue-soft,#e7f0fa);border:1.5px solid #1b6aa5;border-radius:12px;padding:12px 14px"><div class="tiny muted">Mã khách hàng (app tự tạo)</div><div style="font-size:24px;font-weight:800;color:#1b6aa5;letter-spacing:.5px">${esc(c||'—')}</div>
-      <div class="tiny" style="margin-top:4px">${S.pay==='cn'?'Khách công nợ → đầu mã <b>KH</b>':S.rt==='20.TỈNH'?'Khách tỉnh, thanh toán luôn → đầu mã <b>NLT</b>':'Khách Hà Nội, thanh toán luôn → đầu mã <b>TTL</b>'}${S.inv?' + MST':' + năm '+ym().slice(0,4)+' + tháng '+ym().slice(4)+' + STT'}</div>
+      <div class="tiny" style="margin-top:4px">${S.pay==='cn'?'Khách công nợ → đầu mã <b>KH</b>':S.rt==='20.TỈNH'?'Khách tỉnh, thanh toán luôn → đầu mã <b>NLT</b>':'Khách Hà Nội, thanh toán luôn → đầu mã <b>TTL</b>'}${S.inv&&!mstDup()?' + MST':' + năm '+ym().slice(0,4)+' + tháng '+ym().slice(4)+' + STT'}</div>
+      ${S.inv&&mstDup()?`<div class="alert w" style="margin-top:8px">MST này đã có mã <b>${esc(mstCode())}</b> – ${esc(mstDup().name)}${mstDup().address?' (giao: '+esc(mstDup().address)+')':''}. App tạo <b>mã mới ${esc(c)}</b> cho điểm giao khác (cùng tên, cùng MST, hóa đơn vẫn theo MST). Nếu giao đúng điểm cũ thì đóng lại và chọn khách có sẵn. Nhớ báo kế toán tạo mã ${esc(c)} trên MISA.</div>`:''}
       ${!S.inv&&locFull()?`<div class="tiny muted" style="margin-top:4px">Tên khách hàng: <b style="color:var(--fg)">${esc(locFull())}</b></div>`:''}
       ${ex?`<div class="alert r" style="margin-top:8px">Mã ${esc(c)} đã có: ${esc(ex.name)}. Khách này đã có trong danh mục – đóng lại và chọn khách có sẵn.</div>`:''}</div>
      <div id="nc_msg"></div><button class="btn block pri" id="nc_save">Lưu khách hàng</button></div>`;
@@ -1742,7 +1745,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='66';
+const APP_BUILD='67';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
