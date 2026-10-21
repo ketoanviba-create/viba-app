@@ -692,9 +692,11 @@ function orderCard(o,opt){opt=opt||{};const items=(o.lines||[]).map(l=>esc(l.nam
    <div class="addr">${ICON.pin}<span>${esc(o.address||'Chưa có địa chỉ')}</span></div>
    <div class="tiny muted ell">${items}</div>
    <div class="hrow">${stChip(o)}${payChip(o)}${o.dlvDate&&o.status!=='done'&&o.status!=='cancel'?'<span class="chip" style="background:#e7f0fa;color:#1b6aa5">🚚 Giao '+dm(o.dlvDate)+'</span>':''}${o.arising?'<span class="chip b">Phát sinh</span>':''}${o.outside?'<span class="chip b">Ship ngoài</span>':''}<span class="tiny muted right">${esc(o.no)} · ${dm(o.date)}${opt.who?' · '+esc(staffName(o[opt.who])):''}</span></div>${opt.actions||''}</div>`}
+/* v68: thứ tự đơn trên app sale, ship: mới nhất → cũ nhất (ngày lên đơn, giờ tạo, số đơn) */
+function newFirst(a,b){return String(b.date||'').localeCompare(String(a.date||''))||(toNum(b.createdAt)||0)-(toNum(a.createdAt)||0)||String(b.no||'').localeCompare(String(a.no||''),undefined,{numeric:true})}
 function orderListView(v,list,opt){const q=noAcc(R.ui.ordQ);const st=R.ui.ordStatus;
   let L=list.filter(o=>(!st||o.status===st)&&qMatch(o.no+' '+o.custName+' '+o.address+' '+(o.lines||[]).map(l=>l.name).join(' '),q));
-  L.sort((a,b)=>(b.date+b.no).localeCompare(a.date+a.no));
+  L.sort(newFirst);
   v.innerHTML=`<h1 class="big">${opt.title}</h1><div class="stack"><input id="olQ" placeholder="Tìm khách, mã đơn, sản phẩm" value="${esc(R.ui.ordQ)}">
    <div class="seg">${[['','Tất cả'],['new','Chờ giao'],['shipping','Đang giao'],['done','Đã giao'],['cancel','Đã hủy']].map(([k,l])=>`<button data-ost="${k}" class="${st===k?'on':''}">${l}</button>`).join('')}</div>
    ${opt.extra||''}<div class="list">${L.slice(0,150).map(o=>orderCard(o,opt)).join('')||'<div class="empty"><b>Chưa có đơn nào</b>'+(opt.emptyHint||'')+'</div>'}</div>
@@ -773,7 +775,7 @@ function deliverSheet(o,pre,preMsg){const d=pre||{lines:o.lines.map(l=>Object.as
             toast('⚠ Chưa lưu được đơn '+o.no+' (mạng yếu)');d._noPhotoOk=1;deliverSheet(R.orders.find(z=>z.id===o.id)||o,d,'<div class="alert r">Chưa lưu được (mạng yếu?). Bấm Xác nhận đã giao lần nữa.</div>')}})()}catch(x){e.target.disabled=false;m.innerHTML='<div class="alert r">Không lưu được ('+esc(x.code||'lỗi')+').</div>'}}};
   openSheet('Giao đơn '+o.no,'',b=>{draw(b);if(preMsg){const m=b.querySelector('#dvMsg');if(m)m.innerHTML=preMsg}})}
 function viewShipTodo(v){const L=R.orders.filter(o=>(o.status==='new'&&!o.shipId)||(o.status==='shipping'&&o.shipId===R.uid)||(o.status==='new'&&o.shipId===R.uid));
-  const mine=L.filter(o=>o.shipId===R.uid),free0=L.filter(o=>!o.shipId),free=free0.filter(o=>inRt(o)&&inDay(o));/* v63: đơn cũ nhất lên trước – theo ngày lên đơn, rồi giờ tạo, rồi số đơn */const sortF=(a,b)=>String(a.date||'').localeCompare(String(b.date||''))||(toNum(a.createdAt)||0)-(toNum(b.createdAt)||0)||String(a.no).localeCompare(String(b.no));
+  const mine=L.filter(o=>o.shipId===R.uid),free0=L.filter(o=>!o.shipId),free=free0.filter(o=>inRt(o)&&inDay(o));/* v68: đơn MỚI NHẤT lên trước – theo ngày lên đơn, rồi giờ tạo, rồi số đơn (giảm dần) */const sortF=newFirst;
   const sel=shipRtSel(),mr=myRoutes(),fd=free0.filter(inDay),nMine=fd.filter(o=>mr.includes(routeOf(o)||'none')).length;
   const rtNames=sel.mode==='all'?'Tất cả tuyến':sel.ids.map(rtLabel).join(' + '),rtCodes=sel.mode==='all'?'':sel.ids.map(id=>((routeById(id)||{}).codes||[]).join(' · ')).filter(Boolean).join(' · ');
   const dayTxt=!R.ui.shipDay?'Tất cả ngày':(R.ui.shipDay===today()?'Hôm nay · ':R.ui.shipDay===isoAdd(today(),1)?'Ngày mai · ':'')+wdName(R.ui.shipDay)+' '+dmy(R.ui.shipDay);
@@ -1745,7 +1747,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='67';
+const APP_BUILD='68';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
