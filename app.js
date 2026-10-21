@@ -710,11 +710,36 @@ function orderListView(v,list,opt){const q=noAcc(R.ui.ordQ);const st=R.ui.ordSta
   L.sort(newFirst);
   v.innerHTML=`<h1 class="big">${opt.title}</h1><div class="stack"><input id="olQ" placeholder="Tìm khách, mã đơn, sản phẩm" value="${esc(R.ui.ordQ)}">
    <div class="seg">${[['','Tất cả'],['new','Chờ giao'],['shipping','Đang giao'],['done','Đã giao'],['cancel','Đã hủy']].map(([k,l])=>`<button data-ost="${k}" class="${st===k?'on':''}">${l}</button>`).join('')}</div>
-   ${opt.extra||''}<div class="list">${L.slice(0,150).map(o=>orderCard(o,opt)).join('')||'<div class="empty"><b>Chưa có đơn nào</b>'+(opt.emptyHint||'')+'</div>'}</div>
+   ${opt.extra||''}<div class="list">${L.slice(0,150).map(o=>orderCard(o,R.mode==='sale'&&o.status!=='cancel'?Object.assign({},opt,{actions:'<button class="btn sm" data-oimg="'+esc(o.id)+'" style="color:var(--accent,#1b6aa5);font-weight:700">🖼️ Ảnh đơn gửi khách</button>'}):opt)).join('')||'<div class="empty"><b>Chưa có đơn nào</b>'+(opt.emptyHint||'')+'</div>'}</div>
    ${L.length>150?'<div class="tiny muted">Đang hiện 150/'+L.length+' đơn mới nhất. Dùng ô tìm để lọc.</div>':''}</div>`;
-  const qi=$('#olQ');qi.oninput=()=>{R.ui.ordQ=qi.value;render()};
+  const qi=$('#olQ');qi.oninput=e=>{R.ui.ordQ=e.target.value;render()};
   $$('[data-ost]').forEach(b=>b.onclick=()=>{R.ui.ordStatus=b.dataset.ost;render()});
-  $$('[data-oid]').forEach(c=>c.onclick=()=>orderDetail(R.orders.find(o=>o.id===c.dataset.oid)))}
+  $$('[data-oid]').forEach(c=>c.onclick=e=>{if(e.target.closest('[data-oimg]'))return;orderDetail(R.orders.find(o=>o.id===c.dataset.oid))});$$('[data-oimg]').forEach(b=>b.onclick=e=>{e.stopPropagation();shareOrderImage(R.orders.find(o=>o.id===b.dataset.oimg))})}
+/* v72: xuất ảnh đơn đặt hàng (PNG) để sale gửi khách qua Zalo */
+async function orderImage(o){const W=1080,P=56,F='system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif';
+  const cv=document.createElement('canvas'),g=cv.getContext('2d');const font=(w,s)=>g.font=`${w} ${s}px ${F}`;
+  const wrap=(t,maxW)=>{const ws=String(t||'').split(/\s+/),out=[];let cur='';for(const w of ws){const n=cur?cur+' '+w:w;if(g.measureText(n).width>maxW&&cur){out.push(cur);cur=w}else cur=n}if(cur)out.push(cur);return out.length?out:['']};
+  const logo=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.onerror=()=>r(null);i.src='logo2.png'});
+  const L=(o.lines||[]).filter(l=>toNum(l.qty)||toNum(l.gift)),cols=[[P,50],[P+50,420],[P+470,80],[P+550,110],[P+660,150],[P+810,W-2*P-810]];
+  /* đo trước chiều cao */const ops=[];let y=0;const add=(h,fn)=>{const y0=y;ops.push(()=>fn(y0));y+=h};
+  add(150,y0=>{if(logo){const h=110,w=logo.width*h/logo.height;g.drawImage(logo,P,y0+20,w,h)}g.fillStyle='#1b6aa5';font('800',46);g.textAlign='right';g.fillText('ĐƠN ĐẶT HÀNG',W-P,y0+72);g.fillStyle='#555';font('600',28);g.fillText('Số '+(o.no||'')+' · Ngày '+dmy(o.date),W-P,y0+116);g.textAlign='left'});
+  add(16,y0=>{g.fillStyle='#1b6aa5';g.fillRect(P,y0+4,W-2*P,4)});
+  font('700',34);const nm=wrap(o.custName,W-2*P);font('400',28);const ad=wrap((o.address||'')+(o.phone?' · ĐT: '+o.phone:''),W-2*P);
+  add(30+nm.length*44+ad.length*38+50,y0=>{let yy=y0+52;g.fillStyle='#111';font('700',34);nm.forEach(t=>{g.fillText(t,P,yy);yy+=44});g.fillStyle='#555';font('400',28);ad.forEach(t=>{g.fillText(t,P,yy);yy+=38});g.fillStyle='#1b6aa5';font('600',28);g.fillText('Ngày giao: '+dmy(o.dlvDate||o.date),P,yy+4)});
+  add(64,y0=>{g.fillStyle='#e8f1fa';g.fillRect(P,y0+10,W-2*P,54);g.fillStyle='#1b6aa5';font('700',26);['#','Sản phẩm','SL','ĐVT','Đơn giá','Thành tiền'].forEach((t,i)=>{const [x,w]=cols[i];g.textAlign=i>=2?'right':'left';g.fillText(t,i>=2?x+w-10:x+10,y0+46)});g.textAlign='left'});
+  L.forEach((l,k)=>{font('600',28);const nl=wrap(l.name+(toNum(l.gift)?' (tặng '+fmt(l.gift)+')':'')+(toNum(l.disc)?' (KM '+fmt(l.disc)+'%)':''),cols[1][1]-20);const h=Math.max(1,nl.length)*36+28;
+    add(h,y0=>{if(k%2){g.fillStyle='#f7f9fc';g.fillRect(P,y0,W-2*P,h)}g.fillStyle='#111';font('400',28);g.fillText(String(k+1),cols[0][0]+10,y0+44);font('600',28);nl.forEach((t,i)=>g.fillText(t,cols[1][0]+10,y0+44+i*36));font('400',28);g.textAlign='right';
+      g.fillText(fmt(l.qty),cols[2][0]+cols[2][1]-10,y0+44);g.fillText(String(l.unit||''),cols[3][0]+cols[3][1]-10,y0+44);g.fillText(fmt(Math.round(isFee(l)?toNum(l.price):unitNet(l))),cols[4][0]+cols[4][1]-10,y0+44);font('700',28);g.fillText(fmt(lineAmt(l)),cols[5][0]+cols[5][1]-10,y0+44);g.textAlign='left';g.strokeStyle='#e3e8ef';g.beginPath();g.moveTo(P,y0+h);g.lineTo(W-P,y0+h);g.stroke()})});
+  add(90,y0=>{g.fillStyle='#111';font('800',38);g.fillText('TỔNG CỘNG',P+10,y0+62);g.textAlign='right';g.fillStyle='#c0392b';g.fillText(vnd(orderTotal(o)),W-P-10,y0+62);g.textAlign='left'});
+  add(56,y0=>{font('600',28);g.fillStyle=o.paid?'#1e9a5c':'#b25e00';g.fillText(o.paid?'Đã thanh toán '+vnd(o.paidAmount)+(o.payMethod?' ('+(PM_NAME[o.payMethod]||'')+')':''):'Thanh toán khi nhận hàng',P+10,y0+36)});
+  if(o.note){font('400',26);const nt=wrap('Ghi chú: '+o.note,W-2*P-20);add(nt.length*34+16,y0=>{g.fillStyle='#555';font('400',26);nt.forEach((t,i)=>g.fillText(t,P+10,y0+30+i*34))})}
+  add(130,y0=>{g.fillStyle='#e3e8ef';g.fillRect(P,y0+20,W-2*P,2);g.fillStyle='#555';font('400',26);g.fillText('Nhân viên kinh doanh: '+staffName(o.saleId),P,y0+66);g.fillStyle='#1b6aa5';font('700',26);g.fillText('VIBA FOOD – Cảm ơn quý khách!',P,y0+106)});
+  cv.width=W;cv.height=y+30;g.fillStyle='#fff';g.fillRect(0,0,W,cv.height);g.textBaseline='alphabetic';ops.forEach(f=>f());return cv.toDataURL('image/png')}
+async function shareOrderImage(o){toast('Đang tạo ảnh đơn…');let url;try{url=await orderImage(o)}catch(e){toast('Không tạo được ảnh');return}
+  const name='Don_'+(o.no||'')+'_'+String(o.custName||'').replace(/[^\p{L}\p{N}]+/gu,'_').slice(0,40)+'.png';
+  openSheet('Ảnh đơn '+o.no,`<img src="${url}" style="width:100%;border-radius:12px;border:1px solid var(--line,#e3e8ef);background:#fff"><button class="btn block pri" id="oiShare">📤 Gửi ảnh (Zalo, Messenger…)</button><a class="btn block" id="oiDl" href="${url}" download="${esc(name)}">⬇️ Tải ảnh về máy</a><div class="tiny muted">Trên điện thoại: bấm Gửi ảnh → chọn Zalo → chọn khách. Hoặc nhấn giữ vào ảnh để lưu.</div>`,b=>{
+    const sb=b.querySelector('#oiShare');sb.onclick=async()=>{try{const blob=await (await fetch(url)).blob();const f=new File([blob],name,{type:'image/png'});if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:'Đơn hàng '+o.no})}else{b.querySelector('#oiDl').click()}}catch(e){if(e&&e.name!=='AbortError')b.querySelector('#oiDl').click()}}})}
+
 function orderDetail(o){if(!o)return;const role=R.mode;const mine=o.saleId===R.uid;
   const canEdit=(role==='sale'&&mine||role==='admin')&&o.status==='new';
   const canDeliver=(role==='ship'&&(o.shipId===R.uid||!o.shipId)||role==='admin')&&(o.status==='new'||o.status==='shipping');
@@ -731,13 +756,15 @@ function orderDetail(o){if(!o)return;const role=R.mode;const mine=o.saleId===R.u
    ${canDeliver&&o.status==='new'&&role==='ship'?'<button class="btn block blue" data-a="take">Nhận giao đơn này</button>':''}
    ${canDeliver?'<button class="btn block pri" data-a="deliver">Xác nhận đã giao</button>':''}
    ${!o.paid&&o.status!=='cancel'?'<button class="btn block" data-a="pay">Cập nhật đã thanh toán</button>':''}
+   ${(role==='sale'||role==='admin')&&o.status!=='cancel'?'<button class="btn block" data-a="img" style="border:2px solid var(--accent,#1b6aa5);color:var(--accent,#1b6aa5);font-weight:700">🖼️ Xuất ảnh đơn đặt hàng (gửi khách)</button>':''}
+   ${role==='ship'&&o.status==='shipping'&&o.shipId===R.uid?'<button class="btn block" data-a="unclaim">↩ Trả về chờ giao (nhận nhầm)</button>':''}
    ${canEdit?'<button class="btn block" data-a="edit">Sửa đơn</button><button class="btn block danger" data-a="cancel">Hủy đơn</button>':''}
    ${role==='admin'&&o.status==='done'&&!o.px?'<button class="btn block" data-a="reopen">Mở lại đơn (chưa giao)</button>':''}`,b=>{
     bindPhotos(b,k=>k==='p'?pay:k==='s'?slp:rp,()=>{});
     const act=(k,f)=>{const x=b.querySelector(`[data-a="${k}"]`);if(x)x.onclick=f};
     act('take',async()=>{try{const s=await R.db.doc('orders/'+o.id).get();const cur=s.data();if(cur.shipId&&cur.shipId!==R.uid){toast('Đơn đã có người khác nhận.');return}
       await R.db.doc('orders/'+o.id).update({status:'shipping',shipId:R.uid,shipAt:Date.now()});toast('Đã nhận đơn '+o.no);closeSheet()}catch(e){toast('Lỗi: '+(e.code||''))}});
-    act('deliver',()=>{closeSheet();deliverSheet(o)});
+    act('deliver',()=>{closeSheet();deliverSheet(o)});act('img',()=>{closeSheet();shareOrderImage(o)});act('unclaim',()=>{closeSheet();shipUnclaim(o)});
     act('pay',()=>{closeSheet();paySheet(o)});
     act('edit',()=>{R.odraft={id:o.id,no:o.no,cust:o.cust,custName:o.custName,address:o.address||'',phone:o.phone||'',lines:o.lines.filter(l=>!isFee(l)).map(l=>Object.assign({},l,{src:'Giá mặc định'})),shipFee:(o.lines||[]).filter(isFee).reduce((a,l)=>a+lineAmt(l),0)||'',paid:o.paid,payMethod:o.payMethod||'',paidAmount:o.paidAmount||'',payPhotos:(o.payPhotos||[]).map(id=>({id})),note:o.note||'',date:o.date,dlvDate:o.dlvDate||o.date,shipMode:o.shipMode||'co',bookVia:(o.book&&o.book.via)||'Ahamove',bookCost:(o.book&&o.book.cost)||'',bookRef:(o.book&&o.book.ref)||'',pickupBy:o.pickupBy||''};closeSheet();if(R.mode==='admin')R.mode='sale';R.tab='new';render()});
     act('cancel',async()=>{closeSheet();if(await confirmSheet('Hủy đơn '+o.no+'?','Đơn của '+esc(o.custName)+' sẽ chuyển sang trạng thái Đã hủy và không tính vào doanh số.','Hủy đơn',true)){await R.db.doc('orders/'+o.id).update({status:'cancel',updatedAt:Date.now(),updatedBy:R.uid});toast('Đã hủy đơn')}});
@@ -788,6 +815,10 @@ function deliverSheet(o,pre,preMsg){const d=pre||{lines:o.lines.map(l=>Object.as
   openSheet('Giao đơn '+o.no,'',b=>{draw(b);if(preMsg){const m=b.querySelector('#dvMsg');if(m)m.innerHTML=preMsg}})}
 /* v71: ship huỷ đơn đã nhận – bắt buộc chọn lý do + ghi chi tiết; ảnh không bắt buộc */
 const CX_REASONS=['Khách không nhận hàng','Khách báo huỷ','Cửa hàng đóng cửa','Không liên lạc được','Sai địa chỉ','Hàng không đạt','Lý do khác'];
+/* v72: ship bấm nhầm "Nhận giao" → trả đơn về Chờ giao (đơn chưa giao, chưa thu tiền) */
+async function shipUnclaim(o){if(!o)return;const cur=R.orders.find(x=>x.id===o.id)||o;if(cur.status!=='shipping'||cur.shipId!==R.uid){toast('Đơn không còn ở trạng thái bạn đang giao.');return}
+  if(!await confirmSheet('Trả đơn '+o.no+' về chờ giao?','Đơn của <b>'+esc(o.custName)+'</b> sẽ về mục <b>Đơn chờ người giao</b> để bạn hoặc ship khác nhận lại. Dùng khi bấm nhầm Nhận giao.','↩ Trả về chờ giao'))return;
+  try{await R.db.doc('orders/'+o.id).update({status:'new',shipId:null,shipAt:null,unclaimBy:R.uid,unclaimAt:Date.now(),updatedAt:Date.now(),updatedBy:R.uid});toast('Đã trả đơn '+o.no+' về chờ giao')}catch(e){toast('Không lưu được ('+(e.code||'lỗi')+')')}}
 function shipCancel(o,pre){if(!o)return;const d=pre||{r:'',t:'',photos:[]};
   const draw=b=>{const okR=d.r&&String(d.t).trim().length>=5;
     b.innerHTML=`<div class="group"><div class="row"><div class="grow"><div class="t">${esc(o.custName)}</div><div class="s">${esc(o.address||'')} · ${vnd(orderTotal(o))}</div></div></div></div>
@@ -816,10 +847,10 @@ function viewShipTodo(v){const L=R.orders.filter(o=>(o.status==='new'&&!o.shipId
    <div class="seg"><button data-rs="mine" class="${sel.mode==='mine'?'on':''}" ${mr.length?'':'disabled'}>Của tôi (${nMine})</button><button data-rs="pick" class="${sel.mode==='custom'?'on':''}">Tuyến khác</button><button data-rs="all" class="${sel.mode==='all'?'on':''}">Tất cả (${fd.length})</button></div>
    <div class="row tap" id="dayPick" style="padding:0;border:0;min-height:0"><span style="font-size:20px">📅</span><div class="grow"><div class="tiny muted">Ngày giao</div><div style="font-weight:700">${esc(dayTxt)}</div></div><span class="chev">›</span></div></div>`:'';
   v.innerHTML=`<h1 class="big">Cần giao</h1><div class="stack">${rtBox}
-   <div class="sec" style="margin-top:0">Đơn của tôi (${mine.length})</div><div class="list">${mine.sort(sortF).map(o=>orderCard(o,{actions:`<button class="btn pri" data-dv="${esc(o.id)}">Giao xong</button><button class="btn sm" data-scx="${esc(o.id)}" style="color:#d64545;border:1.5px solid #f2c4c4;background:#fff">✕ Huỷ đơn</button>`})).join('')||'<div class="empty">Bạn chưa nhận đơn nào. Chọn đơn ở dưới để nhận giao.</div>'}</div>
+   <div class="sec" style="margin-top:0">Đơn của tôi (${mine.length})</div><div class="list">${mine.sort(sortF).map(o=>orderCard(o,{actions:`<button class="btn pri" data-dv="${esc(o.id)}">Giao xong</button><button class="btn sm" data-scx="${esc(o.id)}" style="color:#d64545;border:1.5px solid #f2c4c4;background:#fff">✕ Huỷ đơn</button><button class="btn sm" data-sun="${esc(o.id)}" style="background:none;color:var(--muted,#6b7785);min-height:0;font-weight:600">↩ Nhận nhầm – trả về chờ giao</button>`})).join('')||'<div class="empty">Bạn chưa nhận đơn nào. Chọn đơn ở dưới để nhận giao.</div>'}</div>
    <div class="sec">Đơn chờ người giao (${free.length})</div><div class="list">${free.sort(sortF).map(o=>orderCard(o,{who:'saleId',actions:`<button class="btn blue" data-take="${esc(o.id)}">Nhận giao</button>`})).join('')||'<div class="empty">Không còn đơn chờ.</div>'}</div></div>`;
   $$('[data-oid]').forEach(c=>c.onclick=e=>{if(e.target.closest('button'))return;orderDetail(R.orders.find(o=>o.id===c.dataset.oid))});
-  $$('[data-dv]').forEach(b=>b.onclick=()=>deliverSheet(R.orders.find(o=>o.id===b.dataset.dv)));$$('[data-scx]').forEach(b=>b.onclick=()=>shipCancel(R.orders.find(o=>o.id===b.dataset.scx)));
+  $$('[data-dv]').forEach(b=>b.onclick=()=>deliverSheet(R.orders.find(o=>o.id===b.dataset.dv)));$$('[data-scx]').forEach(b=>b.onclick=()=>shipCancel(R.orders.find(o=>o.id===b.dataset.scx)));$$('[data-sun]').forEach(b=>b.onclick=()=>shipUnclaim(R.orders.find(o=>o.id===b.dataset.sun)));
   $$('[data-rs]').forEach(b=>b.onclick=()=>{const k=b.dataset.rs;if(k==='pick')return pickRoutes(free0.filter(inDay));R.ui.rtSel=k==='mine'?{mode:'mine',ids:mr}:{mode:'all',ids:[]};render()});
   const rp=$('#rtPick');if(rp)rp.onclick=()=>pickRoutes(free0.filter(inDay));const dp=$('#dayPick');if(dp)dp.onclick=()=>pickShipDay();
   $$('[data-take]').forEach(b=>b.onclick=()=>{b.disabled=true;const id=b.dataset.take;const cur=R.orders.find(o=>o.id===id);if(cur&&cur.shipId&&cur.shipId!==R.uid){toast('Đơn đã có người nhận.');return}
@@ -1487,7 +1518,7 @@ function viewCatalog(v){const T=R.ui.catTab,q=noAcc(R.ui.catQ);
      <div class="sec">Nhân viên (${L.length})</div><div class="group">${L.map(([id,s])=>`<div class="row tap" data-es="${esc(id)}"><div class="grow"><div class="t">${esc(staffName(id))}${s.active===false?' <span class="chip">Đã khóa</span>':''}</div><div class="s">${ROLE_NAME[s.role]||s.role}${s.role==='sale'?' · hoa hồng '+fmt(s.pct!=null&&s.pct!==''?s.pct:ST().salePct)+'%':''}</div></div><span class="chev">›</span></div>`).join('')||'<div class="empty">Chưa có nhân viên. Gửi link app cho nhân viên, họ tự tạo tài khoản và sẽ hiện ở mục Chờ phân quyền.</div>'}</div>`}
   v.innerHTML=`<h1 class="big">Danh mục</h1><div class="stack"><div class="seg">${[['products','Sản phẩm'],['customers','Khách hàng'],['prices','Bảng giá'],['staff','Nhân viên']].map(([k,l])=>`<button data-ct="${k}" class="${T===k?'on':''}">${l}${k==='staff'&&[...R.requests.keys()].some(id=>!R.staff.has(id))?' •':''}</button>`).join('')}</div>
    ${T!=='staff'?`<input id="cQ" placeholder="Tìm kiếm" value="${esc(R.ui.catQ)}">`:''}${body}</div>`;
-  $$('[data-ct]').forEach(b=>b.onclick=()=>{R.ui.catTab=b.dataset.ct;R.ui.catQ='';render()});const qi=$('#cQ');if(qi)qi.oninput=()=>{R.ui.catQ=qi.value;render()};
+  $$('[data-ct]').forEach(b=>b.onclick=()=>{R.ui.catTab=b.dataset.ct;R.ui.catQ='';render()});const qi=$('#cQ');if(qi)qi.oninput=e=>{R.ui.catQ=e.target.value;render()};
   const on=(id,f)=>{const e=$('#'+id);if(e)e.onclick=f};
   on('cNew',()=>T==='products'?editProduct(null):editCustomer(null));
   on('cImp',()=>importXls(T));on('cTpl',()=>templateXls(T));
@@ -1781,7 +1812,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='71';
+const APP_BUILD='72';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
