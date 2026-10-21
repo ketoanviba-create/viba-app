@@ -1718,8 +1718,9 @@ function render(){const role=myRole();const who=$('#who');
 function finishRender(){try{lowAlertMaybe()}catch(e){}$('#dlShip').innerHTML=[...R.staff.entries()].filter(([i,s])=>s.role==='ship').map(([i])=>`<option value="${esc(staffName(i))}"></option>`).join('')}
 
 /* ================= KẾT NỐI ================= */
-let rT;const soon=()=>{clearTimeout(rT);rT=setTimeout(()=>{if(!$('#sheet').hidden){R._pending=true;return}const a=document.activeElement;if(a&&a.closest&&a.closest('#view')&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA')&&(R.tab==='new'||R.tab==='vnew')){R._pending=true;return}render()},80)};
-document.addEventListener('focusout',()=>setTimeout(()=>{if($('#sheet').hidden&&R._pending){R._pending=false;render()}},50));
+let rT;/* v69: đang gõ ở bất kỳ ô nào trên màn hình → hoãn vẽ lại khi có dữ liệu mới (tối đa 15 giây), vẽ lại khi rời ô */
+const soon=()=>{clearTimeout(rT);rT=setTimeout(()=>{if(!$('#sheet').hidden){R._pending=true;return}const a=document.activeElement;if(a&&a.closest&&a.closest('#view')&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.tagName==='SELECT')&&(R.tab==='new'||R.tab==='vnew'||!R._pendAt||Date.now()-R._pendAt<15000)){if(!R._pending)R._pendAt=Date.now();R._pending=true;return}R._pending=false;R._pendAt=0;render()},120)};
+document.addEventListener('focusout',()=>setTimeout(()=>{if($('#sheet').hidden&&R._pending){R._pending=false;R._pendAt=0;render()}},50));
 let nameBusy=false;async function resolveNames(){if(!R.user||nameBusy)return;const ids=new Set([...R.staff.keys(),...R.requests.keys(),R.uid]);R.orders.forEach(o=>{o.saleId&&ids.add(o.saleId);o.shipId&&ids.add(o.shipId)});R.vouchers.forEach(v=>v.createdBy&&ids.add(v.createdBy));
   const need=[...ids].filter(i=>i&&!(i in R.names)).slice(0,64);if(!need.length)return;nameBusy=true;try{const ps=await R.user.profiles(need);need.forEach(i=>R.names[i]=(ps[i]&&ps[i].name)||'');soon()}catch(e){}finally{nameBusy=false}}
 async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use);i++){await new Promise(r=>setTimeout(r,100));c=window.claude}
@@ -1747,7 +1748,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='68';
+const APP_BUILD='69';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';

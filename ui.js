@@ -73,11 +73,11 @@ const st=document.createElement('style');st.textContent=css;document.head.append
 const badge=(cls,ic,c)=>{const [f,bg]=COL[c];return `<span class="${cls}" style="color:${f};background:${bg}">${I[ic]}</span>`};
 const HEAD={'Báo cáo':['trend','b'],'Chấm công':['cal','b'],'Lên đơn':['clip','t'],'Đơn của tôi':['clip','t'],'Tổng quan':['trend','b'],'Cài đặt':['gear','p'],'Cần giao':['truck','b'],'Đã giao':['truck','g']};
 function deco(){
- document.querySelectorAll('[data-acc]:not(.dk)').forEach(a=>{a.classList.add('dk');const l=a.querySelector('.muted');const [ic,c]=pick(l?l.innerText:'');a.insertAdjacentHTML('afterbegin',badge('dk-b',ic,c))});
- document.querySelectorAll('.sec:not(.dk)').forEach(s=>{s.classList.add('dk');const [ic,c]=pick(s.innerText);s.insertAdjacentHTML('afterbegin',badge('dk-s',ic,c))});
- document.querySelectorAll('h1.big:not(.dk)').forEach(h=>{h.classList.add('dk');const k=Object.keys(HEAD).find(k=>h.innerText.trim().startsWith(k));if(k){const [ic,c]=HEAD[k];h.insertAdjacentHTML('afterbegin',badge('dk-h',ic,c))}});
+ document.querySelectorAll('[data-acc]:not(.dk)').forEach(a=>{a.classList.add('dk');const l=a.querySelector('.muted');const [ic,c]=pick(l?l.textContent:'');a.insertAdjacentHTML('afterbegin',badge('dk-b',ic,c))});
+ document.querySelectorAll('.sec:not(.dk)').forEach(s=>{s.classList.add('dk');const [ic,c]=pick(s.textContent);s.insertAdjacentHTML('afterbegin',badge('dk-s',ic,c))});
+ document.querySelectorAll('h1.big:not(.dk)').forEach(h=>{h.classList.add('dk');const k=Object.keys(HEAD).find(k=>h.textContent.trim().startsWith(k));if(k){const [ic,c]=HEAD[k];h.insertAdjacentHTML('afterbegin',badge('dk-h',ic,c))}});
  document.querySelectorAll('#view .alert:not(.dk)').forEach(a=>{a.classList.add('dk');a.insertAdjacentHTML('afterbegin',`<span class="dk-a">${I.alert}</span>`)});
- document.querySelectorAll('#view .group:not(.pick)>.row:not(.dk)').forEach(r=>{r.classList.add('dk');if(r.querySelector('input,select'))return;const t=r.innerText;let ic,c;if(r.id==='oCust')[ic,c]=['user','t'];else if(/DH-|đơn/i.test(t))[ic,c]=['clip','t'];else{const k=pick(t);if(k[0]==='star')return;[ic,c]=k}r.insertAdjacentHTML('afterbegin',badge('dk-row',ic,c))});
+ document.querySelectorAll('#view .group:not(.pick)>.row:not(.dk)').forEach(r=>{r.classList.add('dk');if(r.querySelector('input,select'))return;const t=r.textContent;let ic,c;if(r.id==='oCust')[ic,c]=['user','t'];else if(/DH-|đơn/i.test(t))[ic,c]=['clip','t'];else{const k=pick(t);if(k[0]==='star')return;[ic,c]=k}r.insertAdjacentHTML('afterbegin',badge('dk-row',ic,c))});
 }
 window.__UIF.push(deco);
 })();
@@ -154,7 +154,7 @@ function ux(){
    const w=name.split(/\s+/);const ini=(w[w.length-1]||'?').slice(0,1).toUpperCase();const short=w.slice(-2).join(' ');
    const h=`<b>${esc(ini)}</b><div>${esc(short)}<i>${esc(role)}</i></div><span style="color:var(--muted)">▾</span>`;if(av.innerHTML!==h)av.innerHTML=h;av.dataset.full=name+' · '+role}
  // seg labels
- document.querySelectorAll('.seg button').forEach(b=>{const m={'Tuần này':'Tuần','Tháng này':'Tháng'};if(m[b.innerText.trim()])b.innerText=m[b.innerText.trim()]});
+ document.querySelectorAll('.seg button').forEach(b=>{const m={'Tuần này':'Tuần','Tháng này':'Tháng'};if(m[b.textContent.trim()])b.textContent=m[b.textContent.trim()]});
  // report grid
  const accs=[...document.querySelectorAll('[data-acc]')];if(accs.length>2){const cards=accs.map(a=>a.parentElement);const par=cards[0].parentElement;
    if(cards.every(c=>c.parentElement===par)&&!par.classList.contains('ux-grid')){par.classList.add('ux-grid');
@@ -162,10 +162,10 @@ function ux(){
      // tile lẻ cuối: cho tràn 2 cột
      const tiles=cards.filter(c=>c.classList.contains('ux-tile'));if(tiles.length%2)tiles[tiles.length-1].classList.remove('ux-tile');}}
  // tab badge
- document.querySelectorAll('#tabs button span').forEach(s=>{const m=s.innerText.match(/^(.*) \((\d+)\)$/);if(m){s.innerText=m[1];if(+m[2])s.parentElement.insertAdjacentHTML('beforeend',`<em class="ux-bdg">${m[2]}</em>`)}});
+ document.querySelectorAll('#tabs button span').forEach(s=>{const m=s.textContent.match(/^(.*) \((\d+)\)$/);if(m){s.textContent=m[1];if(+m[2])s.parentElement.insertAdjacentHTML('beforeend',`<em class="ux-bdg">${m[2]}</em>`)}});
  // cần giao summary
  const h=document.querySelector('h1.big');
- if(h&&/Cần giao/.test(h.innerText)&&!document.querySelector('.ux-sum')){const secs=[...document.querySelectorAll('#view .sec')].map(x=>x.textContent);const n=re=>{const t=secs.find(x=>re.test(x));const m=t&&t.match(/\((\d+)\)/);return m?+m[1]:0};
+ if(h&&/Cần giao/.test(h.textContent)&&!document.querySelector('.ux-sum')){const secs=[...document.querySelectorAll('#view .sec')].map(x=>x.textContent);const n=re=>{const t=secs.find(x=>re.test(x));const m=t&&t.match(/\((\d+)\)/);return m?+m[1]:0};
    let tot=0;document.querySelectorAll('#view .oc .money').forEach(m=>{tot+=+(m.textContent.replace(/[^\d]/g,''))||0});
    h.insertAdjacentHTML('afterend',`<div class="ux-sum"><div><span>Đơn của tôi</span><b>${n(/Đơn của tôi/)} đơn</b></div><div><span>Chờ người nhận</span><b style="color:#c27a00">${n(/chờ người giao/i)} đơn</b></div><div style="grid-column:1/-1"><span>Tổng tiền các đơn trên</span><b style="color:#1e9a5c">${vnd(tot)}</b></div></div>`)}
  // lên đơn sticky
@@ -179,7 +179,8 @@ function ux(){
  if(sv&&tb){let bar=document.querySelector('.ux-bar');if(!bar){document.body.insertAdjacentHTML('beforeend','<div class="ux-bar"><div class="t"></div><button type="button"></button></div>');bar=document.querySelector('.ux-bar');document.body.classList.add('ux-hasbar')}bar.querySelector('button').onclick=()=>{const b=document.querySelector('#oSave');if(b&&!b.disabled)b.click()};
    const sp=tb.querySelectorAll('span');const t=`<b>${esc(sp[1]?sp[1].textContent:'')}</b><span>${esc(sp[0]?sp[0].textContent:'')}</span>`;const T=bar.querySelector('.t');if(T.innerHTML!==t)T.innerHTML=t;const B=bar.querySelector('button');if(B.textContent!==sv.textContent)B.textContent=sv.textContent;B.disabled=sv.disabled}
  // bảng rộng → thẻ
- document.querySelectorAll('#view table:not(.ux-done)').forEach(t=>{t.classList.add('ux-done');const hs=[...t.querySelectorAll('thead th')].map(x=>x.textContent.trim());if(hs.length<4||/data-|onclick/.test(t.innerHTML))return;const box=t.closest('.tbl,.card,div');if(!(t.scrollWidth>(box?box.clientWidth:390)+4))return;
+ /* v69: đo hết các bảng trước rồi mới sửa (tránh trình duyệt tính lại bố cục cho từng bảng) */const TB=[...document.querySelectorAll('#view table:not(.ux-done)')].map(t=>{t.classList.add('ux-done');const hs=[...t.querySelectorAll('thead th')].map(x=>x.textContent.trim());if(hs.length<4||/data-|onclick/.test(t.innerHTML))return null;const box=t.closest('.tbl,.card,div');return t.scrollWidth>(box?box.clientWidth:390)+4?[t,hs]:null}).filter(Boolean);
+ TB.forEach(([t,hs])=>{
    const rows=[...t.querySelectorAll('tbody tr,tfoot tr')].map(r=>[...r.children].map((td,i)=>esc((i?td.textContent:td.innerText).trim())));
    const html=`<div class="ux-cards">${rows.map(r=>`<div class="c"><div class="h">${r[0].replace(/\n/g,' · ')}</div><div class="kv">${r.slice(1).map((v,i)=>`<span>${hs[i+1]||''}</span><b>${v}</b>`).join('')}</div></div>`).join('')}</div>`;
    const wrap=t.parentElement;wrap.style.display='none';wrap.insertAdjacentHTML('afterend',html)});
