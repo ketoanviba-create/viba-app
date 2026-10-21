@@ -701,7 +701,7 @@ async function saveOrder(){const d=R.odraft,msg=$('#oMsg');d._err='';const err=t
 function orderCard(o,opt){opt=opt||{};const items=(o.lines||[]).map(l=>esc(l.name)+' ×'+fmt(l.qty)+(l.extra?' (thêm khi giao)':'')).join(', ');
   return `<div class="oc" data-oid="${esc(o.id)}"><div class="h1"><span class="cn ell">${esc(o.custName)}</span><span class="money">${vnd(orderTotal(o))}</span></div>
    <div class="addr">${ICON.pin}<span>${esc(o.address||'Chưa có địa chỉ')}</span></div>
-   <div class="tiny muted ell">${items}</div>
+   <div class="tiny muted ell">${items}</div>${cxHtml(o)}
    <div class="hrow">${stChip(o)}${payChip(o)}${o.dlvDate&&o.status!=='done'&&o.status!=='cancel'?'<span class="chip" style="background:#e7f0fa;color:#1b6aa5">🚚 Giao '+dm(o.dlvDate)+'</span>':''}${o.arising?'<span class="chip b">Phát sinh</span>':''}${smChip(o)}${o.outside?'<span class="chip b">Ship ngoài</span>':''}<span class="tiny muted right">${esc(o.no)} · ${dm(o.date)}${opt.who?' · '+esc(staffName(o[opt.who])):''}</span></div>${opt.actions||''}</div>`}
 /* v68: thứ tự đơn trên app sale, ship: mới nhất → cũ nhất (ngày lên đơn, giờ tạo, số đơn) */
 function newFirst(a,b){return String(b.date||'').localeCompare(String(a.date||''))||(toNum(b.createdAt)||0)-(toNum(a.createdAt)||0)||String(b.no||'').localeCompare(String(a.no||''),undefined,{numeric:true})}
@@ -720,7 +720,7 @@ function orderDetail(o){if(!o)return;const role=R.mode;const mine=o.saleId===R.u
   const canDeliver=(role==='ship'&&(o.shipId===R.uid||!o.shipId)||role==='admin')&&(o.status==='new'||o.status==='shipping');
   const lines=(o.lines||[]).map(l=>`<div class="row"><div class="grow"><div class="t">${esc(l.name)}</div><div class="s">${fmt(l.qty)} ${esc(l.unit)} × ${vnd(l.price)}${l.listPrice!=null&&l.price!==l.listPrice?' <span class="edited">(giá gốc '+vnd(l.listPrice)+')</span>':''}${toNum(l.disc)?' · <b>KM '+fmt(l.disc)+'% → '+vnd(unitNet(l))+'</b>':''}${toNum(l.gift)?' · <b>Tặng '+fmt(l.gift)+'</b>':''}${l.promo?' · KM '+fmt(l.promo):''}${l.swap?' · Hỗ trợ '+fmt(l.swap):''}${l.ret?' · Trả '+fmt(l.ret):''}</div></div><div class="money">${vnd(lineAmt(l))}</div></div>`).join('');
   const pay=(o.payPhotos||[]).map(id=>({id})),rp=(o.retPhotos||[]).map(id=>({id})),slp=(o.slipPhotos||[]).map(id=>({id}));
-  openSheet('Đơn '+o.no,`<div class="hrow">${stChip(o)}${payChip(o)}${o.arising?'<span class="chip b">Phát sinh</span>':''}${smChip(o)}${o.outside?'<span class="chip b">Ship ngoài</span>':''}${o.px?'<span class="chip">Đã xuất kho '+esc(o.px)+'</span>':''}</div>
+  openSheet('Đơn '+o.no,`${cxHtml(o)}<div class="hrow">${stChip(o)}${payChip(o)}${o.arising?'<span class="chip b">Phát sinh</span>':''}${smChip(o)}${o.outside?'<span class="chip b">Ship ngoài</span>':''}${o.px?'<span class="chip">Đã xuất kho '+esc(o.px)+'</span>':''}</div>
    <div class="group"><div class="row"><div class="grow"><div class="t">${esc(o.custName)}</div><div class="s">${esc(o.address||'')}${o.phone?' · '+esc(o.phone):''}</div></div>${o.address?`<a class="mapl" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address)}" target="_blank" rel="noopener">Bản đồ</a>`:''}</div>
    <div class="row"><div class="grow s">Ngày ${dmy(o.date)} · Sale: ${esc(staffName(o.saleId))}${o.shipId?' · Ship: '+esc(staffName(o.shipId)):''}</div></div></div>
    <div class="group">${lines}${(o.lines||[]).some(l=>lineDisc(l))?`<div class="row"><div class="grow s">Khuyến mại đã trừ</div><div>${vnd((o.lines||[]).reduce((s,l)=>s+lineDisc(l),0))}</div></div>`:''}<div class="row"><div class="grow t">Tổng cộng</div><div class="money" style="font-size:18px">${vnd(orderTotal(o))}</div></div>
@@ -786,6 +786,27 @@ function deliverSheet(o,pre,preMsg){const d=pre||{lines:o.lines.map(l=>Object.as
           catch(x){try{const g=await ref.get();const y=g.data()||{};if(y.status==='done'&&y.doneAt===up.doneAt){await Promise.all(jobs.map(f=>f())).catch(()=>{});toast('✓ Đã giao đơn '+o.no);return}}catch(_){}
             toast('⚠ Chưa lưu được đơn '+o.no+' (mạng yếu)');d._noPhotoOk=1;deliverSheet(R.orders.find(z=>z.id===o.id)||o,d,'<div class="alert r">Chưa lưu được (mạng yếu?). Bấm Xác nhận đã giao lần nữa.</div>')}})()}catch(x){e.target.disabled=false;m.innerHTML='<div class="alert r">Không lưu được ('+esc(x.code||'lỗi')+').</div>'}}};
   openSheet('Giao đơn '+o.no,'',b=>{draw(b);if(preMsg){const m=b.querySelector('#dvMsg');if(m)m.innerHTML=preMsg}})}
+/* v71: ship huỷ đơn đã nhận – bắt buộc chọn lý do + ghi chi tiết; ảnh không bắt buộc */
+const CX_REASONS=['Khách không nhận hàng','Khách báo huỷ','Cửa hàng đóng cửa','Không liên lạc được','Sai địa chỉ','Hàng không đạt','Lý do khác'];
+function shipCancel(o,pre){if(!o)return;const d=pre||{r:'',t:'',photos:[]};
+  const draw=b=>{const okR=d.r&&String(d.t).trim().length>=5;
+    b.innerHTML=`<div class="group"><div class="row"><div class="grow"><div class="t">${esc(o.custName)}</div><div class="s">${esc(o.address||'')} · ${vnd(orderTotal(o))}</div></div></div></div>
+    <div style="font-weight:700">Lý do huỷ <span style="color:var(--bad,#d64545)">*</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">${CX_REASONS.map(x=>`<button type="button" class="chip" data-cxr="${esc(x)}" style="padding:8px 12px;font-size:14px;font-weight:600;cursor:pointer;${d.r===x?'background:#1b6aa5;color:#fff':'background:#fff;border:1px solid #cfd8e3;color:var(--fg)'}">${esc(x)}</button>`).join('')}</div>
+    <label class="f">Ghi rõ chi tiết <span style="color:var(--bad,#d64545)">*</span><textarea id="cxT" rows="3" placeholder="VD: quản lý cửa hàng báo đủ hàng, hẹn giao lại thứ 6">${esc(d.t)}</textarea></label>
+    <div class="tiny muted">Bắt buộc chọn lý do và ghi chi tiết (ít nhất 5 ký tự). Sale lên đơn và quản lý sẽ thấy lý do này. Hàng trên đơn mang về kho hoặc giao đơn khác.</div>
+    <div class="group"><div class="row" style="flex-direction:column;align-items:stretch;gap:6px"><div class="tiny muted" style="font-weight:600">📷 Ảnh (không bắt buộc) – cửa hàng đóng cửa / phiếu từ chối nhận</div>${photoStrip(d.photos,true,'cx')}</div></div>
+    <div id="cxMsg"></div><button class="btn block danger" id="cxGo" ${okR?'':'disabled'} style="${okR?'background:#d64545;color:#fff':''}">Xác nhận huỷ đơn</button>`;
+    $$('[data-cxr]',b).forEach(x=>x.onclick=()=>{d.r=x.dataset.cxr;draw(b)});
+    const t=b.querySelector('#cxT');t.oninput=()=>{const was=d.r&&String(d.t).trim().length>=5;d.t=t.value;const now=d.r&&String(d.t).trim().length>=5;if(was!==now){const g=b.querySelector('#cxGo');g.disabled=!now;g.style.cssText=now?'background:#d64545;color:#fff':''}};
+    bindPhotos(b,()=>d.photos,()=>draw(b));
+    b.querySelector('#cxGo').onclick=async e=>{const m=b.querySelector('#cxMsg');if(!d.r)return m.innerHTML='<div class="alert r">Chọn lý do huỷ.</div>';if(String(d.t).trim().length<5)return m.innerHTML='<div class="alert r">Ghi rõ chi tiết lý do (ít nhất 5 ký tự).</div>';
+      const cur=R.orders.find(x=>x.id===o.id)||o;if(cur.status!=='shipping'||cur.shipId!==R.uid)return m.innerHTML='<div class="alert r">Đơn không còn ở trạng thái bạn đang giao.</div>';
+      e.target.disabled=true;try{const ids=[],jobs=[];for(const p of d.photos){if(p.id){ids.push(p.id);continue}const id=o.id+'-cx-'+uidShort();ids.push(id);jobs.push(R.db.doc('photos/'+id).set({data:p.data,orderId:o.id,kind:'cancel',by:R.uid,at:Date.now()}))}
+        await Promise.all(jobs);await R.db.doc('orders/'+o.id).update({status:'cancel',prevStatus:cur.status,cancelBy:R.uid,cancelAt:Date.now(),cancelReason:d.r,cancelNote:String(d.t).trim(),cancelPhotos:ids,updatedAt:Date.now(),updatedBy:R.uid});
+        closeSheet();toast('Đã huỷ đơn '+o.no)}catch(x){e.target.disabled=false;m.innerHTML='<div class="alert r">Không lưu được ('+esc(x.code||'lỗi')+'). Thử lại.</div>'}}};
+  openSheet('Huỷ đơn '+o.no,'',draw)}
+const cxHtml=o=>o.status==='cancel'&&o.cancelReason?`<div style="margin-top:6px;background:#fff6f6;border-left:3px solid #d64545;padding:6px 10px;border-radius:8px;font-size:14px"><b>Lý do huỷ:</b> ${esc(o.cancelReason)}${o.cancelNote?' – '+esc(o.cancelNote):''}<div class="tiny muted">${esc(staffName(o.cancelBy))}${o.cancelAt?' · '+new Date(toNum(o.cancelAt)).toLocaleString('vi-VN',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}):''}</div></div>`:'';
 function viewShipTodo(v){const L=R.orders.filter(o=>(o.status==='new'&&!o.shipId&&!offRoute(o))||(o.status==='shipping'&&o.shipId===R.uid)||(o.status==='new'&&o.shipId===R.uid));
   const mine=L.filter(o=>o.shipId===R.uid),free0=L.filter(o=>!o.shipId),free=free0.filter(o=>inRt(o)&&inDay(o));/* v68: đơn MỚI NHẤT lên trước – theo ngày lên đơn, rồi giờ tạo, rồi số đơn (giảm dần) */const sortF=newFirst;
   const sel=shipRtSel(),mr=myRoutes(),fd=free0.filter(inDay),nMine=fd.filter(o=>mr.includes(routeOf(o)||'none')).length;
@@ -795,10 +816,10 @@ function viewShipTodo(v){const L=R.orders.filter(o=>(o.status==='new'&&!o.shipId
    <div class="seg"><button data-rs="mine" class="${sel.mode==='mine'?'on':''}" ${mr.length?'':'disabled'}>Của tôi (${nMine})</button><button data-rs="pick" class="${sel.mode==='custom'?'on':''}">Tuyến khác</button><button data-rs="all" class="${sel.mode==='all'?'on':''}">Tất cả (${fd.length})</button></div>
    <div class="row tap" id="dayPick" style="padding:0;border:0;min-height:0"><span style="font-size:20px">📅</span><div class="grow"><div class="tiny muted">Ngày giao</div><div style="font-weight:700">${esc(dayTxt)}</div></div><span class="chev">›</span></div></div>`:'';
   v.innerHTML=`<h1 class="big">Cần giao</h1><div class="stack">${rtBox}
-   <div class="sec" style="margin-top:0">Đơn của tôi (${mine.length})</div><div class="list">${mine.sort(sortF).map(o=>orderCard(o,{actions:`<button class="btn pri" data-dv="${esc(o.id)}">Giao xong</button>`})).join('')||'<div class="empty">Bạn chưa nhận đơn nào. Chọn đơn ở dưới để nhận giao.</div>'}</div>
+   <div class="sec" style="margin-top:0">Đơn của tôi (${mine.length})</div><div class="list">${mine.sort(sortF).map(o=>orderCard(o,{actions:`<button class="btn pri" data-dv="${esc(o.id)}">Giao xong</button><button class="btn sm" data-scx="${esc(o.id)}" style="color:#d64545;border:1.5px solid #f2c4c4;background:#fff">✕ Huỷ đơn</button>`})).join('')||'<div class="empty">Bạn chưa nhận đơn nào. Chọn đơn ở dưới để nhận giao.</div>'}</div>
    <div class="sec">Đơn chờ người giao (${free.length})</div><div class="list">${free.sort(sortF).map(o=>orderCard(o,{who:'saleId',actions:`<button class="btn blue" data-take="${esc(o.id)}">Nhận giao</button>`})).join('')||'<div class="empty">Không còn đơn chờ.</div>'}</div></div>`;
   $$('[data-oid]').forEach(c=>c.onclick=e=>{if(e.target.closest('button'))return;orderDetail(R.orders.find(o=>o.id===c.dataset.oid))});
-  $$('[data-dv]').forEach(b=>b.onclick=()=>deliverSheet(R.orders.find(o=>o.id===b.dataset.dv)));
+  $$('[data-dv]').forEach(b=>b.onclick=()=>deliverSheet(R.orders.find(o=>o.id===b.dataset.dv)));$$('[data-scx]').forEach(b=>b.onclick=()=>shipCancel(R.orders.find(o=>o.id===b.dataset.scx)));
   $$('[data-rs]').forEach(b=>b.onclick=()=>{const k=b.dataset.rs;if(k==='pick')return pickRoutes(free0.filter(inDay));R.ui.rtSel=k==='mine'?{mode:'mine',ids:mr}:{mode:'all',ids:[]};render()});
   const rp=$('#rtPick');if(rp)rp.onclick=()=>pickRoutes(free0.filter(inDay));const dp=$('#dayPick');if(dp)dp.onclick=()=>pickShipDay();
   $$('[data-take]').forEach(b=>b.onclick=()=>{b.disabled=true;const id=b.dataset.take;const cur=R.orders.find(o=>o.id===id);if(cur&&cur.shipId&&cur.shipId!==R.uid){toast('Đơn đã có người nhận.');return}
@@ -1682,7 +1703,7 @@ function viewVanDon(v){const day=vdDay();const L=R.orders.filter(o=>o.status!=='
   $('#vdPick').onclick=()=>{const i=document.createElement('input');i.type='date';i.value=day;i.style.cssText='position:fixed;opacity:0;top:0;left:0';document.body.appendChild(i);i.onchange=()=>{if(i.value){R.ui.vdDay=i.value;render()}i.remove()};i.onblur=()=>setTimeout(()=>i.remove(),500);try{i.showPicker?i.showPicker():i.click()}catch(e){i.click()}};
   $$('[data-vdo]').forEach(r=>r.onclick=()=>{const o=L.find(o=>o.id===r.dataset.vdo);R.mode==='admin'?orderDetail(o):vdDetail(o)})}
 function vdDetail(o){if(!o)return;const [c,l]=vdStat(o);
-  openSheet('Đơn '+o.no,`<div class="hrow"><span class="chip ${c}">${l}</span>${o.arising?'<span class="chip b">Phát sinh</span>':''}${smChip(o)}</div>${o.shipMode==='book'&&o.book?`<div class="tiny" style="margin-top:6px">📦 ${esc(o.book.via||'')}${o.book.cost?' · cước công ty trả '+vnd(o.book.cost):''}${o.book.ref?' · '+esc(o.book.ref):''}</div>`:''}${o.shipMode==='kho'&&o.pickupBy?`<div class="tiny" style="margin-top:6px">🏬 Người lấy: ${esc(o.pickupBy)}</div>`:''}
+  openSheet('Đơn '+o.no,`<div class="hrow"><span class="chip ${c}">${l}</span>${o.arising?'<span class="chip b">Phát sinh</span>':''}${smChip(o)}</div>${cxHtml(o)}${o.shipMode==='book'&&o.book?`<div class="tiny" style="margin-top:6px">📦 ${esc(o.book.via||'')}${o.book.cost?' · cước công ty trả '+vnd(o.book.cost):''}${o.book.ref?' · '+esc(o.book.ref):''}</div>`:''}${o.shipMode==='kho'&&o.pickupBy?`<div class="tiny" style="margin-top:6px">🏬 Người lấy: ${esc(o.pickupBy)}</div>`:''}
    <div class="group"><div class="row"><div class="grow"><div class="t">${esc(o.custName)}</div><div class="s">${esc(o.address||'')}</div></div></div>
    <div class="row"><div class="grow s">Giao ${dmy(o.dlvDate||o.date)} · Sale: ${esc(staffName(o.saleId))}${o.shipId?' · Ship: '+esc(staffName(o.shipId)):''}</div></div></div>
    <div class="tw"><table><thead><tr><th>Mặt hàng</th><th class="n">SL</th><th class="n">Tặng</th><th class="n">Hỗ trợ</th><th class="n">Trả</th></tr></thead><tbody>${(o.lines||[]).filter(x=>!isFee(x)).map(x=>`<tr><td>${esc(x.name)}${x.extra?' <span class="chip g" style="font-size:11px">Thêm khi giao</span>':''}<div class="tiny muted">${esc(x.code)} · ${esc(x.unit||'')}</div></td><td class="n">${fmt(x.qty)}</td><td class="n">${fmt0(x.gift)}</td><td class="n">${fmt0(x.swap)}</td><td class="n">${fmt0(x.ret)}</td></tr>`).join('')}</tbody></table></div>
@@ -1760,7 +1781,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='70';
+const APP_BUILD='71';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
