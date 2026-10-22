@@ -690,7 +690,7 @@ async function saveOrder(){const d=R.odraft,msg=$('#oMsg');d._err='';const err=t
     if(d.id){base.payPhotos=pre(d.payPhotos,d.id);await Promise.all(jobs.map(f=>f()));await R.db.doc('orders/'+d.id).update(Object.assign(base,{updatedAt:Date.now(),updatedBy:R.uid}));toast('✓ Đã lưu đơn '+(d.no||''))}
     else{let no=nextNo('DH',d.date,R.orders);base.payPhotos=pre(d.payPhotos,no);if(d.slipPhotos&&d.slipPhotos.length)base.slipPhotos=pre(d.slipPhotos,no,'slip');const now=Date.now();
       const mk=async()=>{for(let k=0;k<40;k++){while(R.orders.some(o=>o.id===no))no=bumpNo(no);
-          try{await R.db.doc('orders/'+no).create(Object.assign({},base,{no,date:d.date,saleId:R.uid,status:arise?(dv?'done':'shipping'):'new',shipId:arise?R.uid:null,outside:false,retPhotos:[],createdAt:now},base.paid?{paidAt:now}:{},arise?Object.assign({arising:true,saleLines:lines,shipAt:now},csOf(d.cust)&&csOf(d.cust)!==R.uid?{ownerSale:csOf(d.cust)}:{}):{},dv?{doneAt:now}:{}));return}
+          try{await R.db.doc('orders/'+no).create(Object.assign({},base,{no,date:d.date,saleId:R.uid,status:arise?(dv?'done':'shipping'):'new',shipId:arise?R.uid:null,outside:false,retPhotos:[],createdAt:now},base.paid?{paidAt:now}:{},arise?Object.assign({arising:true,saleLines:lines,shipAt:now},(w=>w?{ownerSale:w}:{})(pickOwner(csOf(d.cust)))):{},dv?{doneAt:now}:{}));return}
           catch(e){if(e.code==='exists'){const g0=await R.db.doc('orders/'+no).get().catch(()=>null);const y0=g0&&g0.data();if(y0&&y0.createdAt===now&&y0.saleId===R.uid)return;no=bumpNo(no);continue}
             /* v66: mất phản hồi nhưng máy chủ có thể đã ghi xong → kiểm tra trước khi báo lỗi (tránh ship bấm gửi lại thành đơn trùng) */
             for(let t=0;t<3;t++){try{const g=await R.db.doc('orders/'+no).get();const y=g.data();if(y&&y.createdAt===now&&y.saleId===R.uid)return;if(!y)break}catch(_){await new Promise(r=>setTimeout(r,1500))}}throw e}}throw{message:'không cấp được số đơn'}};
@@ -700,10 +700,14 @@ async function saveOrder(){const d=R.odraft,msg=$('#oMsg');d._err='';const err=t
 /* ================= DANH SÁCH ĐƠN (dùng chung) ================= */
 /* v74: sale phụ trách khách (config/custSale, máy chủ cập nhật 6h sáng từ sheet "Danh sách khách hàng") */
 const csOf=code=>(R.custSale&&code)?R.custSale.get(String(code).trim())||null:null;
-const ownerSaleOf=o=>o.ownerSale||(o.arising?csOf(o.cust):null);
+/* 1 sale có thể có nhiều tài khoản cùng tên → danh sách uid */
+const sameAs=u=>(R.csGroup&&R.csGroup.get(u))||[u];
+const ownerSaleOf=o=>o.ownerSale?sameAs(o.ownerSale):(o.arising?csOf(o.cust):null);
+/* ship tạo đơn phát sinh: chọn tài khoản sale đang dùng nhiều nhất (nhiều đơn nhất) */
+const pickOwner=L=>{if(!L||!L.length||L.includes(R.uid))return null;if(L.length===1)return L[0];const n=u=>R.orders.reduce((a,o)=>a+(o.saleId===u?1:0),0);return L.slice().sort((a,b)=>n(b)-n(a))[0]};
 /* doanh số: đơn phát sinh có ghi sale phụ trách (từ v74) tính cho sale đó, còn lại theo người lên đơn */
 const saleOf=o=>o.ownerSale||o.saleId;
-const psList=()=>R.orders.filter(o=>o.saleId!==R.uid&&(o.arising||o.ownerSale)&&ownerSaleOf(o)===R.uid);
+const psList=()=>R.orders.filter(o=>o.saleId!==R.uid&&(o.arising||o.ownerSale)&&(ownerSaleOf(o)||[]).includes(R.uid));
 const psDay=o=>o.doneAt?isoOf(new Date(toNum(o.doneAt))):o.date;
 function psSeenGet(){let v=null;try{v=localStorage.getItem('viba.psSeen.'+R.uid)}catch(e){}if(v==null){const d=new Date();d.setHours(0,0,0,0);v=String(d.getTime());try{localStorage.setItem('viba.psSeen.'+R.uid,v)}catch(e){}}return +v||0}
 function psUnseen(){if(R.mode!=='sale')return 0;const L=psList();const seen=psSeenGet();
@@ -768,7 +772,7 @@ function orderDetail(o){if(!o)return;const role=R.mode;const mine=o.saleId===R.u
   const pay=(o.payPhotos||[]).map(id=>({id})),rp=(o.retPhotos||[]).map(id=>({id})),slp=(o.slipPhotos||[]).map(id=>({id}));
   openSheet('Đơn '+o.no,`${cxHtml(o)}<div class="hrow">${stChip(o)}${payChip(o)}${o.arising?'<span class="chip b">Phát sinh</span>':''}${smChip(o)}${boChip(o)}${o.outside?'<span class="chip b">Ship ngoài</span>':''}${o.px?'<span class="chip">Đã xuất kho '+esc(o.px)+'</span>':''}</div>
    <div class="group"><div class="row"><div class="grow"><div class="t">${esc(o.custName)}</div><div class="s">${esc(o.address||'')}${o.phone?' · '+esc(o.phone):''}</div></div>${o.address?`<a class="mapl" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address)}" target="_blank" rel="noopener">Bản đồ</a>`:''}</div>
-   <div class="row"><div class="grow s">Ngày ${dmy(o.date)} · Sale: ${esc(staffName(o.arising&&ownerSaleOf(o)?ownerSaleOf(o):o.saleId))}${o.shipId?' · Ship: '+esc(staffName(o.shipId)):''}${o.arising?' (ship tạo phát sinh)':''}</div></div></div>${ro?'<div class="tiny muted" style="text-align:center">Đơn ship tạo phát sinh – bạn chỉ xem, không sửa.</div>':''}
+   <div class="row"><div class="grow s">Ngày ${dmy(o.date)} · Sale: ${esc(staffName(o.ownerSale||(o.arising&&ownerSaleOf(o)?ownerSaleOf(o)[0]:o.saleId)))}${o.shipId?' · Ship: '+esc(staffName(o.shipId)):''}${o.arising?' (ship tạo phát sinh)':''}</div></div></div>${ro?'<div class="tiny muted" style="text-align:center">Đơn ship tạo phát sinh – bạn chỉ xem, không sửa.</div>':''}
    <div class="group">${lines}${(o.lines||[]).some(l=>lineDisc(l))?`<div class="row"><div class="grow s">Khuyến mại đã trừ</div><div>${vnd((o.lines||[]).reduce((s,l)=>s+lineDisc(l),0))}</div></div>`:''}<div class="row"><div class="grow t">Tổng cộng</div><div class="money" style="font-size:18px">${vnd(orderTotal(o))}</div></div>
    ${o.paid?`<div class="row"><div class="grow s">Đã thu ${vnd(o.paidAmount)} (${o.paidBy==='ship'?'ship thu':'sale thu'}${o.payMethod?' · '+PM_NAME[o.payMethod]:''})</div></div>`:''}</div>
    ${o.note?`<div class="card small">${esc(o.note)}</div>`:''}
@@ -1831,7 +1835,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   const hm=window.APP_MODE||(location.hash||'').replace('#','');if(['sale','ship','kho','admin'].includes(hm)){R.mode=hm;R.tab=null}
   const sub=(coll,fn)=>db.collection(coll).onSnapshot(s=>{fn(s);soon();resolveNames()},e=>toast('Mất kết nối '+coll+' ('+e.code+')'));
   sub('staff',s=>{R.staff=new Map(s.docs.map(d=>[d.id,d.data()]))});
-  sub('config',s=>{const d=s.docs.find(x=>x.id==='custGroups');R.cgroups=d?d.data():null;const sp=s.docs.find(x=>x.id==='staffPre');R.staffPre=sp?sp.data():null;const v=s.docs.find(x=>x.id==='vatRates');R.vat=v?v.data():null;const cs=s.docs.find(x=>x.id==='custSale');const cd=cs?cs.data():null;if((cd&&cd.h)!==R._csH){R._csH=cd&&cd.h;const m=new Map();Object.entries((cd&&cd.by)||{}).forEach(([u,L])=>(L||[]).forEach(k=>m.set(String(k).trim(),u)));R.custSale=m}});
+  sub('config',s=>{const d=s.docs.find(x=>x.id==='custGroups');R.cgroups=d?d.data():null;const sp=s.docs.find(x=>x.id==='staffPre');R.staffPre=sp?sp.data():null;const v=s.docs.find(x=>x.id==='vatRates');R.vat=v?v.data():null;const cs=s.docs.find(x=>x.id==='custSale');const cd=cs?cs.data():null;if((cd&&cd.h)!==R._csH){R._csH=cd&&cd.h;const m=new Map(),gp=new Map();Object.entries((cd&&cd.by)||{}).forEach(([u,L])=>{const us=String(u).split(',').filter(Boolean);us.forEach(x=>gp.set(x,us));(L||[]).forEach(k=>m.set(String(k).trim(),us))});R.custSale=m;R.csGroup=gp}});
   sub('config',s=>{const rt=s.docs.find(x=>x.id==='routes');const nr=rt?rt.data():null;if(JSON.stringify(nr)!==JSON.stringify(R.routes)){R.routes=nr;R.ui.rtSel=null}const d=s.docs.find(x=>x.id==='prodAlias');const it=(d&&d.data()||{}).items||{};R.palias=Object.fromEntries(Object.entries(it).map(([k,v])=>[k,(Array.isArray(v)?v:String(v||'').split(/[;|\n]/)).map(x=>String(x).trim()).filter(Boolean)]))});
   sub('requests',s=>{R.requests=new Map(s.docs.map(d=>[d.id,d.data()]))});
   sub('attend',s=>{R.attend=s.docs.map(d=>Object.assign({},d.data(),{id:d.id}))});
@@ -1847,7 +1851,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='74';
+const APP_BUILD='75';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
