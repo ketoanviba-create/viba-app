@@ -690,7 +690,7 @@ async function saveOrder(){const d=R.odraft,msg=$('#oMsg');d._err='';const err=t
     if(d.id){base.payPhotos=pre(d.payPhotos,d.id);await Promise.all(jobs.map(f=>f()));await R.db.doc('orders/'+d.id).update(Object.assign(base,{updatedAt:Date.now(),updatedBy:R.uid}));toast('✓ Đã lưu đơn '+(d.no||''))}
     else{let no=nextNo('DH',d.date,R.orders);base.payPhotos=pre(d.payPhotos,no);if(d.slipPhotos&&d.slipPhotos.length)base.slipPhotos=pre(d.slipPhotos,no,'slip');const now=Date.now();
       const mk=async()=>{for(let k=0;k<40;k++){while(R.orders.some(o=>o.id===no))no=bumpNo(no);
-          try{await R.db.doc('orders/'+no).create(Object.assign({},base,{no,date:d.date,saleId:R.uid,status:arise?(dv?'done':'shipping'):'new',shipId:arise?R.uid:null,outside:false,retPhotos:[],createdAt:now},base.paid?{paidAt:now}:{},arise?Object.assign({arising:true,saleLines:lines,shipAt:now},(w=>w?{ownerSale:w}:{})(pickOwner(csOf(d.cust)))):{},dv?{doneAt:now}:{}));return}
+          try{await R.db.doc('orders/'+no).create(Object.assign({},base,{no,date:d.date,saleId:R.uid,status:arise?(dv?'done':'shipping'):'new',shipId:arise?R.uid:null,outside:false,retPhotos:[],createdAt:now},base.paid?{paidAt:now}:{},arise?Object.assign({arising:true,saleLines:lines,shipAt:now},(w=>w?{ownerSale:w}:{})(pickOwner(csOf(d.cust,base.address)))):{},dv?{doneAt:now}:{}));return}
           catch(e){if(e.code==='exists'){const g0=await R.db.doc('orders/'+no).get().catch(()=>null);const y0=g0&&g0.data();if(y0&&y0.createdAt===now&&y0.saleId===R.uid)return;no=bumpNo(no);continue}
             /* v66: mất phản hồi nhưng máy chủ có thể đã ghi xong → kiểm tra trước khi báo lỗi (tránh ship bấm gửi lại thành đơn trùng) */
             for(let t=0;t<3;t++){try{const g=await R.db.doc('orders/'+no).get();const y=g.data();if(y&&y.createdAt===now&&y.saleId===R.uid)return;if(!y)break}catch(_){await new Promise(r=>setTimeout(r,1500))}}throw e}}throw{message:'không cấp được số đơn'}};
@@ -699,10 +699,18 @@ async function saveOrder(){const d=R.odraft,msg=$('#oMsg');d._err='';const err=t
 
 /* ================= DANH SÁCH ĐƠN (dùng chung) ================= */
 /* v74: sale phụ trách khách (config/custSale, máy chủ cập nhật 6h sáng từ sheet "Danh sách khách hàng") */
-const csOf=code=>(R.custSale&&code)?R.custSale.get(String(code).trim())||null:null;
+/* v76: khách chuỗi (1 mã công ty, nhiều cửa hàng, mỗi cửa hàng 1 sale) → ghép theo địa điểm giao */
+const csNorm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[đĐ]/g,'d').toLowerCase().replace(/\s+/g,' ').trim().replace(/^\([^)]*\)\s*/,'').slice(0,120);
+const csTok=s=>s.split(/[^a-z0-9]+/).filter(x=>x.length>1);
+function csPt(P,addr){const a=csNorm(addr);if(!a)return null;const f=P.find(x=>x[0]===a);if(f)return f[1]||null;
+  const pre=P.filter(x=>Math.min(x[0].length,a.length)>=12&&(x[0].startsWith(a)||a.startsWith(x[0])));if(pre.length)return pre.every(x=>x[1]===pre[0][1])?(pre[0][1]||null):null;
+  const ta=new Set(csTok(a));if(!ta.size)return null;const sc=new Map();
+  for(const x of P){const sb=new Set(csTok(x[0]));if(!sb.size)continue;let i=0;sb.forEach(t=>{if(ta.has(t))i++});const v=i/(ta.size+sb.size-i);if(v>(sc.get(x[1])||0))sc.set(x[1],v)}
+  const r=[...sc.entries()].sort((p,q)=>q[1]-p[1]);return r.length&&r[0][1]>=0.6&&(r.length<2||r[0][1]-r[1][1]>=0.15)?(r[0][0]||null):null}
+const csOf=(code,addr)=>{if(!code)return null;const c=String(code).trim();if(R.csPts&&R.csPts.has(c)){const k=csPt(R.csPts.get(c),addr);return k?k.split(','):null}return R.custSale?R.custSale.get(c)||null:null};
 /* 1 sale có thể có nhiều tài khoản cùng tên → danh sách uid */
 const sameAs=u=>(R.csGroup&&R.csGroup.get(u))||[u];
-const ownerSaleOf=o=>o.ownerSale?sameAs(o.ownerSale):(o.arising?csOf(o.cust):null);
+const ownerSaleOf=o=>o.ownerSale?sameAs(o.ownerSale):(o.arising?csOf(o.cust,o.address):null);
 /* ship tạo đơn phát sinh: chọn tài khoản sale đang dùng nhiều nhất (nhiều đơn nhất) */
 const pickOwner=L=>{if(!L||!L.length||L.includes(R.uid))return null;if(L.length===1)return L[0];const n=u=>R.orders.reduce((a,o)=>a+(o.saleId===u?1:0),0);return L.slice().sort((a,b)=>n(b)-n(a))[0]};
 /* doanh số: đơn phát sinh có ghi sale phụ trách (từ v74) tính cho sale đó, còn lại theo người lên đơn */
@@ -1835,7 +1843,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   const hm=window.APP_MODE||(location.hash||'').replace('#','');if(['sale','ship','kho','admin'].includes(hm)){R.mode=hm;R.tab=null}
   const sub=(coll,fn)=>db.collection(coll).onSnapshot(s=>{fn(s);soon();resolveNames()},e=>toast('Mất kết nối '+coll+' ('+e.code+')'));
   sub('staff',s=>{R.staff=new Map(s.docs.map(d=>[d.id,d.data()]))});
-  sub('config',s=>{const d=s.docs.find(x=>x.id==='custGroups');R.cgroups=d?d.data():null;const sp=s.docs.find(x=>x.id==='staffPre');R.staffPre=sp?sp.data():null;const v=s.docs.find(x=>x.id==='vatRates');R.vat=v?v.data():null;const cs=s.docs.find(x=>x.id==='custSale');const cd=cs?cs.data():null;if((cd&&cd.h)!==R._csH){R._csH=cd&&cd.h;const m=new Map(),gp=new Map();Object.entries((cd&&cd.by)||{}).forEach(([u,L])=>{const us=String(u).split(',').filter(Boolean);us.forEach(x=>gp.set(x,us));(L||[]).forEach(k=>m.set(String(k).trim(),us))});R.custSale=m;R.csGroup=gp}});
+  sub('config',s=>{const d=s.docs.find(x=>x.id==='custGroups');R.cgroups=d?d.data():null;const sp=s.docs.find(x=>x.id==='staffPre');R.staffPre=sp?sp.data():null;const v=s.docs.find(x=>x.id==='vatRates');R.vat=v?v.data():null;const cs=s.docs.find(x=>x.id==='custSale');const cd=cs?cs.data():null;if((cd&&cd.h)!==R._csH){R._csH=cd&&cd.h;const m=new Map(),gp=new Map();Object.entries((cd&&cd.by)||{}).forEach(([u,L])=>{const us=String(u).split(',').filter(Boolean);us.forEach(x=>gp.set(x,us));(L||[]).forEach(k=>m.set(String(k).trim(),us))});R.custSale=m;R.csGroup=gp;R.csPts=new Map(Object.entries((cd&&cd.pts)||{}));R.csPts.forEach(P=>(P||[]).forEach(x=>{const us=String(x[1]||'').split(',').filter(Boolean);if(us.length>1)us.forEach(u=>gp.set(u,us))}))}});
   sub('config',s=>{const rt=s.docs.find(x=>x.id==='routes');const nr=rt?rt.data():null;if(JSON.stringify(nr)!==JSON.stringify(R.routes)){R.routes=nr;R.ui.rtSel=null}const d=s.docs.find(x=>x.id==='prodAlias');const it=(d&&d.data()||{}).items||{};R.palias=Object.fromEntries(Object.entries(it).map(([k,v])=>[k,(Array.isArray(v)?v:String(v||'').split(/[;|\n]/)).map(x=>String(x).trim()).filter(Boolean)]))});
   sub('requests',s=>{R.requests=new Map(s.docs.map(d=>[d.id,d.data()]))});
   sub('attend',s=>{R.attend=s.docs.map(d=>Object.assign({},d.data(),{id:d.id}))});
@@ -1851,7 +1859,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='75';
+const APP_BUILD='76';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
