@@ -782,10 +782,10 @@ async function shareOrderImage(o){toast('Đang tạo ảnh đơn…');let url;tr
 const isProv=o=>/^\s*\(\s*20\s*\./.test(String(o&&(o.address||o.custName)||''))||/^\s*\([^)]*t[iỉ]nh/i.test(String(o&&(o.address||o.custName)||''));
 const pgPhone=s=>{const m=String(s||'').match(/(?:\+?84|0)(?:[\s.]?\d){9,10}/);return m?m[0].replace(/\D/g,'').replace(/^84/,'0'):''};
 const pgFmtPh=p=>{p=String(p||'').replace(/\D/g,'');return p.length===10?p.replace(/(\d{4})(\d{3})(\d{3})/,'$1 $2 $3'):p.length===11?p.replace(/(\d{4})(\d{3})(\d{4})/,'$1 $2 $3'):p};
-function pgParse(o){const c=findCust(o.cust)||{};let t=String(o.address||o.custName||c.name||'').split('\n')[0].replace(/^\s*\([^)]*\)\s*/,'').trim();let nx='',nxp='';
+function pgParse(o){const c=findCust(o.cust)||{};let t=String(o.address||o.custName||c.name||'').split('\n')[0].replace(/^(\s*\([^)]*\)\s*)+/,'').trim();let nx='',nxp='';
   const g=t.search(/g[ửưu]i\s*(h[àa]ng|xe)\b/i);if(g>=0){let s=t.slice(g).replace(/^g[ửưu]i\s*(h[àa]ng|xe)\s*[:\-]?\s*/i,'');nxp=pgPhone(s);if(nxp)s=s.replace(/(?:\+?84|0)(?:[\s.]?\d){9,10}/,'');nx=s.replace(/[\s:.,\-]+$/,'').replace(/^[\s:.,\-]+/,'').trim();t=t.slice(0,g)}
   let ph=pgPhone(t)||pgPhone(o.phone)||pgPhone(c.phone);t=t.replace(/(?:\+?84|0)(?:[\s.]?\d){9,10}/g,' ').replace(/\b(sđt|sdt|đt|dt)\s*[:.]?\s*$/i,'');
-  let name='',addr='';const k=t.indexOf(' - ');if(k>0){name=t.slice(0,k);addr=t.slice(k+3)}else{const cn=String(c.name||'').replace(/^\s*\([^)]*\)\s*/,'');name=cn&&cn.length<60?cn:t;addr=cn&&cn.length<60?t.replace(cn,''):''}
+  let name='',addr='';const k=t.indexOf(' - ');if(k>0){name=t.slice(0,k);addr=t.slice(k+3)}else{const q=t.indexOf(',');if(q>0){name=t.slice(0,q);addr=t.slice(q+1)}else name=t}
   const cl=x=>String(x||'').replace(/\s+/g,' ').replace(/^[\s:.,\-]+|[\s:.,\-]+$/g,'').trim();
   /* sale phụ trách khách → tên + SĐT (nick có SĐT ưu tiên); không có thì sale lên đơn */
   let us=(typeof csOf==='function'&&csOf(o.cust,o.address))||[];if(!us.length&&o.saleId)us=[o.saleId];const st=u=>R.staff.get(u)||{};let su=us.find(u=>pgPhone(st(u).phone))||us[0]||'';
@@ -2020,7 +2020,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='91';
+const APP_BUILD='92';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
