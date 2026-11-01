@@ -780,7 +780,9 @@ async function shareOrderImage(o){toast('Đang tạo ảnh đơn…');let url;tr
 
 /* v91: PHIẾU GỬI HÀNG khách tỉnh (A4 ngang) – tự điền từ đơn: người nhận, sale phụ trách + SĐT, ngày in, nhà xe, hàng hoá; nhập số kiện → in N tờ 1/N…N/N; sửa được trên bản xem trước */
 const isProv=o=>/^\s*\(\s*20\s*\./.test(String(o&&(o.address||o.custName)||''))||/^\s*\([^)]*t[iỉ]nh/i.test(String(o&&(o.address||o.custName)||''));
-const PG_PH=[/(?<!\d)0\d{9}(?!\d)/,/(?<!\d)(?:\+?84)\d{9}(?!\d)/,/(?<!\d)0\d{10}(?!\d)/,/(?<!\d)0\d{2,3}(?:[\s.]\d{3,4}){2}(?![\s.]?\d)/];const pgPhM=s=>{s=String(s||'');for(const re of PG_PH){const m=s.match(re);if(m)return m}return null};
+const PG_PH=[/(?<!\d)0\d{9}(?!\d)/,/(?<!\d)(?:\+?84)\d{9}(?!\d)/,/(?<!\d)0\d{10}(?!\d)/,/(?<!\d)0\d{2,3}(?:[\s.]\d{3,4}){2}(?![\s.]?\d)/];const pgPhM=s=>{s=String(s||'');for(const re of PG_PH){const m=s.match(re);if(m)return m}const rg=/(?<!\d)(?:\+?84|0)\d[\d .]{7,13}\d(?!\d)/g;let x;while((x=rg.exec(s))){const d=x[0].replace(/\D/g,'').replace(/^84/,'0');if(d.length===10)return x}return null};
+/* v95: nhớ SĐT / địa chỉ / nhà xe đã sửa trên phiếu theo khách + điểm giao (collection pgmemo) */
+const pgKey=o=>{const k=String(o.cust||'')+'|'+noAcc(String(o.address||o.custName||'').split('\n')[0].replace(/^(\s*\([^)]*\)\s*)+/,'').replace(/(?:\+?84|0)\d[\d .]{7,13}\d/g,'')).replace(/[^a-z0-9]+/g,' ').trim().slice(0,80);return 'm'+[...new TextEncoder().encode(k)].reduce((h,c)=>(h*31+c)>>>0,7).toString(36)+k.length.toString(36)};
 const pgPhone=s=>{const m=pgPhM(s);return m?m[0].replace(/\D/g,'').replace(/^84/,'0'):''};
 const pgFmtPh=p=>{p=String(p||'').replace(/\D/g,'');return p.length===10?p.replace(/(\d{4})(\d{3})(\d{3})/,'$1 $2 $3'):p.length===11?p.replace(/(\d{4})(\d{3})(\d{4})/,'$1 $2 $3'):p};
 function pgParse(o){const c=findCust(o.cust)||{};let t=String(o.address||o.custName||c.name||'').split('\n')[0].replace(/^(\s*\([^)]*\)\s*)+/,'').trim();let nx='',nxp='';
@@ -793,6 +795,10 @@ function pgParse(o){const c=findCust(o.cust)||{};let t=String(o.address||o.custN
   let us=(typeof csOf==='function'&&csOf(o.cust,o.address))||[];if(!us.length&&o.saleId)us=[o.saleId];const st=u=>R.staff.get(u)||{};let su=us.find(u=>pgPhone(st(u).phone))||us[0]||'';
   if(su&&!pgPhone(st(su).phone)){const nm=noAcc(staffName(su));for(const [u,s] of R.staff)if(noAcc(s.name||'')===nm&&pgPhone(s.phone)){su=u;break}}
   const it=(o.lines||[]).filter(l=>!isFee(l)&&(toNum(l.qty)||giftQ(l))).map(l=>[l.name,fmt(r3(toNum(l.qty)+giftQ(l)))+' '+(l.unit||'')]);
+  if(!cl(addr)){addr=name;const cn=String(c.name||'').replace(/^(\s*\([^)]*\)\s*)+/,'').trim();if(cn&&cn.length<=40&&noAcc(cn)!==noAcc(cl(name)))name=cn}
+  /* SĐT: điểm giao → đơn → danh mục khách → đơn cũ cùng khách + điểm giao */
+  if(!ph){const kk=pgKey(o);for(const x of R.orders||[]){if(x===o||x.cust!==o.cust||pgKey(x)!==kk)continue;const p2=pgPhone(x.phone);if(p2){ph=p2;break}}}
+  const mm=(R.pgmemo||{})[pgKey(o)];if(mm){if(mm.ph&&!ph)ph=mm.ph;if(mm.addr&&(!cl(addr)||addr===name))addr=mm.addr;if(mm.nx&&!nx)nx=mm.nx;if(mm.nxp&&!nxp)nxp=mm.nxp;if(mm.name)name=mm.name}
   return {name:cl(name),ph:pgFmtPh(ph),addr:cl(addr),nx:(x=>x.charAt(0).toUpperCase()+x.slice(1))(cl(nx)),nxp:pgFmtPh(nxp),sale:su?staffName(su):'',sph:su?pgFmtPh(st(su).phone):'',no:o.no||'',it}}
 function printPG(o){const d=pgParse(o),E=x=>esc(x||''),today=dmy(isoOf(new Date()));
   const css=`#pgArea{position:fixed;inset:0;z-index:10000;background:#e9eef3;overflow:auto;color:#12304a}#pgArea .pbar{position:sticky;top:0;z-index:3;background:#1b69a3;color:#fff;padding:8px 10px;font:600 15px system-ui,sans-serif;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}#pgArea .pbar button{border:0;border-radius:10px;padding:9px 14px;font-weight:700;font-size:15px}#pgArea .kn{display:flex;align-items:center;gap:6px;background:#fff;color:#1b69a3;border-radius:10px;padding:3px 6px}#pgArea .kn button{background:#e3eef8;color:#1b69a3;padding:4px 12px;font-size:18px}#pgArea .kn input{width:52px!important;min-width:0!important;height:38px!important;min-height:0!important;padding:0!important;margin:0!important;text-align:center;font:700 20px system-ui!important;border:0!important;box-shadow:none!important;color:#000;background:#fff!important;-moz-appearance:textfield;appearance:textfield}#pgArea .kn input::-webkit-inner-spin-button,#pgArea .kn input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
@@ -827,7 +833,7 @@ function printPG(o){const d=pgParse(o),E=x=>esc(x||''),today=dmy(isoOf(new Date(
     wrap.querySelectorAll('[data-f]').forEach(x=>{if(x.dataset.f in val)x.innerText=val[x.dataset.f];x.oninput=()=>{wrap.querySelectorAll(`[data-f="${x.dataset.f}"]`).forEach(y=>{if(y!==x)y.innerText=x.innerText})}});wrap.querySelectorAll('.pg').forEach(fit);zm()};
   const zm=()=>{const w=el.clientWidth-16;wrap.style.zoom=w<1123?(w/1123).toFixed(3):''};
   el.querySelector('#pgM').onclick=()=>{el.querySelector('#pgN').value=toNum(el.querySelector('#pgN').value)-1;draw()};el.querySelector('#pgP').onclick=()=>{el.querySelector('#pgN').value=toNum(el.querySelector('#pgN').value)+1;draw()};el.querySelector('#pgN').onchange=draw;
-  el.querySelector('#pgX').onclick=()=>el.remove();el.querySelector('#pgGo').onclick=()=>{try{document.activeElement&&document.activeElement.blur();window.print()}catch(e){toast('Máy không hỗ trợ in')}};
+  el.querySelector('#pgX').onclick=()=>el.remove();el.querySelector('#pgGo').onclick=()=>{try{document.activeElement&&document.activeElement.blur();keep();const ch={};for(const f of ['name','ph','addr','nx','nxp']){const v=String(val[f]||'').trim();if(v&&v!==String(d[f]||'').trim())ch[f]=f==='ph'||f==='nxp'?pgPhone(v)||v:v}if(Object.keys(ch).length){const id=pgKey(o),old=(R.pgmemo||{})[id]||{};const nd=Object.assign({},old,ch,{cust:o.cust||'',loc:String(o.address||'').slice(0,120),at:Date.now(),by:R.uid});R.pgmemo=Object.assign({},R.pgmemo||{},{[id]:nd});R.db.doc('pgmemo/'+id).set(nd).catch(()=>{})}window.print()}catch(e){toast('Máy không hỗ trợ in')}};
   draw()}
 function orderDetail(o){if(!o)return;const role=R.mode;const mine=o.saleId===R.uid;const ro=role==='sale'&&!mine;
   const canEdit=(role==='sale'&&mine||role==='admin')&&o.status==='new';
@@ -2013,6 +2019,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   sub('products',s=>{R.allProducts=s.docs.map(d=>d.data()).filter(p=>p&&p.code);R.products=new Map(s.docs.map(d=>[d.id,d.data()]).filter(x=>x[1]&&x[1].code&&/^(HH|TP)/i.test(String(x[1].code).trim())&&!PROD_HIDE.test(' '+noAcc(x[1].name).replace(/[^a-z0-9]+/g,' ')+' ')))});/* chỉ dùng mã hàng hoá HH và thành phẩm TP */
   sub('customers',s=>{R.custInd=new Map(s.docs.map(d=>[d.id,d.data()]).filter(x=>x[1]&&x[1].code));rebuildCustomers()});
   sub('custpack',s=>{R.custPacks=new Map(s.docs.map(d=>[d.id,(d.data()||{}).items||[]]));rebuildCustomers()});
+  sub('pgmemo',s=>{R.pgmemo=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]))});
   sub('custLoc',s=>{R.custLoc=s.docs.map(d=>Object.assign({},d.data(),{_id:d.id})).filter(x=>x&&x.cust&&isFinite(x.lat)&&isFinite(x.lng))});
   sub('prices',s=>{R.prices=new Map(s.docs.map(d=>{const x=d.data();return [x.cust,x]}))});
   sub('vouchers',s=>{R.vouchers=s.docs.map(d=>Object.assign({},d.data(),{id:d.id})).filter(v=>v.date&&v.type)});
@@ -2022,7 +2029,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='94';
+const APP_BUILD='95';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
