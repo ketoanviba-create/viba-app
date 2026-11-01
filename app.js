@@ -1892,7 +1892,13 @@ function render(){const role=myRole();const who=$('#who');
   views()[R.mode][R.tab](v);
   if(keep){const el=document.getElementById(keep.id);if(el){el.focus();try{if(keep.s!=null)el.setSelectionRange(keep.s,keep.e)}catch(e){}}}
   finishRender()}
-function finishRender(){try{lowAlertMaybe()}catch(e){}$('#dlShip').innerHTML=[...R.staff.entries()].filter(([i,s])=>s.role==='ship').map(([i])=>`<option value="${esc(staffName(i))}"></option>`).join('')}
+/* v87: dòng "Cập nhật lúc … · ↻ Làm mới" đầu màn hình */
+function syncBarUpd(){const v=$('#view'),S=window.vibaSync;if(!v||!R.db||!S||!myRole())return;let b=document.getElementById('syncBar');if(!b||b.parentNode!==v){b=document.createElement('div');b.id='syncBar';b.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px';v.prepend(b)}
+  const t=S.last?new Date(S.last).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'}):'…';const st=R.ui.syncFull?'⏳ Đang tải lại toàn bộ…':S.busy&&!S.last?'⏳ Đang tải…':S.err?'⚠️ Mạng yếu – đang thử lại · dữ liệu lúc '+t:'🔄 Cập nhật lúc '+t;
+  b.innerHTML=`<span class="tiny" style="color:${S.err?'var(--bad)':'var(--muted)'};font-weight:600">${st}</span><button class="btn sm" id="syncNowBtn" style="min-height:0;padding:4px 12px" ${R.ui.syncFull?'disabled':''}>↻ Làm mới</button>`;
+  b.querySelector('#syncNowBtn').onclick=async()=>{R.ui.syncFull=true;syncBarUpd();toast('Đang tải lại toàn bộ dữ liệu…');try{await S.full();toast('✓ Đã tải lại đầy đủ')}catch(e){toast('Chưa tải được – kiểm tra mạng rồi thử lại')}R.ui.syncFull=false;render()}}
+window.addEventListener('viba-sync',()=>{try{syncBarUpd()}catch(e){}});setInterval(()=>{try{syncBarUpd()}catch(e){}},30000);
+function finishRender(){try{lowAlertMaybe()}catch(e){}try{syncBarUpd()}catch(e){}$('#dlShip').innerHTML=[...R.staff.entries()].filter(([i,s])=>s.role==='ship').map(([i])=>`<option value="${esc(staffName(i))}"></option>`).join('')}
 
 /* ================= KẾT NỐI ================= */
 let rT;/* v69: đang gõ ở bất kỳ ô nào trên màn hình → hoãn vẽ lại khi có dữ liệu mới (tối đa 15 giây), vẽ lại khi rời ô */
@@ -1926,11 +1932,11 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='85';
+const APP_BUILD='87';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
     b.onclick=()=>location.reload();document.body.appendChild(b)}}catch(e){}}
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)chkUpdate()});setInterval(chkUpdate,300000);setTimeout(chkUpdate,8000);
+/* v87: mở lại app sau hơn 30 phút để nền → tải lại trang cho mới (không làm khi đang mở bảng/đang gõ) */let hidAt=0;document.addEventListener('visibilitychange',()=>{if(document.hidden){hidAt=Date.now();return}const a=document.activeElement;if(hidAt&&Date.now()-hidAt>1800000&&$('#sheet').hidden&&!(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName))){location.reload();return}chkUpdate()});setInterval(chkUpdate,300000);setTimeout(chkUpdate,8000);
 init();
 })();
