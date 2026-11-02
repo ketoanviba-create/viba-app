@@ -1132,7 +1132,8 @@ function banSup(uid,f,t,L){const S=ST(),B=bepSet(),std=toNum(S.shipSwapStd)/100,
    Ship công ty: lương cơ bản 11tr ÷ số ngày tháng × ngày công (tính cả CN) + kg × 600 + doanh số × 1%;  Phùng Văn Tùng: 20tr ÷ số ngày tháng × ngày công
    kg chuối + dứa quả: CHỈ theo phiếu xuất kho (Xuất bán) ghi tên ship − phiếu nhập hàng trả lại; ngày chưa có phiếu → chưa tính (báo thiếu phiếu)
    Doanh số mát + đông: đơn đã giao (không tính ship ngoài), bỏ chuối, dứa quả, hàng cafe (bơ, chanh leo, mãng cầu, xoài, dâu tây); hàng tặng/hỗ trợ/đổi tính theo đơn giá (trống → giá mặc định); trước thuế GTGT */
-const PAY_PH=['Hỗ trợ điện thoại, lên đơn phát sinh',300000],PAY_CS=['Hỗ trợ chăm sóc khách hàng (tuyến chưa có sale)',1000000];
+/* v97: hỗ trợ xăng 500k, điện thoại 300k, chăm sóc KH 1tr (Hiểu, Khánh) tính theo ngày đi làm thực tế = mức tháng ÷ số ngày tháng × ngày công; thâm niên, đội trưởng giữ nguyên mức tháng */
+const PAY_KH=[['Hỗ trợ xăng',500000,1],['Hỗ trợ điện thoại, lên đơn phát sinh',300000,1]],PAY_CS=['Hỗ trợ chăm sóc khách hàng (tuyến chưa có sale)',1000000,1];
 const PAY_PLAN={'bach quoc hieu':{t:'k',pc:[['Phụ cấp thâm niên',500000],['Phụ cấp đội trưởng đội giao hàng',500000],PAY_CS]},'nguyen ngoc khanh':{t:'k',pc:[PAY_CS]},'le van minh':{t:'k'},'dang quoc cuong':{t:'k'},'dinh quang huy':{t:'k'},
   'nguyen van truong':{t:'c',base:11000000},'mac thanh binh':{t:'c',base:11000000},'le danh hai':{t:'c',base:11000000},'nguyen minh quang':{t:'c',base:11000000},'phung van tung':{t:'f',base:20000000}};
 const PAY_T={k:{lab:'Ship khoán',kg:1350,pct:3.6},c:{lab:'Ship công ty',kg:600,pct:1},f:{lab:'Lương cố định',kg:0,pct:0}};
@@ -1156,7 +1157,7 @@ function shipPay(uid,ym,L){const S=ST(),[f,t,n]=ymRange(ym);const td=today();con
   const c=payCalc(uid,f,t,L);const worked=[...c.days].length;const off=Math.max(0,upto-[...c.days].filter(d=>+d.slice(8,10)<=upto).length);
   const items=[];const add=(lab,v,note)=>items.push({lab,v:Math.round(v),note});
   if(P.t==='c'||P.t==='f')add('Lương cơ bản',P.base/n*worked,`${fmt(P.base)} ÷ ${n} ngày × ${worked} ngày công`);
-  if(P.t==='k'){(P.pc||[]).forEach(([a,b])=>add(a,b));add(PAY_PH[0],PAY_PH[1]);add('Thưởng chuyên cần',Math.max(0,300000-off*100000),`300.000 − nghỉ ${off} ngày × 100.000`)}
+  if(P.t==='k'){(P.pc||[]).concat(PAY_KH).forEach(([a,b,pr])=>pr?add(a,b/n*worked,`${fmt(b)} ÷ ${n} ngày × ${worked} ngày công`):add(a,b));add('Thưởng chuyên cần',Math.max(0,300000-off*100000),`300.000 − nghỉ ${off} ngày × 100.000`)}
   const hhKg=Math.round(c.kg*T.kg),hhPct=Math.round(c.pre*T.pct/100);
   if(T.kg){add('Công giao chuối + dứa quả',hhKg,`${fmt(c.kg)} kg × ${fmt(T.kg)}đ`+(c.vDays?` · phiếu xuất ${fmt(c.kgX)}${c.kgN?' − nhập trả '+fmt(c.kgN):''} kg`:'')+(c.miss.length?` · ⚠️ chưa có phiếu xuất ngày ${c.miss.map(x=>dmy(x).slice(0,5)).join(', ')} – chưa tính`:''));
     add('Công giao hàng mát + đông',hhPct,`Doanh số trước thuế ${fmt(c.pre)} × ${String(T.pct).replace('.',',')}%`)}
@@ -1166,6 +1167,7 @@ function shipPay(uid,ym,L){const S=ST(),[f,t,n]=ymRange(ym);const td=today();con
 /* thu nhập 1 ngày (phụ cấp/chuyên cần chỉ tính ở tháng) */
 function shipPayDay(uid,d,L){const P=payPlan(uid),T=PAY_T[P.t]||PAY_T.k;const c=payCalc(uid,d,d,L);const [,,n]=ymRange(d.slice(0,7));const items=[];const add=(lab,v,note)=>items.push({lab,v:Math.round(v),note});
   if((P.t==='c'||P.t==='f')&&c.days.size)add('Lương cơ bản ngày',P.base/n,`${fmt(P.base)} ÷ ${n} ngày`);
+  if(P.t==='k'&&c.days.size)(P.pc||[]).concat(PAY_KH).filter(x=>x[2]).forEach(([a,b])=>add(a,b/n,`${fmt(b)} ÷ ${n} ngày`));
   if(T.kg){add('Công giao chuối + dứa quả',c.kg*T.kg,`${c.pxNo.length?'Phiếu xuất '+c.pxNo.join(', ')+': ':''}${fmt(c.kg)} kg × ${fmt(T.kg)}đ${c.kgN?' (đã trừ nhập trả '+fmt(c.kgN)+' kg)':''}${c.miss.length?' · ⚠️ chưa có phiếu xuất – chưa tính':''}`);
     add('Công giao hàng mát + đông',c.pre*T.pct/100,`Doanh số trước thuế ${fmt(c.pre)} × ${String(T.pct).replace('.',',')}%`)}
   return Object.assign(c,{items,total:items.reduce((a,x)=>a+x.v,0),plan:P,T})}
@@ -1194,7 +1196,7 @@ function payBlock(uid){const md=R.ui.payMode||'m';const seg=`<div class="seg"><b
     return seg+`<div style="display:flex;gap:8px;align-items:center;margin-top:8px"><button class="btn sm" data-pdstep="-1">‹</button><input type="date" id="payDayIn" value="${d}" max="${today()}" style="flex:1"><button class="btn sm" data-pdstep="1" ${d>=today()?'disabled':''}>›</button></div>
      <div class="card"><div class="totalbar"><span class="muted">Thu nhập ngày ${dmy(d)} ${tag(s.plan)}</span><span class="money">${vnd(s.total)}</span></div></div>
      <div class="card">${s.items.map(x=>row(x.lab,fmt(x.v),x.note)).join('')||'<div class="empty">Không có khoản tính trong ngày.</div>'}${row('Đơn giao trong ngày',fmt(s.nDone),s.nOut?s.nOut+' đơn ship ngoài (không tính)':'')}</div>
-     ${s.plan.t==='k'?'<div class="tiny muted">Phụ cấp, hỗ trợ và thưởng chuyên cần tính theo tháng – xem mục Theo tháng.</div>':''}${payDetail(s,s.T,true)}`}
+     ${s.plan.t==='k'?'<div class="tiny muted">Phụ cấp thâm niên, đội trưởng và thưởng chuyên cần tính theo tháng – xem mục Theo tháng.</div>':''}${payDetail(s,s.T,true)}`}
   const ym=payYm();const L=payOrders(ym);const head=seg+payMonthBar();if(!L)return head+'<div class="empty">Đang tải…</div>';const s=shipPay(uid,ym,L);const [f]=ymRange(ym);
   const w0=(new Date(+f.slice(0,4),+f.slice(5,7)-1,1).getDay()+6)%7;let cal='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:12px;margin-top:8px">'+['T2','T3','T4','T5','T6','T7','CN'].map(d=>`<div class="muted">${d}</div>`).join('')+'<div></div>'.repeat(w0);
   for(let d=1;d<=s.n;d++){const iso=f.slice(0,8)+pad(d);const w=s.days.has(iso),fut=d>s.upto;cal+=`<div style="padding:6px 0;border-radius:8px;${w?'background:rgba(30,150,90,.15);color:#1e9a5c':fut?'opacity:.4':'background:rgba(220,60,60,.15);color:#d64545;font-weight:700'}">${d}</div>`}cal+='</div>';
@@ -1232,7 +1234,7 @@ function payAdmin(){const ym=payYm();const L=payOrders(ym);const head=`<div clas
 function bindPayAdmin(){bindPayMonth();const b=$('#payXls');if(!b)return;b.onclick=()=>{const ym=payYm();const L=payOrders(ym)||[];const S=ST();const P=shipIds(L).map(u=>shipPay(u,ym,L));
   const rows=[['Ship','Loại','Ngày công','Số ngày tháng','Ngày nghỉ','Lương cơ bản','Phụ cấp, hỗ trợ','Thưởng chuyên cần','Kg chuối + dứa quả','Đơn giá kg','Công chuối, dứa (đ)','Doanh số mát + đông trước thuế','Tỷ lệ %','Công mát, đông (đ)','Tổng lương tháng (đ)','Đơn ship ngoài nội thành','Đơn ship ngoài ngoại thành','Công ship ngoài – trả ngay (đ)']];
   P.forEach(p=>rows.push([staffName(p.uid),p.T.lab,p.worked,p.n,p.off,p.lcb,p.pcs,p.cc,p.kg,p.T.kg,p.hhKg,p.pre,p.T.pct,p.hhPct,p.total,p.outN,p.outF,p.outFee]));
-  rows.push([],['Cách tính (02/11/2026): ship khoán kg × 1.350 + doanh số mát/đông trước thuế × 3,6% + hỗ trợ điện thoại 300.000 + chuyên cần 300.000 − 100.000/ngày nghỉ + phụ cấp riêng (Hiểu: thâm niên 500.000, đội trưởng 500.000; Hiểu, Khánh: chăm sóc KH 1.000.000); ship công ty 11.000.000 ÷ số ngày tháng × ngày công + kg × 600 + doanh số × 1%; Phùng Văn Tùng 20.000.000 ÷ số ngày tháng × ngày công. Kg chỉ theo phiếu xuất − nhập trả (ngày chưa có phiếu xuất: chưa tính), chuối gói quy kg theo bảng pack, dứa chín quả 0,85 kg. Không tính ship ngoài, hàng cafe (bơ, chanh leo, mãng cầu, xoài, dâu tây), không tính chênh lệch hỗ trợ chuối.']);
+  rows.push([],['Cách tính (02/11/2026): ship khoán kg × 1.350 + doanh số mát/đông trước thuế × 3,6% + hỗ trợ xăng 500.000 + điện thoại 300.000 (theo ngày công: mức tháng ÷ số ngày tháng × ngày công) + chuyên cần 300.000 − 100.000/ngày nghỉ + phụ cấp riêng (Hiểu: thâm niên 500.000, đội trưởng 500.000 cố định; Hiểu, Khánh: chăm sóc KH 1.000.000 theo ngày công); ship công ty 11.000.000 ÷ số ngày tháng × ngày công + kg × 600 + doanh số × 1%; Phùng Văn Tùng 20.000.000 ÷ số ngày tháng × ngày công. Kg chỉ theo phiếu xuất − nhập trả (ngày chưa có phiếu xuất: chưa tính), chuối gói quy kg theo bảng pack, dứa chín quả 0,85 kg. Không tính ship ngoài, hàng cafe (bơ, chanh leo, mãng cầu, xoài, dâu tây), không tính chênh lệch hỗ trợ chuối.']);
   xlsxFile('Luong_ship_'+ym+'.xlsx',[{name:'Luong ship',rows,cols:[22,13,9,9,9,13,13,13,12,9,13,16,8,13,15,10,10,13]}])}}
 
 /* ================= CHẤM CÔNG + LƯƠNG SALE (v29) =================
@@ -2081,7 +2083,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='96';
+const APP_BUILD='97';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
