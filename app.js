@@ -93,7 +93,7 @@ function routeOf(o){const a=(o&&o.address)||'';const m2=String(a).match(/^\s*\(\
 const tKey=a=>noAcc(a).replace(/\s+/g,' ').replace(/^\(\s*20[^)]*\)\s*/,'').slice(0,24);
 function tinhMap(){const g=(R.routes||{}).tinhG;if(!g)return {};if(R._tm&&R._tmSrc===g)return R._tm;const m={};for(const k in g)for(const x of String(g[k]).split('|'))if(x)m[x]=k;R._tmSrc=g;return R._tm=m}
 const rtLabel=id=>id==='none'||!id?'Chưa có tuyến':((routeById(id)||{}).name||id);
-const myRoutes=()=>RT().filter(r=>r.ship===R.uid).map(r=>r.id);
+const myRoutes=()=>RT().filter(r=>r.ship===R.uid||(r.co||[]).includes(R.uid)).map(r=>r.id);/* v102: ship phụ (co) dùng chung tuyến */
 function shipRtSel(){if(R.ui.rtSel)return R.ui.rtSel;if(!R.routes)return {mode:'all',ids:[]};const m=myRoutes();return R.ui.rtSel=m.length?{mode:'mine',ids:m}:{mode:'all',ids:[]}}
 const inRt=o=>{const s=shipRtSel();return s.mode==='all'||s.ids.includes(routeOf(o)||'none')};
 /* v81: đơn QUÁ HẠN (ngày giao đã qua, chưa ship nhận, chưa giao) vẫn hiện ở Đơn chờ người giao khi xem hôm nay/ngày sau, kèm nhãn Quá hạn */
@@ -2112,7 +2112,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='101';
+const APP_BUILD='102';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
