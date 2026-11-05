@@ -7,10 +7,10 @@ const ss={get:k=>{try{return sessionStorage.getItem(k)}catch(e){return null}},se
 const delTok=()=>{ls.del(TK);ss.del(TK)};
 let token=ls.get(TK)||ss.get(TK),me=null;
 /* Google đôi khi trả 404 ở bước chuyển hướng (script.googleusercontent.com/macros/echo) dù máy chủ đã chạy xong: thử lại tối đa 4 lần */
-async function fetchApi(op,a){let last;const N=op==='sync'?2:4;for(let i=0;i<N;i++){let ac=null,tm=null;try{if(op==='sync'&&window.AbortController){ac=new AbortController();tm=setTimeout(()=>ac.abort(),30000)}const r=await fetch(window.VIBA_API,{method:'POST',credentials:'omit',cache:'no-store',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({api:1,tok:token,op,a:a||{}}),signal:ac?ac.signal:undefined});clearTimeout(tm);const t=await r.text();if(r.ok&&t.charAt(0)==='{'){const o=JSON.parse(t);
+async function fetchApi(op,a){let last;const N=op==='sync'?2:3;for(let i=0;i<N;i++){let ac=null,tm=null;try{/* v103: mọi lệnh đều có hạn chờ (trước chỉ đồng bộ) – tránh treo mãi khi mạng chập chờn */if(window.AbortController){ac=new AbortController();tm=setTimeout(()=>ac.abort(),op==='sync'?30000:20000)}const r=await fetch(window.VIBA_API,{method:'POST',credentials:'omit',cache:'no-store',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({api:1,tok:token,op,a:a||{}}),signal:ac?ac.signal:undefined});clearTimeout(tm);const t=await r.text();if(r.ok&&t.charAt(0)==='{'){const o=JSON.parse(t);
       if(i>0&&op==='signup'&&/đã có tài khoản/.test(o.error||''))return fetchApi('login',a); /* lần trước đã tạo xong nhưng mất phản hồi */
       return o}last=new Error('HTTP '+r.status)}catch(e){clearTimeout(tm);last=e}if(i<N-1)await new Promise(r=>setTimeout(r,800*(i+1)+Math.random()*900))}
-  throw Object.assign(new Error(navigator.onLine===false?'Mất kết nối mạng':'Máy chủ dữ liệu chưa phản hồi, thử lại sau ít phút'),{code:'unavailable',cause:last})}
+  throw Object.assign(new Error(navigator.onLine===false?'Mất kết nối mạng':'Máy chủ dữ liệu chưa phản hồi, thử lại sau ít phút'),{code:'unavailable',net:true,cause:last})}
 function call(op,a){if(window.VIBA_API)return fetchApi(op,a).then(o=>{if(o.ok)return o.r;if(/^AUTH:/.test(o.error||'')){delTok();location.reload();return new Promise(()=>{})}throw Object.assign(new Error(o.error),{code:o.code||'unavailable'})});
   return new Promise((res,rej)=>{google.script.run.withSuccessHandler(s=>{let o;try{o=JSON.parse(s)}catch(e){return rej(Object.assign(new Error('Phản hồi lỗi'),{code:'unavailable'}))}
     if(o.ok)return res(o.r);if(/^AUTH:/.test(o.error||'')){delTok();location.reload();return}rej(Object.assign(new Error(o.error),{code:o.code||'unavailable'}))})
@@ -18,12 +18,12 @@ function call(op,a){if(window.VIBA_API)return fetchApi(op,a).then(o=>{if(o.ok)re
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 /* ---------- kho dữ liệu cục bộ, đồng bộ định kỳ ---------- */
-const store=new Map();let since=0;const listeners=new Set();let syncing=false;
+const store=new Map();let OB=[];const inflight=new Set();let since=0;const listeners=new Set();let syncing=false;
 const split=p=>{const s=p.split('/');return {coll:s.slice(0,-1).join('/'),id:s[s.length-1]}};
 const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
 const snapDoc=(id,d)=>({id,exists:d!=null,data:()=>d==null?undefined:clone(d),metadata:{fromCache:false,hasPendingWrites:false}});
 const qsnap=l=>({docs:l,size:l.length,empty:!l.length,docChanges:()=>[],metadata:{fromCache:false,hasPendingWrites:false}});
-function applyRows(rows){const touched=new Set();for(const r of rows){let d=null;if(r.j){try{d=JSON.parse(r.j)}catch(e){d=null}}if(d==null)store.delete(r.p);else store.set(r.p,d);dirty.add(r.p);touched.add(split(r.p).coll);touched.add('#'+r.p)}return touched}
+function applyRows(rows){const touched=new Set();for(const r of rows){if(OB.length&&OB.some(x=>x.path===r.p))continue;/* v103: đang chờ gửi → giữ bản trên máy */let d=null;if(r.j){try{d=JSON.parse(r.j)}catch(e){d=null}}if(d==null)store.delete(r.p);else store.set(r.p,d);dirty.add(r.p);touched.add(split(r.p).coll);touched.add('#'+r.p)}return touched}
 function notify(touched){listeners.forEach(l=>{if(touched===true||touched.has(l.key))l.fire()})}
 /* v43: lưu dữ liệu trên máy (IndexedDB) để mở lại app chỉ tải phần thay đổi, đỡ tải máy chủ khi nhiều người cùng vào */
 const IDB={d:null,open(){return this.d||(this.d=new Promise(res=>{try{const q=indexedDB.open('viba',1);q.onupgradeneeded=()=>q.result.createObjectStore('kv');q.onsuccess=()=>res(q.result);q.onerror=()=>res(null);setTimeout(()=>res(null),12000)}catch(e){res(null)}}))},
@@ -46,10 +46,42 @@ const loadBar=n=>{let b=document.getElementById('vibaLoadBar');if(n===false){if(
 let perm=null;async function syncNow(onFirst){if(syncing)return;syncing=true;let big=false;try{let r=await call('sync',{since});const pk=(r.owner?'o':'')+(r.staff?'s':'');if(perm!==null&&pk!==perm){/* vừa được giao/thu quyền: tải lại toàn bộ */store.clear();wipe=true;since=0;r=await call('sync',{since:0})}const changed=r.rows.length>0||perm!==pk;perm=pk;since=r.now;notify(r.rows.length?applyRows(r.rows):new Set());if(changed)saveCache();
   /* v80: tài khoản có quyền nhân viên nhưng dòng quyền (staff/<uid>) chưa về (dòng mới nhất nằm ở phần tải cuối) → hỏi riêng dòng quyền trước, mở app ngay */if(r.more&&pk.includes('s')&&me&&me.uid&&!store.has('staff/'+me.uid)){try{const g=await call('get',{path:'staff/'+me.uid});if(g&&g.j){notify(applyRows([{p:'staff/'+me.uid,t:g.t||0,j:g.j}]));saveCache()}}catch(e){}}
   /* v69: lần đầu chưa có dữ liệu → mở app ngay sau phần đầu, phần còn lại tải nền */if(onFirst){onFirst();onFirst=null}
-  /* v66: máy chủ chia dữ liệu thành nhiều phần nhỏ (more=true) → tải tiếp từng phần, phần nào xong lưu phần đó */for(let k=0;k<60&&r.more;k++){if(k>=1){big=true;loadBar(k+1)}r=await call('sync',{since});since=r.now;if(r.rows.length){notify(applyRows(r.rows));saveCache()}}/* v87: ghi lúc đồng bộ xong; lỗi mạng → thử lại sau 3 giây (tối đa 3 lần liền) */;lastOk=Date.now();syncErr=0}catch(e){syncErr++;if(syncErr<=3)setTimeout(()=>syncNow(),3000)}finally{syncing=false;if(big)loadBar(false);if(onFirst)onFirst();try{window.dispatchEvent(new Event('viba-sync'))}catch(_){}}}
+  /* v66: máy chủ chia dữ liệu thành nhiều phần nhỏ (more=true) → tải tiếp từng phần, phần nào xong lưu phần đó */for(let k=0;k<60&&r.more;k++){if(k>=1){big=true;loadBar(k+1)}r=await call('sync',{since});since=r.now;if(r.rows.length){notify(applyRows(r.rows));saveCache()}}/* v87: ghi lúc đồng bộ xong; lỗi mạng → thử lại sau 3 giây (tối đa 3 lần liền) */;lastOk=Date.now();syncErr=0;if(OB.length&&!obBusy)obKick(500)}catch(e){syncErr++;if(syncErr<=3)setTimeout(()=>syncNow(),3000)}finally{syncing=false;if(big)loadBar(false);if(onFirst)onFirst();try{window.dispatchEvent(new Event('viba-sync'))}catch(_){}}}
 let firstLoad=null;let lastOk=0,syncErr=0;
-function startSync(){firstLoad=(async()=>{try{await loadCache()}catch(e){}if(store.size){syncNow();return}await new Promise(res=>syncNow(res))})();
-  const tick=()=>setTimeout(async()=>{try{if(document.visibilityState!=='hidden')await syncNow()}finally{tick()}},15000+Math.random()*5000);tick();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow()})}
+/* v103: HÀNG CHỜ GỬI – đơn chưa lên được máy chủ (mạng yếu/treo) được giữ trên máy (localStorage), hiện nhãn "Chưa đồng bộ" và tự gửi lại.
+   Trước đây lệnh ghi không có hạn chờ: mạng treo → đơn chỉ nằm trên máy người lên, máy chủ không có (vụ DH2611-495 Mộc Trà 05/11). */
+const OBP=p=>/^orders\//.test(p);
+const OBK=()=>me&&me.uid?'viba.ob.'+me.uid:null;
+const qErr=p=>Object.assign(new Error('Chưa đồng bộ – đã lưu trên máy, app sẽ tự gửi lại'),{code:'queued',path:p});
+function obSave(){const k=OBK();if(!k)return;try{if(OB.length)localStorage.setItem(k,JSON.stringify(OB));else localStorage.removeItem(k)}catch(e){}}
+function obLoad(){const k=OBK();if(!k)return;try{const a=JSON.parse(localStorage.getItem(k)||'[]');if(Array.isArray(a))OB=a.filter(x=>x&&x.path&&x.data)}catch(e){OB=[]}const t=new Set();for(const x of OB){store.set(x.path,clone(x.data));t.add(split(x.path).coll);t.add('#'+x.path)}if(OB.length){notify(t);obKick(3000)}}
+function obEvt(detail){try{window.dispatchEvent(new CustomEvent('viba-pending',{detail:detail||{}}))}catch(e){}}
+function obPut(path,op,data,base){const old=OB.find(x=>x.path===path);if(old&&old.op==='create')op='create';OB=OB.filter(x=>x!==old);OB.push({path,op,data:clone(data),base:old?old.base:(base==null?null:JSON.stringify(base)),at:old?old.at:Date.now(),tries:0,err:null});obSave();obEvt();obKick(15000)}
+let obBusy=false,obT=null;
+function obKick(ms){clearTimeout(obT);if(OB.length)obT=setTimeout(obFlush,ms==null?20000:ms)}
+const bumpId=id=>{const i=id.lastIndexOf('-'),n=parseInt(id.slice(i+1),10);return i>0&&isFinite(n)?id.slice(0,i+1)+String(n+1).padStart(3,'0'):id+'-1'};
+async function obFlush(){if(obBusy||!OB.length||!token)return;obBusy=true;let changed=false;
+  try{for(const x of OB.slice()){x.tries=(x.tries||0)+1;
+    try{if(x.op==='create'){let path=x.path,d=x.data;
+        for(let k=0;k<40;k++){const r=await call('create',{path,data:clone(d)});if(!(r&&r.exists))break;
+          const g=await call('get',{path});const y=g&&g.j?JSON.parse(g.j):null;
+          if(y&&y.createdAt===d.createdAt&&y.saleId===d.saleId)break;/* lần gửi trước đã lên được */
+          /* số đơn đã bị đơn khác dùng → trả đơn kia về máy, chuyển đơn này sang số kế tiếp còn trống */
+          if(y){store.set(path,y);dirty.add(path)}else store.delete(path);
+          let np=path;do{np=split(np).coll+'/'+bumpId(split(np).id)}while(store.has(np));
+          const old=path;path=np;d=Object.assign({},d,{no:split(np).id});store.set(path,clone(d));x.renamed=x.renamed||old;x.path=path;x.data=d;obSave();notify(new Set([split(old).coll,'#'+old,'#'+path]))}
+        store.set(path,clone(d));dirty.add(path);OB=OB.filter(z=>z!==x);changed=true;obSave();notify(new Set([split(path).coll,'#'+path]));obEvt({done:path,from:x.renamed||null})}
+      else{const g=await call('get',{path:x.path});const y=g&&g.j?JSON.parse(g.j):null;
+        const yj=y?JSON.stringify(y):null;if(y&&x.base!=null&&yj!==x.base&&yj!==JSON.stringify(x.data)){/* người khác đã sửa sau đó → không ghi đè, trả bản máy chủ */
+          store.set(x.path,y);dirty.add(x.path);OB=OB.filter(z=>z!==x);changed=true;obSave();notify(new Set([split(x.path).coll,'#'+x.path]));obEvt({conflict:x.path});continue}
+        await call('set',{path:x.path,data:clone(x.data)});dirty.add(x.path);OB=OB.filter(z=>z!==x);changed=true;obSave();obEvt({done:x.path})}
+    }catch(e){x.err=String(e&&e.message||e);obSave();break}}}
+  finally{obBusy=false;if(changed)saveCache();obEvt();obKick(20000)}}
+window.addEventListener('online',()=>obKick(800));
+window.vibaPending={count:()=>OB.length,has:p=>OB.some(x=>x.path===p)?'queued':inflight.has(p)?'sending':'',list:()=>OB.map(x=>({path:x.path,op:x.op,at:x.at,tries:x.tries,err:x.err})),get busy(){return obBusy},retry:()=>obKick(0)};
+
+function startSync(){firstLoad=(async()=>{try{await loadCache()}catch(e){}try{obLoad()}catch(e){}if(store.size){syncNow();return}await new Promise(res=>syncNow(res))})();
+  const tick=()=>setTimeout(async()=>{try{if(document.visibilityState!=='hidden')await syncNow()}finally{tick()}},15000+Math.random()*5000);tick();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){syncNow();obKick(1500)}})}
 function pass(d,filters){for(const [f,op,v] of filters){const x=d?d[f]:undefined;const s=x==null?'':String(x);
   if(op==='>='&&!(s>=v))return false;if(op==='<='&&!(s<=v))return false;if(op==='>'&&!(s>v))return false;if(op==='<'&&!(s<v))return false;if(op==='=='&&s!==String(v))return false;if(op==='!='&&s===String(v))return false}return true}
 function listColl(coll,filters){const out=[];const pre=coll+'/';for(const [p,d] of store){if(!p.startsWith(pre))continue;const rest=p.slice(pre.length);if(rest.includes('/'))continue;if(pass(d,filters))out.push(snapDoc(rest,d))}return out.sort((a,b)=>a.id<b.id?-1:1)}
@@ -64,9 +96,9 @@ function doc(path){const {coll,id}=split(path);
     delete:async()=>{},update:async()=>{},onSnapshot:()=>()=>{}};
   const r={id,path,
     get:async()=>{const x=await call('get',{path});const d=x.j?JSON.parse(x.j):null;if(d==null)store.delete(path);else store.set(path,d);return snapDoc(id,d)},
-    set:async d=>{const prev=store.get(path);localWrite(path,d);try{await call('set',{path,data:clone(d)})}catch(e){localWrite(path,prev);throw e}},
+    set:async d=>{const prev=store.get(path);localWrite(path,d);if(OBP(path)&&OB.some(x=>x.path===path)){obPut(path,'set',d,prev);throw qErr(path)}inflight.add(path);obEvt();try{await call('set',{path,data:clone(d)})}catch(e){if(OBP(path)&&e.net){obPut(path,'set',d,prev);throw qErr(path)}localWrite(path,prev);throw e}finally{inflight.delete(path);obEvt()}},
     update:async d=>{/* dùng bản đang có trên máy (đồng bộ 15s) để khỏi gọi máy chủ thêm 1 lần */let cur=store.get(path);if(cur==null){const g=await r.get();if(!g.exists)throw Object.assign(new Error('Không tìm thấy dữ liệu'),{code:'invalid_argument'});cur=g.data()}await r.set(merge(clone(cur),d))},
-    create:async d=>{const prev=store.get(path);localWrite(path,d);let x;try{x=await call('create',{path,data:clone(d)})}catch(e){localWrite(path,prev);throw e}if(x&&x.exists){localWrite(path,prev);throw Object.assign(new Error('Số đơn đã có'),{code:'exists'})}},
+    create:async d=>{const prev=store.get(path);localWrite(path,d);let x;inflight.add(path);obEvt();try{x=await call('create',{path,data:clone(d)})}catch(e){if(OBP(path)&&e.net){obPut(path,'create',d,null);throw qErr(path)}localWrite(path,prev);throw e}finally{inflight.delete(path);obEvt()}if(x&&x.exists){localWrite(path,prev);throw Object.assign(new Error('Số đơn đã có'),{code:'exists'})}},
     delete:async()=>{const prev=store.get(path);localWrite(path,null);try{await call('del',{path})}catch(e){localWrite(path,prev);throw e}},
     acquire:async()=>({acquired:true}),
     onSnapshot:(next)=>{const l={key:'#'+path,fire:()=>next(snapDoc(id,store.get(path)))};listeners.add(l);Promise.resolve(firstLoad).then(l.fire);return ()=>listeners.delete(l)},
