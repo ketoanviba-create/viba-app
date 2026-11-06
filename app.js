@@ -160,6 +160,9 @@ function stats(list){const s={orders:0,qty:0,promo:0,swap:0,ret:0,revenue:0,paid
 const retRate=s=>pct(s.ret+s.swap,s.qty);
 
 /* ================= ẢNH ================= */
+/* v106: chọn nhiều ảnh trong thư viện, nén lần lượt */
+function pickPhotos(max){return new Promise(res=>{const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.multiple=true;inp.style.display='none';document.body.appendChild(inp);
+  inp.onchange=async()=>{const fs=[...inp.files].slice(0,max||10);inp.remove();if(inp.files.length>(max||10))toast('Chỉ lấy '+(max||10)+' ảnh đầu');const out=[];for(const f of fs){try{out.push(await compress(f))}catch(e){toast('Bỏ qua 1 ảnh không đọc được')}}res(out)};inp.click()})}
 function pickPhoto(){return new Promise(res=>{const inp=$('#fileCam');inp.value='';inp.onchange=async()=>{const f=inp.files[0];if(!f)return res(null);try{res(await compress(f))}catch(e){toast('Không đọc được ảnh này');res(null)}};inp.click()})}
 async function compress(file){const url=URL.createObjectURL(file);try{const img=new Image();await new Promise((ok,no)=>{img.onload=ok;img.onerror=no;img.src=url});
   let max=1280,out='';for(let t=0;t<4;t++){const k=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));const w=Math.round(img.naturalWidth*k),h=Math.round(img.naturalHeight*k);
@@ -168,9 +171,10 @@ async function compress(file){const url=URL.createObjectURL(file);try{const img=
 async function savePhotos(list,orderId,kind){/* tải ảnh song song */return Promise.all(list.map(async p=>{if(p.id)return p.id;const id=orderId+'-'+kind+'-'+uidShort();await R.db.doc('photos/'+id).set({data:p.data,orderId,kind,by:R.uid,at:Date.now()});R.photoCache.set(id,p.data);return id}))}
 async function loadPhoto(id){if(R.photoCache.has(id))return R.photoCache.get(id);try{const s=await R.db.doc('photos/'+id).get();const d=s.exists?s.data().data:'';R.photoCache.set(id,d);return d}catch(e){return ''}}
 function photoStrip(list,editable,key){return `<div class="photos">${list.map((p,i)=>`<div class="ph" data-ph="${esc(key)}:${i}" ${p.data?`style="background-image:url('${p.data}')"`:`data-pid="${esc(p.id)}"`} role="button" aria-label="Xem ảnh">${editable?`<button class="x" data-phx="${esc(key)}:${i}" aria-label="Xóa ảnh">×</button>`:''}</div>`).join('')}
-  ${editable?`<button class="phadd" data-phadd="${esc(key)}">${ICON.cam}<span>Chụp ảnh</span></button>`:''}</div>`}
+  ${editable?`<button class="phadd" data-phadd="${esc(key)}">${ICON.cam}<span>Chụp ảnh</span></button><button class="phadd" data-phmulti="${esc(key)}" style="color:var(--accent,#1b6aa5)"><span style="font-size:20px;line-height:1">🖼️</span><span>Chọn nhiều ảnh</span></button>`:''}</div>`}
 function hydratePhotos(root){$$('[data-pid]',root).forEach(async el=>{const d=await loadPhoto(el.dataset.pid);if(d){el.style.backgroundImage=`url('${d}')`;el.dataset.src='1'}})}
 function bindPhotos(root,getList,onChange){$$('[data-phadd]',root).forEach(b=>b.onclick=async e=>{e.stopPropagation();const d=await pickPhoto();if(d){getList(b.dataset.phadd).push({data:d});onChange()}});
+  /* v106: chọn nhiều ảnh từ thư viện (tối đa 10 ảnh/mục) */$$('[data-phmulti]',root).forEach(b=>b.onclick=async e=>{e.stopPropagation();const L=getList(b.dataset.phmulti);const room=Math.max(0,10-L.length);if(!room){toast('Mỗi mục tối đa 10 ảnh');return}const arr=await pickPhotos(room);if(arr.length){arr.forEach(d=>L.push({data:d}));onChange();toast('Đã thêm '+arr.length+' ảnh')}});
   $$('[data-phx]',root).forEach(b=>b.onclick=e=>{e.stopPropagation();const [k,i]=b.dataset.phx.split(':');getList(k).splice(+i,1);onChange()});
   $$('[data-ph]',root).forEach(el=>el.onclick=async()=>{const [k,i]=el.dataset.ph.split(':');const p=getList(k)[+i];const d=p.data||await loadPhoto(p.id);if(d)showImg(d)});hydratePhotos(root)}
 function showImg(d){const v=$('#viewer');v.innerHTML=`<img src="${d}" alt="Ảnh chứng từ">`;v.hidden=false;v.onclick=()=>{v.hidden=true;v.innerHTML=''}}
@@ -611,7 +615,7 @@ const PHK=[['sup','swap','Ảnh hàng hỗ trợ','#e67e22','#b35400','#fff5ea',
 const phList=(d,k)=>d[k+'Photos']||(d[k+'Photos']=[]);
 const phNeed=lines=>PHK.filter(x=>(lines||[]).some(l=>toNum(l[x[1]])>0));
 const phMiss=(lines,d)=>phNeed(lines).filter(x=>!phList(d,x[0]).length).map(x=>x[2].toLowerCase());
-function phCard(d,lines,id){return phNeed(lines).map(([k,f,t,c1,c2,bg,hint])=>{const P=phList(d,k),ok=P.length>0;let ps=photoStrip(P,true,k);if(P.length>=4)ps=ps.replace(/<button class="phadd"[\s\S]*?<\/button>/,'');const ls=(lines||[]).filter(l=>toNum(l[f])>0);
+function phCard(d,lines,id){return phNeed(lines).map(([k,f,t,c1,c2,bg,hint])=>{const P=phList(d,k),ok=P.length>0;let ps=photoStrip(P,true,k);if(P.length>=10)ps=ps.replace(/<button class="phadd"[\s\S]*?<\/button>/g,'');const ls=(lines||[]).filter(l=>toNum(l[f])>0);
   return `<div class="card stack" id="${id}-${k}" style="gap:8px;border:2px solid ${ok?'#27ae60':c1}"><div style="font-weight:800;color:${ok?'#1e8449':c2}">📸 ${t} (bắt buộc)${ok?' ✓':''}</div><div class="tiny" style="background:${bg};border-radius:10px;padding:7px 10px">${ls.map(l=>'• '+esc(l.name)+': <b>'+fmt(toNum(l[f]))+' '+esc(l.unit||'')+'</b>').join('<br>')}</div><div class="tiny muted">${hint}</div>${ps}${ok?`<div class="tiny" style="color:#1e8449;font-weight:600">✓ Đã có ${P.length} ảnh</div>`:`<div class="alert r" style="margin:0">Chưa có ${t.toLowerCase()} — chưa lưu được.</div>`}</div>`}).join('')}
 function supCard(d){return phCard(d,d.lines,'oSup')}
 function viewSaleNew(v){if(!R.odraft)R.odraft=newOrderDraft();const d=R.odraft;const c=d.cust?findCust(d.cust):null;
@@ -2122,7 +2126,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='105';
+const APP_BUILD='106';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
