@@ -693,7 +693,7 @@ async function saveOrder(){const d=R.odraft,msg=$('#oMsg');d._err='';const err=t
   const lines=d.lines.map(l=>({code:l.code,name:l.name,unit:l.unit,qty:r3(toNum(l.qty)),promo:r3(toNum(l.promo)),gift:r3(toNum(l.gift)),disc:Math.min(100,Math.max(0,r3(toNum(l.disc)))),g:l.g?1:0,swap:r3(toNum(l.swap)),bad:r3(toNum(l.bad)),ret:r3(toNum(l.ret)),price:Math.round(toNum(l.price)),listPrice:l.listPrice==null?null:Math.round(toNum(l.listPrice))})).filter(l=>l.qty>0||l.promo>0||l.gift>0||l.swap>0||l.bad>0||l.ret>0);
   if(!lines.length)return err('Đơn chưa có sản phẩm nào có số lượng.');
   {const fee=feeOf(d);if(fee>0){const fp=findProd(FEE_CODE);lines.push({code:FEE_CODE,name:fp?fp.name:'Phí Ship',unit:fp?fp.unit:'chuyến',qty:1,promo:0,gift:0,disc:0,g:1,swap:0,ret:0,price:fee,listPrice:fee,fee:1})}}
-  const bad=lines.find(l=>l.ret>l.qty+1e-9);if(bad)return err(`${esc(bad.name)}: số trả (${fmt(bad.ret)}) lớn hơn số bán (${fmt(bad.qty)}).`);
+  /* v105: cho phép trả nhiều hơn số bán (hàng trả lô cũ) */
   const zero=lines.find(l=>l.qty>0&&!l.price);if(zero&&!d._zeroOk){d._zeroOk=true;return msg.innerHTML=`<div class="alert w">${esc(zero.name)} đang có đơn giá 0đ. Bấm Gửi lần nữa nếu đúng là hàng không tính tiền.</div>`}
   if(d.paid){const e2=pmCheck(d.payMethod,d.payPhotos);if(e2)return err(e2)}
   if(R.mode==='ship'&&!d.id&&phMiss(lines,d).length){const sc=$('[id^="oSup-"]');if(sc)sc.scrollIntoView({block:'center'});return err('Bắt buộc chụp: '+phMiss(lines,d).join(', ')+'.')}
@@ -923,7 +923,7 @@ function deliverSheet(o,pre,preMsg){const d=pre||{lines:o.lines.map(l=>Object.as
     b.querySelector('#dvOut').onchange=e=>d.outside=e.target.checked;b.querySelector('#dvNote').oninput=e=>d.note=e.target.value;
     {$$('[data-boi]',b).forEach(x=>x.onchange=()=>{d._boList[+x.dataset.boi].on=x.checked;draw(b)});$$('[data-bod]',b).forEach(x=>x.onclick=()=>{d._boDate=x.dataset.bod;draw(b)});const by=b.querySelector('#dvBoYes');if(by)by.onclick=()=>{d._bo='yes';draw(b);b.querySelector('#dvSave').click()};const bn=b.querySelector('#dvBoNo');if(bn)bn.onclick=()=>{d._bo='no';draw(b);b.querySelector('#dvSave').click()};const bk=b.querySelector('#dvBoBack');if(bk)bk.onclick=ev=>{ev.preventDefault();d._bo=undefined;draw(b)}}
     if(b.querySelector('#dvSave'))b.querySelector('#dvSave').onclick=async e=>{const m=b.querySelector('#dvMsg');const lines=d.lines.map(l=>({code:l.code,name:l.name,unit:l.unit,qty:r3(toNum(l.qty)),promo:r3(toNum(l.promo)),gift:r3(toNum(l.gift)),disc:Math.min(100,Math.max(0,r3(toNum(l.disc)))),g:l.g?1:0,swap:r3(toNum(l.swap)),bad:r3(toNum(l.bad)),ret:r3(toNum(l.ret)),price:Math.round(toNum(l.price)),listPrice:l.listPrice==null?null:Math.round(toNum(l.listPrice)),...(l.extra?{extra:1}:{})}));
-      if(lines.some(l=>l.ret>l.qty+1e-9)){m.innerHTML='<div class="alert r">Số trả không được lớn hơn số giao.</div>';return}
+      /* v105: cho phép trả nhiều hơn số giao (hàng trả lô cũ) */
       if(d._bo===undefined||d._bo==='ask'){const sh=boShort(o,lines);if(sh.length){const prev=d._boList||[];d._boList=sh.map(x=>Object.assign(x,{on:(prev.find(y=>y.code===x.code)||{on:true}).on}));d._bo='ask';d._boDate=d._boDate||isoAdd(today(),1);draw(b);const bx=b.querySelector('#dvBo');if(bx)bx.scrollIntoView({block:'center'});return}d._bo=null}
       {const mt=phMiss(lines,d);if(mt.length){m.innerHTML='<div class="alert r">Bắt buộc chụp: '+mt.join(', ')+'.</div>';const sc=b.querySelector('[id^="dvPh-"]');if(sc)sc.scrollIntoView({block:'center'});return}}
       if(false){d._noPhotoOk=1;m.innerHTML='<div class="alert w">Có hàng hỗ trợ / trả nhưng chưa chụp ảnh. Bấm xác nhận lần nữa nếu vẫn muốn lưu.</div>';return}
@@ -2122,7 +2122,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='104';
+const APP_BUILD='105';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
