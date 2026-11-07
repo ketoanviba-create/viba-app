@@ -966,13 +966,13 @@ function paySheet(o){const st={amt:orderTotal(o),photos:[],pm:''};const draw=b=>
 /* v73: giao thiếu → phần còn lại thành đơn giao bù (đơn mới, ở mục chờ giao cho ship tuyến nhận) */
 const boShort=(o,lines)=>{const out=[];for(const ol of (o.lines||[])){if(isFee(ol)||ol.extra)continue;const dl=lines.find(x=>x.code===ol.code&&!x.extra);const miss=r3(toNum(ol.qty)-(dl?toNum(dl.qty):0));if(miss>1e-9)out.push(Object.assign({},ol,{qty:miss,gift:0,promo:0,swap:0,ret:0}))}return out};
 const boChip=o=>o.backorder?'<span class="chip" style="background:#fff3e0;color:#b25e00">↪ Giao bù đơn '+esc(o.parentNo||'')+'</span>':o.boNo?'<span class="chip" style="background:#fdeede;color:#b25e00">Giao thiếu → đơn bù '+esc(o.boNo)+'</span>':'';
-function deliverSheet(o,pre,preMsg){const d=pre||{lines:o.lines.map(l=>Object.assign({},l,{src:'Giá trên đơn',listPrice:l.listPrice!=null?l.listPrice:l.price})),paid:!!o.paid||qrOk(o),paidAmount:'',payPhotos:[],retPhotos:[],supPhotos:[],badPhotos:[],traPhotos:[],outside:!!o.outside,note:''};
+function deliverSheet(o,pre,preMsg){const d=pre||{lines:o.lines.map(l=>Object.assign({},l,{src:'Giá trên đơn',listPrice:l.listPrice!=null?l.listPrice:l.price})),paid:!!o.paid,paidAmount:'',payPhotos:[],retPhotos:[],supPhotos:[],badPhotos:[],traPhotos:[],outside:!!o.outside,note:''};
   const draw=b=>{const total=orderTotal(d);const hasRet=d.lines.some(l=>toNum(l.ret)||toNum(l.swap)||toNum(l.bad));
     b.innerHTML=`<div class="group"><div class="row"><div class="grow"><div class="t">${esc(o.custName)}</div><div class="s">${esc(o.address||'')}</div></div></div></div>
     <div class="tiny muted">Sửa lại số lượng thực giao, đổi/trả hoặc giá nếu khác đơn.</div>
     <div class="list">${d.lines.map((l,i)=>lineCard(l,i,null,{qtyLabel:'SL thực giao'})).join('')}</div>
     <button class="btn block" id="dvAdd" style="border:2px dashed var(--accent,#1b6aa5);color:var(--accent,#1b6aa5);font-weight:700">＋ Thêm sản phẩm khác (ngoài đơn)</button>
-    <div class="group"><div class="toggle"><div><div style="font-weight:600">Khách đã thanh toán</div><div class="tiny muted">${o.paid?'Sale đã ghi nhận thu '+vnd(o.paidAmount):qrOk(o)?'<b style="color:#c0392b">Khách thu tiền luôn – đã bật sẵn</b> · tắt nếu khách nợ':'Bật nếu bạn thu tiền khi giao'}</div></div><input type="checkbox" class="sw" id="dvPaid" ${d.paid?'checked':''} ${o.paid?'disabled':''} aria-label="Đã thanh toán"></div>
+    <div class="group"><div class="toggle"><div><div style="font-weight:600">Khách đã thanh toán</div><div class="tiny muted">${o.paid?'Sale đã ghi nhận thu '+vnd(o.paidAmount):'Bật nếu bạn thu tiền khi giao'}</div></div><input type="checkbox" class="sw" id="dvPaid" ${d.paid?'checked':''} ${o.paid?'disabled':''} aria-label="Đã thanh toán"></div>
      ${d.paid&&!o.paid?`<div class="row" style="flex-direction:column;align-items:stretch;gap:10px"><label class="f">Số tiền đã thu<input id="dvAmt" inputmode="numeric" class="num" value="${esc(d.paidAmount===''?total:d.paidAmount)}"></label>${pmSeg(d.payMethod)}${d.payMethod==='transfer'&&qrOk(o)?qrBox(o,Math.round(d.paidAmount===''?total:toNum(d.paidAmount)),{title:'Khách quét mã để chuyển khoản'}):''}${pmPhotos(d.payMethod,d.payPhotos,'pay',d.payMethod==='transfer'&&qrOk(o)?'Khách chuyển xong → <b>chụp màn hình giao dịch</b> trên máy khách':'')}</div>`:''}
      ${hasRet?`<div class="row" style="flex-direction:column;align-items:stretch;gap:6px">${phCard(d,d.lines,'dvPh')}</div>`:''}
      <div class="toggle"><div><div style="font-weight:600">Đơn ship ngoài</div><div class="tiny muted">Tính công riêng, trả ngay (${vnd(ST().shipFeeOut)}/đơn)</div></div><input type="checkbox" class="sw" id="dvOut" ${d.outside?'checked':''} aria-label="Đơn ship ngoài"></div></div>
@@ -2189,7 +2189,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='107';
+const APP_BUILD='108';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
