@@ -65,7 +65,7 @@ const R={db:null,user:null,dl:null,uid:null,isOwner:false,checked:false,
 window.__R=R;
 const ST=()=>Object.assign({company:'VIBA FOOD',address:'',taxCode:'',dept:'',whName:'Kho chính',whCode:'KHO',whPlace:'',keeper:'',chiefAcc:'',director:'',
   circular:'(Kèm theo Thông tư số 99/2025/TT-BTC ngày 27/10/2025 của Bộ trưởng Bộ Tài chính)',lockDate:'',salePct:2,shipFee:20000,shipFeeOut:30000,shipFeeFar:50000,shipFarCodes:'07.LB, 16.GL',saleBase:6000000,saleAllow:2500000,saleStd:26,saleComm:2.4,coLoc:'',shipCC:300000,shipCCOff:100000,shipKg:1350,shipPct:3.6,shipSwapStd:5.5,shipSwapPrice:18000,shipSupNeg:1,shipBepCodes:'KH0105145683, KH0107522785, KH0104567410, KHĐQ0111269334, KH0111269334, KH0102061812, KH0106490072-001, KH0108462391-001, Tư thục hạt giống, KH345, KH358, KH0110797613, KH0109048659, KH0107499688, TTL0107361087',vAlias:''},R.settings);
-const ROLE_NAME={admin:'Quản lý',sale:'Bán hàng',ship:'Giao hàng',kho:'Thủ kho'};
+const ROLE_NAME={admin:'Quản lý',sale:'Bán hàng',ship:'Giao hàng',kho:'Thủ kho',view:'Chỉ xem'};
 function myRole(){if(R.isOwner)return'admin';const s=R.staff.get(R.uid);return s&&s.active!==false?s.role:null}
 function staffName(id){if(!id)return'—';const s=R.staff.get(id);return (s&&s.name)||R.names[id]||(id===R.uid?'Bạn':'Nhân viên')}
 function locked(date){const L=ST().lockDate;return !!(L&&date&&date<=L)}
@@ -772,7 +772,7 @@ function orderListView(v,list,opt){const q=noAcc(R.ui.ordQ);const st=R.ui.ordSta
    ${L.length>150?'<div class="tiny muted">Đang hiện 150/'+L.length+' đơn mới nhất. Dùng ô tìm để lọc.</div>':''}</div>`;
   const qi=$('#olQ');qi.oninput=e=>{R.ui.ordQ=e.target.value;render()};
   $$('[data-ost]').forEach(b=>b.onclick=()=>{R.ui.ordStatus=b.dataset.ost;render()});
-  $$('[data-oid]').forEach(c=>c.onclick=e=>{if(e.target.closest('[data-oimg]'))return;orderDetail(R.orders.find(o=>o.id===c.dataset.oid))});$$('[data-oimg]').forEach(b=>b.onclick=e=>{e.stopPropagation();shareOrderImage(R.orders.find(o=>o.id===b.dataset.oimg))})}
+  $$('[data-oid]').forEach(c=>c.onclick=e=>{if(e.target.closest('[data-oimg]'))return;const o=R.orders.find(o=>o.id===c.dataset.oid);R.mode==='view'?vdDetail(o):orderDetail(o)});$$('[data-oimg]').forEach(b=>b.onclick=e=>{e.stopPropagation();shareOrderImage(R.orders.find(o=>o.id===b.dataset.oimg))})}
 /* v72: xuất ảnh đơn đặt hàng (PNG) để sale gửi khách qua Zalo */
 async function orderImage(o,qr){const W=1080,P=56,F='system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif';
   const cv=document.createElement('canvas'),g=cv.getContext('2d');const font=(w,s)=>g.font=`${w} ${s}px ${F}`;
@@ -1980,7 +1980,7 @@ function templateXls(T){if(T==='products')xlsxFile('Mau_san_pham.xlsx',[{name:'S
 
 /* ================= v31: NHÂN VIÊN DÙNG APP (đăng nhập bằng SĐT) =================
    config/staffPre = {list:[{name,phone,role:'sale'|'ship'|'kho',email,active}]}. Máy chủ chỉ cho tạo tài khoản <sđt>@sdt.viba nếu SĐT có trong danh sách và tự gán staff/{uid}. */
-const PRE_ROLE={ship:'Giao hàng',sale:'Bán hàng',kho:'Thủ kho',admin:'Quản lý'};
+const PRE_ROLE={ship:'Giao hàng',sale:'Bán hàng',kho:'Thủ kho',admin:'Quản lý',view:'Chỉ xem (thực tập)'};
 const normPhone=v=>{let d=String(v||'').replace(/\D/g,'');if(d.startsWith('84')&&d.length===11)d='0'+d.slice(2);return d};
 const fmtPhone=p=>String(p||'').replace(/^(\d{4})(\d{3})(\d+)$/,'$1 $2 $3');
 const loginLabel=e=>{const m=String(e||'').match(/^(\d+)@sdt\.viba$/);return m?'Số điện thoại: <b>'+esc(fmtPhone(m[1]))+'</b>':'Email: <b>'+esc(e)+'</b>'};
@@ -2070,7 +2070,7 @@ function lowAlertMaybe(){if(R.mode!=='kho'||!R.products||!R.products.size||!R.vo
 function lowSheet(manual){const L=lowList();const thr=LOW_STOCK();
   openSheet('⚠️ Cảnh báo hết hàng',`<div class="tiny muted">Mặt hàng đang bán có tồn hiện tại dưới ${fmt(thr)} (hoặc dưới tồn tối thiểu riêng) – cần đặt thêm hàng.</div>
    ${L.length?`<div class="tw"><table><thead><tr><th>Mặt hàng</th><th class="n">Đã bán${soldPeriod()?' ('+soldPeriod()+')':''}</th><th class="n">Tồn</th></tr></thead><tbody>${L.map(r=>`<tr><td>${esc(r.name)}<div class="tiny muted">${esc(r.code)} · ${esc(r.unit)}</div></td><td class="n">${fmt(soldOf(r.code))}</td><td class="n ${r.cuoi<=0?'neg':''}"><b style="color:${r.cuoi<=0?'#d33':'#c27c00'}">${fmt(r.cuoi)}</b></td></tr>`).join('')}</tbody></table></div>`:'<div class="alert g">Không có mặt hàng nào dưới mức cảnh báo.</div>'}
-   ${L.length?'<button class="btn block pri" id="lwNew">📝 Lập phiếu nhập hàng</button><button class="btn block" id="lwXls">📋 Xuất danh sách cần đặt (Excel)</button>':''}
+   ${L.length&&R.mode!=='view'?'<button class="btn block pri" id="lwNew">📝 Lập phiếu nhập hàng</button><button class="btn block" id="lwXls">📋 Xuất danh sách cần đặt (Excel)</button>':''}
    ${'Notification' in window&&Notification.permission==='default'?'<button class="btn block" id="lwNoti">🔔 Bật thông báo trên máy này</button>':''}
    <button class="btn block" id="lwLater">${manual?'Đóng':'Đã biết, nhắc lại sau 2 giờ'}</button>`,b=>{
     const x=(id,f)=>{const e=b.querySelector('#'+id);if(e)e.onclick=f};
@@ -2102,7 +2102,7 @@ function viewVanDon(v){const day=vdDay();/* v110: nút "Chưa xong" – đơn ch
      return `<div class="card stack" style="gap:6px"><div class="tap" data-vdg="${esc(k)}" role="button" style="cursor:pointer"><div class="hrow" style="justify-content:space-between;flex-wrap:nowrap"><b>${k==='#book'?'📦 Book ship':k==='#kho'?'🏬 Bán tại kho':k?'🚚 '+esc(staffName(k))+(rtOf(k)?' · '+rtOf(k):'')+' <span style="font-weight:600;color:var(--muted);white-space:nowrap">('+aT+' đơn)</span>':'⏳ Chưa có ship nhận'}</b><span style="display:flex;align-items:center;gap:8px;white-space:nowrap"><span class="tiny muted">${G.length} đơn · ${vnd(sum)}</span><span style="font-size:18px;color:var(--muted)">${op?'▾':'▸'}</span></span></div>
       ${k&&k[0]!=='#'?`<div class="hrow" style="margin-top:6px">${vf==='wait'||ALL?`<span class="chip" style="background:#3a3216;color:#f2c94c">Chờ nhận ${aW}</span>`:''}<span class="chip b"${aI?'':' style="opacity:.55"'}>Đang giao ${aI}</span>${ALL?(aL?`<span class="chip r">Quá hạn ${aL}</span>`:''):`<span class="chip g"${aD?'':' style="opacity:.55"'}>Đã giao ${aD}</span>`}${aO?`<span class="chip r">Chưa thu ${aO}</span>`:''}${aD?`<button class="btn sm" data-vdp="${esc(k)}" style="min-height:0;padding:3px 10px;margin-left:auto">🖨️ In</button>`:''}</div>`:''}</div>
       ${op?G.map(o=>{const [c,l]=vdStat(o);const rt=routeOf(o);return `<div class="row tap" data-vdo="${esc(o.id)}" style="padding:6px 0;min-height:0;border-top:1px solid var(--line,#eef2f6)"><div class="grow"><div style="font-size:14px">${esc(o.custName)}</div><div class="tiny muted ell">${esc(o.address||'')}${!k&&rt?' · T'+esc(rt):''} · ${esc(o.no)}${o.shipMode==='book'&&o.book&&o.book.via?' · '+esc(o.book.via):''}</div><div class="tiny" style="margin-top:3px;color:var(--fg);font-weight:600">📝 Đặt <b style="color:var(--fg)">${dm(o.date)}</b> · 🚚 Hẹn giao <b style="color:${(o.dlvDate||o.date)<today()&&o.status!=='done'?'var(--bad)':'var(--blue)'}">${dm(o.dlvDate||o.date)}</b>${o.status==='done'&&doneD(o)>dOf(o)?` · ✅ Giao xong <b style="color:var(--bad)">${dm(doneD(o))} · trễ ${Math.round((Date.parse(doneD(o))-Date.parse(dOf(o)))/864e5)} ngày</b>`:''}</div></div><div style="text-align:right"><span class="chip ${c}">${l}</span><div class="tiny">${vnd(orderTotal(o))}</div></div></div>`}).join(''):''}</div>`}).join(''):'<div class="empty"><b>'+(ALL?(vf&&FL[vf]?'Không có đơn "'+FL[vf][0]+'" chưa giao xong':'Không còn đơn chưa giao xong'):(vf&&FL[vf]?'Không có đơn "'+FL[vf][0]+'" ngày ':'Không có đơn giao ngày ')+dmy(day))+'</b></div>'}
-   ${R.mode==='admin'?'<button class="btn block" id="vdAll">📋 Tất cả đơn hàng (tìm, sửa, huỷ đơn)</button>':'<div class="tiny muted">Bấm vào đơn để xem mặt hàng, số lượng. Thủ kho chỉ xem, không sửa đơn.</div>'}</div>`;{const a=$('#vdAll');if(a)a.onclick=()=>go('orders')}
+   ${R.mode==='admin'?'<button class="btn block" id="vdAll">📋 Tất cả đơn hàng (tìm, sửa, huỷ đơn)</button>':'<div class="tiny muted">Bấm vào đơn để xem mặt hàng, số lượng. '+(R.mode==='view'?'Tài khoản chỉ xem.':'Thủ kho chỉ xem, không sửa đơn.')+'</div>'}</div>`;{const a=$('#vdAll');if(a)a.onclick=()=>go('orders')}
   $$('[data-vdd]').forEach(b=>b.onclick=()=>{R.ui.vdDay=b.dataset.vdd;if(R.ui.vdAll&&R.ui.vdF==='late')R.ui.vdF='';R.ui.vdAll=false;render()});$$('[data-vda]').forEach(b=>b.onclick=()=>{R.ui.vdAll=true;if(!['wait','ing','late'].includes(R.ui.vdF||'x'))R.ui.vdF='';render()});
   $$('[data-vdf]').forEach(b=>b.onclick=()=>{R.ui.vdF=R.ui.vdF===b.dataset.vdf?'':b.dataset.vdf;render()});
   /* v77: bấm tên ship → mở/đóng danh sách đơn của ship đó */$$('[data-vdg]').forEach(b=>b.onclick=()=>{R.ui.vdOpen=R.ui.vdOpen||new Set();const key=(R.ui.vdF||'')+'|'+b.dataset.vdg;R.ui.vdOpen.has(key)?R.ui.vdOpen.delete(key):R.ui.vdOpen.add(key);render()});{const x=$('#vdFx');if(x)x.onclick=()=>{R.ui.vdF='';render()}}
@@ -2121,12 +2121,16 @@ const TABS={
   sale:[['new','Lên đơn','cart'],['orders','Đơn của tôi','list'],['att','Chấm công','cam'],['report','Báo cáo','chart']],
   ship:[['todo','Cần giao','truck'],['new','Phát sinh','cart'],['done','Đã giao','check'],['report','Báo cáo','chart']],
   kho:[['vnew','Lập phiếu','doc'],['vlist','Phiếu','list'],['vdon','Vận đơn','truck'],['stock','Tồn kho','box']],
+  view:[['orders','Đơn hàng','list'],['vdon','Vận đơn','truck'],['stock','Tồn kho','box']],
   admin:[['dash','Tổng quan','home'],['vdon','Vận đơn','truck'],['stock','Kho','box'],['catalog','Danh mục','book'],['settings','Cài đặt','gear']]};
 function views(){return{
   sale:{new:viewSaleNew,orders:viewSaleOrders,att:viewAttend,report:v=>viewSaleReport(v,R.uid)},
   ship:{todo:viewShipTodo,new:viewSaleNew,done:viewShipDone,report:v=>viewShipReport(v,R.uid)},
   kho:{vnew:viewKhoNew,vlist:viewKhoList,vdon:viewVanDon,stock:viewStock,byorder:viewKhoByOrder},
+  view:{orders:v=>{orderListView(v,R.orders,{title:'Đơn hàng',who:'saleId'});viewBanner(v)},vdon:v=>{viewVanDon(v);viewBanner(v)},stock:v=>{viewStock(v);viewBanner(v)}},
   admin:{dash:viewDash,vdon:viewVanDon,orders:viewAllOrders,stock:viewStock,catalog:viewCatalog,settings:viewSettings}}}
+/* v113: tài khoản Chỉ xem (thực tập) – máy chủ chặn mọi thao tác ghi, chỉ đồng bộ đơn hàng, sản phẩm, phiếu kho */
+function viewBanner(v){v.insertAdjacentHTML('afterbegin','<div class="alert" style="margin-bottom:10px">👁 Tài khoản thực tập – <b>chỉ xem</b>, không nhập/sửa được dữ liệu.</div>')}
 function go(tab){R.tab=tab;try{localStorage.setItem('viba.tab',R.mode+':'+tab)}catch(e){}render();window.scrollTo({top:0})}
 /* ghép cây mới (nf) vào cây cũ (oldP) mà KHÔNG gỡ ô đang gõ (focus) khỏi trang: iPhone không đóng bàn phím, gõ tiếng Việt không bị mất chữ */
 function graft(oldP,newP,focus){const nf=newP.querySelector('#'+CSS.escape(focus.id));if(!nf)return false;
@@ -2179,7 +2183,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   if(user){try{R.uid=await user.id()}catch(e){}try{R.isOwner=await user.isOwner()}catch(e){}}
   if(!db||!R.uid){R.db=db;if(!R.uid)R.db=null;render();return}
   try{const t=localStorage.getItem('viba.tab');if(t){const [m,k]=t.split(':');R.mode=m;R.tab=k}}catch(e){}
-  const hm=window.APP_MODE||(location.hash||'').replace('#','');if(['sale','ship','kho','admin'].includes(hm)){R.mode=hm;R.tab=null}
+  const hm=window.APP_MODE||(location.hash||'').replace('#','');if(['sale','ship','kho','admin','view'].includes(hm)){R.mode=hm;R.tab=null}
   const sub=(coll,fn)=>db.collection(coll).onSnapshot(s=>{fn(s);soon();resolveNames()},e=>toast('Mất kết nối '+coll+' ('+e.code+')'));
   sub('staff',s=>{R.staff=new Map(s.docs.map(d=>[d.id,d.data()]))});
   sub('config',s=>{const g=s.docs.find(x=>x.id==='custGeo');R.custGeo=g?g.data():null});
@@ -2200,7 +2204,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='111';
+const APP_BUILD='113';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
