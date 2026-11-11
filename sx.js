@@ -74,7 +74,7 @@ const HW=l=>l.hv===2?num(l.hours):num(l.people)*num(l.hours);
 const HO=l=>num(l.ot);
 const otK=()=>num(cfg().otK)||1.5;
 const HC=l=>HW(l)+HO(l)*otK();
-const hTxt=l=>`${fm(l.people)} người · ${fm(HW(l))} giờ${HO(l)?' + '+fm(HO(l))+' giờ tăng ca':''}`;
+const hTxt=l=>`${fm(l.people)} người · ${fm(HW(l))} giờ${HO(l)||num(l.pot)?' | tăng ca '+fm(l.pot)+' người · '+fm(HO(l))+' giờ':''}`;
 /* v117: số gói / thùng theo sheet "Quy cách đóng hàng" (GIÁ THÀNH CHUNG 2026); HOP = đóng hộp thay túi */
 const PERBOX={'sau|300':45,'sau|500':24,'sau|1000':13,'ksq|300':45,'ksq|1000':13,'daut|900':10,'cleo|400':20,'cleo|600':20,'xoai|1000':12,'bo|1000':12,'mcau|1000':12,'san|400':24,'san|250':30,'docm|200':50,'docm|1000':13,'kmo|250':45,'duanc|1500':10};
 const HOP={san:1};
@@ -147,7 +147,7 @@ function logRow(l){return `<div class="row tap" data-lid="${esc(l.id)}"><div cla
 function bindLogRows(){$$('[data-lid]').forEach(r=>r.onclick=()=>logDetail(S.logs.find(x=>x.id===r.dataset.lid)))}
 
 /* ---------------- PHIẾU 5 CÔNG ĐOẠN ---------------- */
-function openForm(kind,pre){const n0=nvls()[0],it=items()[0];S.form={kind,date:today(),nvl:n0?n0.id:'',item:it?it.id:'',people:'',hours:'',ot:'',packs:[{w:'',u:'g',q:''}],dest:'hn',xt:'tp',q:{},xe:'',xeO:'',ncc:'',nccQ:'',note:''};
+function openForm(kind,pre){const n0=nvls()[0],it=items()[0];S.form={kind,date:today(),nvl:n0?n0.id:'',item:it?it.id:'',people:'',hours:'',pot:'',ot:'',packs:[{w:'',u:'g',q:''}],dest:'hn',xt:'tp',q:{},xe:'',xeO:'',ncc:'',nccQ:'',note:''};
   if(kind==='sx'){const t=tpsOfNvl(S.form.nvl)[0];S.form.item=t?t.id:''}
   if(pre)Object.assign(S.form,pre);
   if(kind==='dg'||kind==='dgl')S.form.packs=packsDefault(S.form.item);S.post=null;
@@ -161,7 +161,7 @@ function packRows(f){return `<div class="sec">Quy cách đóng gói</div>${f.pac
    <label><span class="lb">Số gói</span><input data-p="${i}" data-pk="q" value="${esc(p.q)}" inputmode="numeric" placeholder="0"></label></div>
    <div class="qck"><span id="pk${i}"></span>${f.packs.length>1?`<button class="lnk" data-prm="${i}">✕ Bỏ dòng</button>`:''}</div></div>`).join('')}
    <button class="addb" id="pAdd">＋ Thêm quy cách</button>`}
-function laborBox(f){return `<div class="sec">Nhân công thực tế</div>${inp(f,'people','Số người','0','numeric')}<div class="grid2">${inp(f,'hours','Tổng số giờ làm (cả nhóm)','0')}${inp(f,'ot','Tổng giờ tăng ca (cả nhóm)','0')}</div><div class="auto" id="lbTot"></div>`}
+function laborBox(f){return `<div class="sec">Nhân công thực tế – giờ chính thức</div><div class="grid2">${inp(f,'people','Số người','0','numeric')}${inp(f,'hours','Tổng số giờ làm','0')}</div><div class="sec">Tăng ca (nếu có)</div><div class="grid2">${inp(f,'pot','Số người tăng ca','0','numeric')}${inp(f,'ot','Tổng giờ tăng ca','0')}</div><div class="auto" id="lbTot"></div>`}
 function viewForm(v){const f=S.form,K=KIND[f.kind],C=calc(),it=itemOf(f.item);let body='';
   if(f.kind==='nvl'){
     body=`${selNvl(f)}<label class="f"><span class="lab">Nhà cung cấp – gõ tìm</span><input id="nccQ" value="${esc(f.ncc&&f.ncc!=='__new'?f.ncc:f.nccQ)}" placeholder="Gõ tên nhà cung cấp…" class="sxin" autocomplete="off"></label><div id="nccL" class="nccl" hidden></div>
@@ -210,7 +210,7 @@ function bindNcc(){const f=S.form,q=$('#nccQ'),box=$('#nccL');if(!q)return;
   q.onfocus=show;q.oninput=()=>{f.nccQ=q.value;if(f.ncc&&f.ncc!=='__new'&&q.value!==f.ncc)f.ncc='';show()};q.onblur=()=>setTimeout(()=>box.hidden=true,150)}
 function useKg(f,src){const bu=num(f.bagsUse);if(bu){const w=num(f.bagW)||(src&&src.bags>0?src.kg/src.bags:0);return r3(bu*w)}return num(f.kgUse)}
 function packsKg(f){let kg=0;for(const p of f.packs){const g=gOf(p.w,p.u),q=num(p.q);if(g>0&&q>0)kg+=g*q/1000}return r3(kg)}
-function upd(){const f=S.form,C=calc(),it=itemOf(f.item);const lt=$('#lbTot');if(lt){const t=num(f.hours),o=num(f.ot),gc=cfg().gioCong||8;lt.innerHTML=t||o?'= <b>'+fm(t)+' giờ</b> ('+fm(t/gc,2)+' công)'+(o?' + <b>'+fm(o)+' giờ tăng ca</b> ('+fm(o/gc,2)+' công)':''):'Ghi tổng số giờ làm của cả nhóm (VD 5 người × 8 giờ = 40) và tổng giờ tăng ca nếu có.'}
+function upd(){const f=S.form,C=calc(),it=itemOf(f.item);const lt=$('#lbTot');if(lt){const t=num(f.hours),o=num(f.ot),gc=cfg().gioCong||8;lt.innerHTML=t||o?'Chính thức: <b>'+fm(num(f.people))+' người · '+fm(t)+' giờ</b> ('+fm(t/gc,2)+' công)'+(o||num(f.pot)?'<br>Tăng ca: <b>'+fm(num(f.pot))+' người · '+fm(o)+' giờ</b> ('+fm(o/gc,2)+' công)':''):'Tổng số giờ = cộng giờ của cả nhóm (VD 5 người × 8 giờ = 40). Tăng ca ghi riêng số người và tổng giờ tăng ca.'}
   f.packs.forEach((p,i)=>{const e=$('#pk'+i);if(e){const g=gOf(p.w,p.u),q=num(p.q);e.textContent=g&&q?'= '+fm(g*q/1000)+' kg':''}});
   const sb=$('#sugBox');if(sb&&f.kind==='sx'){sb.innerHTML=sugHTML(f);$$('#sugBox [data-f]').forEach(el=>el.onchange=()=>{f.plan=el.value;upd()})}
   const cb=$('#calcBox');if(!cb)return;
@@ -223,9 +223,9 @@ function autoCode(n){const w=noAcc(n).toUpperCase().replace(/[^A-Z ]/g,'').split
 function lotCode(code,date){const base=(code||'NCC')+date.slice(8,10)+date.slice(5,7);const used=new Set(liveLogs().filter(l=>l.kind==='nvl').map(l=>l.lot));if(!used.has(base))return base;for(let i=2;i<50;i++)if(!used.has(base+'-'+i))return base+'-'+i;return base+'-'+Date.now()%1000}
 function newId(date){return 'P'+date.replace(/-/g,'').slice(2)+'-'+Date.now().toString(36).slice(-5)+Math.random().toString(36).slice(2,4)}
 async function save(){const f=S.form,C=calc(),it=itemOf(f.item),msg=t=>$('#fMsg').innerHTML='<div class="alert r">'+esc(t)+'</div>';
-  const people=num(f.people),hours=num(f.hours),ot=num(f.ot);
+  const people=num(f.people),hours=num(f.hours),ot=num(f.ot),pot=num(f.pot);
   if(!f.date)return msg('Chọn ngày.');if(f.date>today())return msg('Ngày không được sau hôm nay.');
-  const d={kind:f.kind,date:f.date,people,hours,ot,hv:2,note:String(f.note||'').trim(),by:S.uid,at:Date.now()};
+  const d={kind:f.kind,date:f.date,people,hours,pot,ot,hv:2,note:String(f.note||'').trim(),by:S.uid,at:Date.now()};
   if(f.kind==='nvl'){if(!f.nvl)return msg('Chọn nguyên liệu.');d.nvl=f.nvl}
   else if(f.kind!=='xuat'){if(!f.item)return msg('Chọn mặt hàng.');d.item=f.item;if(f.kind==='sx')d.nvl=f.nvl}
   if(f.kind==='nvl'){const n=nccPick(f);if(!n.name)return msg('Chọn nhà cung cấp.');const kg=num(f.kg);if(kg<=0)return msg('Gõ số kg nhận.');const price=num(f.price),ship=num(f.ship);if(price<=0&&!confirm('Chưa gõ giá nhập. Vẫn lưu (kế toán điền sau)?'))return;Object.assign(d,{ncc:n.name,nccCode:n.code,kg,price,ship,lot:lotCode(n.lot,f.date)});
@@ -243,7 +243,7 @@ async function save(){const f=S.form,C=calc(),it=itemOf(f.item),msg=t=>$('#fMsg'
     else{for(const i of items()){const kg=num(f.q['k|'+i.id]),bags=num(f.q['b|'+i.id]);if(!kg&&!bags)continue;const b=C.btp.get(i.id);let k2=kg;if(!k2&&bags&&b&&b.bags>0)k2=r3(bags*b.kg/b.bags);if(!k2)return msg('Gõ số kg '+i.name+'.');lines.push({t:'btp',item:i.id,kg:k2,bags})}}
     if(!lines.length)return msg('Gõ số lượng xuất.');Object.assign(d,{dest:f.dest,lines,xe:xeVal(f)});
     if(f.xt==='tp'&&f.dest==='hn'&&f.mau){const rest=[],its=new Set(lines.map(x=>x.item));for(const [k,q0] of C.tp.entries()){if(!its.has(k.split('|')[0]))continue;const q=q0-num(f.q[k]);if(q>0){const [id,g]=k.split('|');rest.push({t:'tp',item:id,g:+g,q})}}if(rest.length)d.mauLines=rest}}
-  if(!people||!(hours||ot)){if(!confirm('Chưa ghi số người / tổng số giờ làm. Vẫn lưu?'))return}
+  if(ot&&!pot)return msg('Gõ số người tăng ca.');if(!people||!(hours||ot)){if(!confirm('Chưa ghi số người / tổng số giờ làm. Vẫn lưu?'))return}
   const btn=$('#fSave');btn.disabled=true;btn.textContent='Đang lưu…';
   try{const id=newId(f.date);await S.db.doc('mlog/'+id).set(d);
     if(d.mauLines){const m={kind:'xuat',date:f.date,dest:'mau',lines:d.mauLines,people:0,hours:0,hv:2,note:'Phần còn lại sau xuất Hà Nội',by:S.uid,at:Date.now()+1};delete d.mauLines;await S.db.doc('mlog/'+newId(f.date)).set(m)}
@@ -265,12 +265,12 @@ function logDetail(l){if(!l)return;const C=calc();const mine=l.by===S.uid,adm=is
   if(l.kind==='sx'){const u=C.use.get(l.id)||[];det+=`<div class="tiny muted" style="margin-top:4px">Lô đã dùng: ${u.map(x=>esc(x.lot)+' '+fm(x.kg)+' kg').join(' · ')||'—'}</div>`}
   if(l.xe)det+=`<div class="tiny muted">Xe: ${esc(l.xe)}</div>`;if(l.note)det+=`<div class="tiny">📝 ${esc(l.note)}</div>`;
   if(l.edits&&l.edits.length)det+=`<div class="tiny muted" style="margin-top:4px">Đã sửa: ${l.edits.map(e=>esc(nameOf(e.by))+' '+new Date(e.at).toLocaleString('vi-VN',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})+' ('+esc(e.what)+')').join('; ')}</div>`;
-  let ed='';if(canEdit&&!l.deleted){ed=`<div class="sec">Nhân công</div><div class="grid2"><label class="f"><span class="lab">Số người</span><input id="eP" value="${fm(l.people)}" inputmode="numeric"></label></div><div class="grid2"><label class="f"><span class="lab">Tổng số giờ làm</span><input id="eH" value="${String(HW(l)||'').replace('.',',')}" inputmode="decimal"></label><label class="f"><span class="lab">Tổng giờ tăng ca</span><input id="eO" value="${String(HO(l)||'').replace('.',',')}" inputmode="decimal"></label></div>`;
+  let ed='';if(canEdit&&!l.deleted){ed=`<div class="sec">Nhân công</div><div class="grid2"><label class="f"><span class="lab">Số người</span><input id="eP" value="${fm(l.people)}" inputmode="numeric"></label></div><div class="grid2"><label class="f"><span class="lab">Tổng số giờ làm</span><input id="eH" value="${String(HW(l)||'').replace('.',',')}" inputmode="decimal"></label></div><div class="grid2"><label class="f"><span class="lab">Số người tăng ca</span><input id="ePo" value="${num(l.pot)?fm(l.pot):''}" inputmode="numeric"></label><label class="f"><span class="lab">Tổng giờ tăng ca</span><input id="eO" value="${String(HO(l)||'').replace('.',',')}" inputmode="decimal"></label></div>`;
     if(l.kind==='nvl'&&adm)ed+=`<div class="sec">Giá mua (kế toán điền theo phiếu MISA)</div><div class="grid2"><label class="f"><span class="lab">Đơn giá (đ/kg)</span><input id="ePr" value="${l.price?fm(l.price):''}" inputmode="decimal"></label><label class="f"><span class="lab">Vận chuyển (đ)</span><input id="eSh" value="${l.ship?fm(l.ship):''}" inputmode="decimal"></label></div><label class="f"><span class="lab">Chi phí khác (đ)</span><input id="eEx" value="${l.extra?fm(l.extra):''}" inputmode="decimal"></label><label class="f"><span class="lab">Số phiếu MISA</span><input id="eMs" value="${esc(l.misa||'')}"></label>`;
     ed+=`<div id="eMsg"></div><button class="btn block pri" id="eSave">Lưu thay đổi</button><button class="btn block" id="eDel" style="color:var(--bad)">Xoá phiếu</button>`}
   const close=sheet(`${KIND[l.kind].n} · ${dmy(l.date)}`,`${det}<div class="tiny muted" style="margin-top:6px">Người nhập: ${esc(nameOf(l.by))} · ${new Date(l.at).toLocaleString('vi-VN')}</div>${ed}`);
   if(!ed)return;
-  $('#eSave').onclick=async()=>{const p={people:num($('#eP').value),hours:num($('#eH').value),ot:num($('#eO').value),hv:2};const what=[];if(p.people!==num(l.people)||p.hours!==HW(l)||p.ot!==HO(l))what.push('công '+hTxt(l)+' → '+hTxt(p));
+  $('#eSave').onclick=async()=>{const p={people:num($('#eP').value),hours:num($('#eH').value),ot:num($('#eO').value),pot:num($('#ePo').value),hv:2};const what=[];if(p.people!==num(l.people)||p.hours!==HW(l)||p.ot!==HO(l)||p.pot!==num(l.pot))what.push('công '+hTxt(l)+' → '+hTxt(p));
     if($('#ePr')){p.price=num($('#ePr').value);p.extra=num($('#eEx').value);p.ship=num($('#eSh').value);p.misa=$('#eMs').value.trim();if(p.price!==num(l.price)||p.extra!==num(l.extra)||p.ship!==num(l.ship))what.push('giá')}
     if(what.length)p.edits=(l.edits||[]).concat([{by:S.uid,at:Date.now(),what:what.join(', ')}]);
     try{await S.db.doc('mlog/'+l.id).update(p);toast('✓ Đã lưu');close()}catch(e){$('#eMsg').innerHTML='<div class="alert r">Chưa lưu được.</div>'}};
@@ -300,12 +300,12 @@ function viewNC(v){const d=S.ui.ncDate||today();const L=liveLogs().filter(l=>l.d
   const sum=[...by.entries()].map(([k,x])=>{if(k==='_chung')return `<div class="row"><div class="grow t">Nhập NVL + Xuất hàng (chung)</div><div class="num">${fm(x.h)} giờ · ${fm(x.h/gc,2)} công</div></div>`;const it=itemOf(k),dm=it.dm||{};const c100=x.kg?x.h/gc/x.kg*100:null;const ok=c100!=null&&dm.cong100?c100<=dm.cong100*1.05:null;
     return `<div class="row"><div class="grow"><div class="t">${esc(it.name)}</div><div class="s">${fm(x.h)} giờ = ${fm(x.h/gc,2)} công${x.kg?' · '+fm(x.kg)+' kg TP':''}</div></div>${c100!=null?`<span class="chip ${ok?'g':'r'}">${fm(c100,2)} công/100kg · ĐM ${fm(dm.cong100,2)}</span>`:''}</div>`}).join('');
   v.innerHTML=`<h1 class="big">Nhân công</h1><label class="f"><span class="lab">Ngày</span><input type="date" id="ncD" value="${d}" max="${today()}"></label>
-   <div class="tiny muted" style="margin:4px 0 8px">Số người, tổng giờ làm, giờ tăng ca lấy từ phiếu tổ trưởng. Sửa trực tiếp rồi bấm Lưu – app ghi lại ai sửa. Quy đổi ${gc} giờ = 1 công.</div>
-   <div class="group">${L.map(l=>`<div class="row"><div class="grow"><div class="t">${esc(l.kind==='nvl'?nvlOf(nvlId(l)).name+' (NVL)':l.item?itemOf(l.item).name:'Chung')}</div><div class="s">${KORDER.indexOf(l.kind)+1}. ${KIND[l.kind].n} · ${esc(nameOf(l.by))}</div></div><input class="ncin" data-nid="${l.id}" data-nk="people" value="${fm(l.people)}" inputmode="numeric"><input class="ncin" data-nid="${l.id}" data-nk="hours" value="${String(HW(l)||0).replace('.',',')}" inputmode="decimal"><input class="ncin" data-nid="${l.id}" data-nk="ot" value="${String(HO(l)||0).replace('.',',')}" inputmode="decimal"></div>`).join('')||'<div class="empty">Không có phiếu ngày này.</div>'}</div>
-   ${L.length?'<div class="tiny muted" style="text-align:right;margin:-4px 8px 8px">Số người · Tổng giờ · Giờ tăng ca</div><button class="btn block pri" id="ncSave">Lưu</button>':''}
+   <div class="tiny muted" style="margin:4px 0 8px">Số người, tổng giờ chính thức và tăng ca lấy từ phiếu tổ trưởng. Sửa trực tiếp rồi bấm Lưu – app ghi lại ai sửa. Quy đổi ${gc} giờ = 1 công.</div>
+   ${L.length?'<div class="nchd"><span>Người</span><span>Giờ</span><span>Người TC</span><span>Giờ TC</span></div>':''}<div class="group">${L.map(l=>`<div class="row"><div class="grow"><div class="t">${esc(l.kind==='nvl'?nvlOf(nvlId(l)).name+' (NVL)':l.item?itemOf(l.item).name:'Chung')}</div><div class="s">${KORDER.indexOf(l.kind)+1}. ${KIND[l.kind].n} · ${esc(nameOf(l.by))}</div></div><input class="ncin" data-nid="${l.id}" data-nk="people" value="${fm(l.people)}" inputmode="numeric"><input class="ncin" data-nid="${l.id}" data-nk="hours" value="${String(HW(l)||0).replace('.',',')}" inputmode="decimal"><input class="ncin" data-nid="${l.id}" data-nk="pot" value="${fm(num(l.pot))}" inputmode="numeric"><input class="ncin" data-nid="${l.id}" data-nk="ot" value="${String(HO(l)||0).replace('.',',')}" inputmode="decimal"></div>`).join('')||'<div class="empty">Không có phiếu ngày này.</div>'}</div>
+   ${L.length?'<button class="btn block pri" id="ncSave">Lưu</button>':''}
    <div class="sec">Tổng theo mặt hàng</div><div class="group">${sum||'<div class="empty">—</div>'}</div>`;
   $('#ncD').onchange=e=>{S.ui.ncDate=e.target.value;render()};
-  const sv=$('#ncSave');if(sv)sv.onclick=async()=>{let n=0;for(const l of L){const p=num($(`[data-nid="${l.id}"][data-nk="people"]`).value),h=num($(`[data-nid="${l.id}"][data-nk="hours"]`).value),o=num($(`[data-nid="${l.id}"][data-nk="ot"]`).value);if(p!==num(l.people)||h!==HW(l)||o!==HO(l)){n++;const nw={people:p,hours:h,ot:o,hv:2};await S.db.doc('mlog/'+l.id).update({...nw,edits:(l.edits||[]).concat([{by:S.uid,at:Date.now(),what:'công '+hTxt(l)+' → '+hTxt(nw)}])})}}toast(n?'✓ Đã lưu '+n+' dòng':'Không có thay đổi')}}
+  const sv=$('#ncSave');if(sv)sv.onclick=async()=>{let n=0;for(const l of L){const p=num($(`[data-nid="${l.id}"][data-nk="people"]`).value),h=num($(`[data-nid="${l.id}"][data-nk="hours"]`).value),o=num($(`[data-nid="${l.id}"][data-nk="ot"]`).value),po=num($(`[data-nid="${l.id}"][data-nk="pot"]`).value);if(p!==num(l.people)||h!==HW(l)||o!==HO(l)||po!==num(l.pot)){n++;const nw={people:p,hours:h,pot:po,ot:o,hv:2};await S.db.doc('mlog/'+l.id).update({...nw,edits:(l.edits||[]).concat([{by:S.uid,at:Date.now(),what:'công '+hTxt(l)+' → '+hTxt(nw)}])})}}toast(n?'✓ Đã lưu '+n+' dòng':'Không có thay đổi')}}
 
 /* ---------------- QUẢN LÝ: ĐỊNH MỨC ---------------- */
 const DMF=[['tl','Tỷ lệ thành phẩm (%)','kg TP / kg nguyên liệu'],['cong100','Nhân công (công / 100 kg TP)',''],['rate','Đơn giá 1 công (đ)',''],['baoBi','Túi + tem + hộp… (đ / gói)','tính theo số gói'],['dienGa','Điện, ga (đ / kg TP)',''],['kh','Khấu hao TSCĐ (đ / kg TP)',''],['thung','Thùng xốp, vận chuyển (đ / kg TP)',''],['guiKho','Gửi kho đông (đ / kg TP)','định mức như file giá thành']];
@@ -366,8 +366,8 @@ function exportXlsx(from,to,X){if(!window.XLSX)return toast('Chưa tải đượ
   const a=[['Mặt hàng','Kg NVL','Kg TP','Tỷ lệ TP %','ĐM tỷ lệ %','Giờ công','Công','ĐM công','CP nguyên liệu','Kg NVL chưa có giá','CP nhân công','Túi tem hộp','Điện ga KH thùng gửi kho','Tổng CP','Giá/kg TP (chưa túi tem)']];
   for(const x of X)a.push([itemOf(x.id).name,r3(x.kgIn),r3(x.kgTP),x.kgIn?r3(x.kgTP/x.kgIn*100):'',x.dm.tl||'',r3(x.h),r3(x.cong),x.dmCong!=null?r3(x.dmCong):'',Math.round(x.nvl),r3(x.nvlMiss),Math.round(x.lab),Math.round(x.bb),Math.round(x.oth),Math.round(x.tot),Math.round(x.perKg)]);
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),'Giá thành');
-  const b=[['Ngày','Công đoạn','Mặt hàng','Chi tiết','Số người','Tổng giờ làm','Giờ tăng ca','Người nhập','Ghi chú']];
-  for(const l of liveLogs().filter(l=>l.date>=from&&l.date<=to).sort((p,q)=>p.date.localeCompare(q.date)))b.push([l.date,KIND[l.kind].n,l.item?itemOf(l.item).name:'',logSum(l).replace(/<[^>]+>/g,''),num(l.people),r3(HW(l)),r3(HO(l)),nameOf(l.by),l.note||'']);
+  const b=[['Ngày','Công đoạn','Mặt hàng','Chi tiết','Số người','Tổng giờ làm','Số người tăng ca','Giờ tăng ca','Người nhập','Ghi chú']];
+  for(const l of liveLogs().filter(l=>l.date>=from&&l.date<=to).sort((p,q)=>p.date.localeCompare(q.date)))b.push([l.date,KIND[l.kind].n,l.item?itemOf(l.item).name:'',logSum(l).replace(/<[^>]+>/g,''),num(l.people),r3(HW(l)),num(l.pot),r3(HO(l)),nameOf(l.by),l.note||'']);
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(b),'Phiếu');
   XLSX.writeFile(wb,`Gia thanh san xuat ${from} den ${to}.xlsx`)}
 
