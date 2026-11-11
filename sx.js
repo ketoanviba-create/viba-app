@@ -69,6 +69,21 @@ const nameOf=uid=>S.names[uid]||(uid===S.uid?'Tôi':'…');
 const gOf=(w,u)=>r3(num(w)*(u==='kg'?1000:1));
 const packLabel=g=>g>=1000?String(r3(g/1000)).replace('.',',')+' kg':String(r3(g)).replace('.',',')+' g';
 const packKey=(item,g)=>item+'|'+g;
+/* v117: số gói / thùng theo sheet "Quy cách đóng hàng" (GIÁ THÀNH CHUNG 2026); HOP = đóng hộp thay túi */
+const PERBOX={'sau|300':45,'sau|500':24,'sau|1000':13,'ksq|300':45,'ksq|1000':13,'daut|900':10,'cleo|400':20,'cleo|600':20,'xoai|1000':12,'bo|1000':12,'mcau|1000':12,'san|400':24,'san|250':30,'docm|200':50,'docm|1000':13,'kmo|250':45,'duanc|1500':10};
+const HOP={san:1};
+function sugHTML(f){const it=itemOf(f.item);if(!it||!it.id)return '';const dm=it.dm||{},a=num(f.kgIn);
+  if(!a)return `<div class="sec">Đề xuất vật tư, nhân công</div><div class="auto">Gõ số kg nguyên liệu đưa vào – app đề xuất vật tư và nhân công cần chuẩn bị.</div>`;
+  if(!dm.tl)return `<div class="sec">Đề xuất vật tư, nhân công</div><div class="auto">${esc(it.name)} chưa có định mức tỷ lệ thành phẩm – Quản lý nhập ở tab Định mức để app đề xuất.</div>`;
+  const tp=a*dm.tl/100,P=(it.packs||[]).map(p=>gOf(p[0],p[1])).filter(g=>g>0);
+  let g=num(f.plan);if(!P.includes(g))g=P[0]||0;
+  const cong=dm.cong100?tp*dm.cong100/100:0,gc=cfg().gioCong||8,ng=cong?Math.ceil(cong-0.05):0;
+  let rows=`<tr><td>Thành phẩm dự kiến</td><td><b>${fm(tp)} kg</b> <span class="muted">(tỷ lệ ${fm(dm.tl,1)}%)</span></td></tr>`;
+  if(cong)rows+=`<tr><td>Nhân công</td><td><b>${fm(cong,1)} công</b> ≈ ${ng} người × ${gc} giờ</td></tr>`;
+  if(g){const n=Math.floor(tp*1000/g),pb=PERBOX[it.id+'|'+g];
+    rows+=`<tr><td>${HOP[it.id]?'Hộp':'Túi'} ${packLabel(g)}</td><td><b>${fm(n)}</b> cái</td></tr><tr><td>Tem</td><td><b>${fm(n)}</b> cái</td></tr>`+
+      `<tr><td>Thùng xốp</td><td>${pb?'<b>'+fm(Math.ceil(n/pb))+'</b> thùng <span class="muted">('+pb+' gói/thùng)</span>':'<span class="muted">chưa có số gói/thùng</span>'}</td></tr>`}
+  return `<div class="sec">Đề xuất vật tư, nhân công</div>${P.length>1?`<label class="f"><span class="lab">Dự kiến đóng gói loại</span><select data-f="plan" class="sxin">${P.map(x=>`<option value="${x}"${x===g?' selected':''}>${packLabel(x)}</option>`).join('')}</select></label>`:''}<div class="card sug"><table class="gt">${rows}</table><div class="tiny muted" style="margin-top:6px">Theo định mức · thêm 3–5% dự phòng hỏng túi, tem.</div></div>`}
 
 /* ---------------- TỒN KHO (tính lại từ toàn bộ phiếu) ---------------- */
 function calc(){const L=liveLogs().slice().sort((a,b)=>(a.date+String(a.at).padStart(15,'0')).localeCompare(b.date+String(b.at).padStart(15,'0')));
@@ -77,7 +92,7 @@ function calc(){const L=liveLogs().slice().sort((a,b)=>(a.date+String(a.at).padS
   for(const l of L){
     if(l.kind==='nvl'){const n=nvlId(l);if(!lots.has(n))lots.set(n,[]);lots.get(n).push({id:l.id,lot:l.lot,date:l.date,kg:num(l.kg),left:num(l.kg),price:lotPrice(l),ncc:l.ncc})}
     else if(l.kind==='sx'){let need=num(l.kgIn);const used=[];for(const x of lots.get(nvlId(l))||[]){if(need<=1e-9)break;const t=Math.min(x.left,need);if(t>0){x.left=r3(x.left-t);need=r3(need-t);used.push({lot:x.lot,kg:t,price:x.price})}}
-      if(need>1e-9)used.push({lot:'(thiếu tồn)',kg:need,price:null});use.set(l.id,used);const b=B(btp,tpId(l.item));b.kg=r3(b.kg+num(l.kgOut));b.bags+=num(l.bags)}
+      if(need>1e-9)used.push({lot:'(thiếu tồn)',kg:need,price:null});use.set(l.id,used);const b=B(btp,tpId(l.item));b.kg=r3(b.kg+num(l.kgOut));b.bags+=num(l.bags);if(!b.last||l.date>b.last)b.last=l.date}
     else if(l.kind==='dg'){const b=B(btp,tpId(l.item));b.kg=r3(b.kg-num(l.kgUse));b.bags-=num(l.bagsUse);for(const p of l.packs||[]){const k=packKey(tpId(l.item),p.g);tp.set(k,(tp.get(k)||0)+num(p.q))}}
     else if(l.kind==='xuat'){for(const x of l.lines||[]){if(x.t==='tp'){const k=packKey(tpId(x.item),x.g);tp.set(k,(tp.get(k)||0)-num(x.q))}else{const b=B(btp,tpId(x.item));b.kg=r3(b.kg-num(x.kg));b.bags-=num(x.bags);if(l.dest==='dong'){const d=B(kd,tpId(x.item));d.kg=r3(d.kg+num(x.kg));d.bags+=num(x.bags);if(!d.since||l.date<d.since)d.since=l.date}}}}
     else if(l.kind==='dgl'){const d=B(kd,tpId(l.item));d.kg=r3(d.kg-num(l.kgUse));d.bags-=num(l.bagsUse);if(d.kg<=0.001)d.since=null;for(const p of l.packs||[]){const k=packKey(tpId(l.item),p.g);tp.set(k,(tp.get(k)||0)+num(p.q))}}}
@@ -118,7 +133,7 @@ function viewHome(v){const C=calc();
   $$('.sxbig').forEach(b=>b.onclick=()=>openForm(b.dataset.k));bindLogRows()}
 function logSum(l){const it=itemOf(l.item).name;
   if(l.kind==='nvl')return `${esc(nvlOf(nvlId(l)).name)} · ${esc(l.ncc||'')} · ${fm(l.kg)} kg${l.price?' × '+fm(l.price)+' đ':''} · lô ${esc(l.lot||'')}`;
-  if(l.kind==='sx')return `${esc(nvlOf(nvlId(l)).name)} → ${it} · ${fm(l.kgIn)} kg vào → ${fm(l.kgOut)} kg ra${l.bags?' ('+fm(l.bags)+' bịch)':''}`;
+  if(l.kind==='sx')return `${esc(nvlOf(nvlId(l)).name)} → ${it} · ${fm(l.kgIn)} kg vào${l.bags?' → '+fm(l.bags)+' bịch × '+fm(l.bagW)+' kg':''}`;
   if(l.kind==='dg'||l.kind==='dgl')return `${it} · ${(l.packs||[]).map(p=>fm(p.q)+' × '+packLabel(p.g)).join(', ')} = ${fm(l.kgTP)} kg TP`;
   if(l.kind==='xuat')return `→ ${DEST[l.dest]||l.dest} · ${(l.lines||[]).map(x=>x.t==='tp'?itemOf(x.item).name+' '+packLabel(x.g)+' × '+fm(x.q):itemOf(x.item).name+' '+fm(x.kg)+' kg'+(x.bags?' ('+fm(x.bags)+' bịch)':'')).join(', ')}`;
   return ''}
@@ -148,9 +163,9 @@ function viewForm(v){const f=S.form,K=KIND[f.kind],C=calc(),it=itemOf(f.item);le
      <div class="grid2">${inp(f,'price','Giá nhập (đ/kg)','0')}${inp(f,'ship','Chi phí vận chuyển (đ)','0')}</div><div class="auto" id="calcBox"></div>`}
   else if(f.kind==='sx'){const lots=(C.lots.get(f.nvl)||[]).filter(x=>x.left>0.001),nn=nvlOf(f.nvl).name,TL=tpsOfNvl(f.nvl);
     body=`${selNvl(f)}<div class="auto">${lots.length?esc(nn)+' đang có: '+lots.map(x=>'<b>'+esc(x.lot)+'</b> '+fm(x.left)+' kg').join(' · '):'Chưa có tồn nguyên liệu '+esc(nn)+' – vẫn lưu được, app ghi "thiếu tồn".'}</div>${TL.length?selItem(f,'Làm ra sản phẩm',TL):'<div class="alert r">Nguyên liệu này chưa gắn sản phẩm – Quản lý thêm ở tab Định mức.</div>'}
-     ${inp(f,'kgIn','Nguyên liệu đưa vào (kg)','0')}${inp(f,'kgOut','Ra được – bán thành phẩm (kg)','0')}${it.bich?`<div class="grid2">${inp(f,'bags','Số bịch lớn','0','numeric')}${inp(f,'bagW','Trọng lượng 1 bịch (kg)','VD: 25')}</div>`:''}<div class="auto" id="calcBox"></div>`}
+     ${inp(f,'kgIn','Nguyên liệu đưa vào (kg)','0')}${it.bich?`<div class="grid2">${inp(f,'bags','Số bịch lớn (nếu có)','0','numeric')}${inp(f,'bagW','Trọng lượng 1 bịch (kg)','VD: 25')}</div>`:''}<div class="auto" id="calcBox"></div><div id="sugBox">${sugHTML(f)}</div>`}
   else if(f.kind==='dg'||f.kind==='dgl'){const src=f.kind==='dg'?C.btp.get(f.item):C.kd.get(f.item);const kg=src?src.kg:0,bags=src?src.bags:0;
-    body=`${selItem(f)}<div class="auto">${f.kind==='dg'?'Bán thành phẩm ở nhà máy':'Ở kho đông'}: <b>${fm(kg)} kg</b>${bags?' · '+fm(bags)+' bịch':''}${f.kind==='dgl'&&src&&src.since?' · gửi từ '+dmy(src.since):''}</div>
+    body=`${selItem(f)}<div class="auto">${f.kind==='dg'?'Bán thành phẩm ở nhà máy':'Ở kho đông'}: <b>${kg>0.001?fm(kg)+' kg':(f.kind==='dg'?'không cân':'0 kg')}</b>${bags>0?' · '+fm(bags)+' bịch':''}${f.kind==='dgl'&&src&&src.since?' · gửi từ '+dmy(src.since):''}</div>
      ${it.bich?`<div class="grid2">${inp(f,'bagsUse',f.kind==='dg'?'Lấy ra bao nhiêu bịch':'Lấy về bao nhiêu bịch','0','numeric')}${inp(f,'bagW','Trọng lượng 1 bịch (kg)',bags>0?'TB '+String(r3(kg/bags)).replace('.',','):'VD: 25')}</div>`:inp(f,'kgUse',f.kind==='dg'?'Bán thành phẩm dùng (kg)':'Số kg lấy về','để trống = bằng kg thành phẩm')}
      ${f.kind==='dgl'?xeSel(f):''}${packRows(f)}<div class="auto" id="calcBox"></div>`}
   else if(f.kind==='xuat'){
@@ -159,8 +174,8 @@ function viewForm(v){const f=S.form,K=KIND[f.kind],C=calc(),it=itemOf(f.item);le
     if(f.xt==='tp'){const L=[...C.tp.entries()].filter(([k,q])=>q>0).sort();
       body+=`<div class="sec">Số lượng xuất</div><div class="group">${L.map(([k,q])=>{const [id,g]=k.split('|');return `<div class="row"><div class="grow"><div class="t">${esc(itemOf(id).name)} ${packLabel(+g)}</div><div class="s">đang có ${fm(q)}</div></div><input class="xq" data-xk="${esc(k)}" value="${esc(f.q[k]??'')}" inputmode="numeric" placeholder="0"></div>`}).join('')||'<div class="empty">Không có thành phẩm tồn.</div>'}</div>
        ${f.dest==='hn'?`<label class="chk"><input type="checkbox" data-f="mau" ${f.mau?'checked':''}> Phần còn lại của các mặt hàng vừa xuất ghi vào <b>Hàng mẫu</b></label>`:''}`}
-    else{const L=items().filter(i=>{const b=C.btp.get(i.id);return b&&b.kg>0.001});
-      body+=`<div class="sec">Bán thành phẩm ở nhà máy</div><div class="group">${L.map(i=>{const b=C.btp.get(i.id);return `<div class="row"><div class="grow"><div class="t">${esc(i.name)}</div><div class="s">có ${fm(b.kg)} kg${b.bags?' · '+fm(b.bags)+' bịch':''}</div></div><div style="display:flex;gap:6px">${i.bich?`<input class="xq" data-xb="${i.id}" value="${esc(f.q['b|'+i.id]??'')}" inputmode="numeric" placeholder="bịch" style="width:64px">`:''}<input class="xq" data-xg="${i.id}" value="${esc(f.q['k|'+i.id]??'')}" inputmode="decimal" placeholder="kg" style="width:76px"></div></div>`}).join('')||'<div class="empty">Không có bán thành phẩm tồn.</div>'}</div>`}
+    else{const L=items().filter(i=>{const b=C.btp.get(i.id);return b&&(b.kg>0.001||b.bags>0||(b.last&&b.last>=addDays(today(),-30)))});
+      body+=`<div class="sec">Bán thành phẩm ở nhà máy</div><div class="group">${L.map(i=>{const b=C.btp.get(i.id);return `<div class="row"><div class="grow"><div class="t">${esc(i.name)}</div><div class="s">${b.kg>0.001?'có '+fm(b.kg)+' kg':'không cân – gõ kg xuất'}${b.bags>0?' · '+fm(b.bags)+' bịch':''}</div></div><div style="display:flex;gap:6px">${i.bich?`<input class="xq" data-xb="${i.id}" value="${esc(f.q['b|'+i.id]??'')}" inputmode="numeric" placeholder="bịch" style="width:64px">`:''}<input class="xq" data-xg="${i.id}" value="${esc(f.q['k|'+i.id]??'')}" inputmode="decimal" placeholder="kg" style="width:76px"></div></div>`}).join('')||'<div class="empty">Không có bán thành phẩm tồn.</div>'}</div>`}
     body+=xeSel(f)}
   v.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><h1 class="big" style="margin:0"><span class="kn" style="background:${K.c}">${KORDER.indexOf(f.kind)+1}</span> ${K.n}</h1><button class="btn sm" id="fX">✕ Đóng</button></div>
    <label class="f" style="margin-top:10px"><span class="lab">Ngày</span><input type="date" data-f="date" value="${esc(f.date)}" max="${today()}" class="sxin"></label>
@@ -191,9 +206,10 @@ function useKg(f,src){const bu=num(f.bagsUse);if(bu){const w=num(f.bagW)||(src&&
 function packsKg(f){let kg=0;for(const p of f.packs){const g=gOf(p.w,p.u),q=num(p.q);if(g>0&&q>0)kg+=g*q/1000}return r3(kg)}
 function upd(){const f=S.form,C=calc(),it=itemOf(f.item);const lt=$('#lbTot');if(lt){const t=num(f.people)*num(f.hours);lt.innerHTML=t?'= <b>'+fm(t)+' giờ công</b> ('+fm(t/(cfg().gioCong||8),2)+' công)':'Ghi số người và số giờ làm thực tế của công đoạn này.'}
   f.packs.forEach((p,i)=>{const e=$('#pk'+i);if(e){const g=gOf(p.w,p.u),q=num(p.q);e.textContent=g&&q?'= '+fm(g*q/1000)+' kg':''}});
+  const sb=$('#sugBox');if(sb&&f.kind==='sx'){sb.innerHTML=sugHTML(f);$$('#sugBox [data-f]').forEach(el=>el.onchange=()=>{f.plan=el.value;upd()})}
   const cb=$('#calcBox');if(!cb)return;
   if(f.kind==='nvl'){const n=nccPick(f),kg=num(f.kg),p=num(f.price),sh=num(f.ship);cb.innerHTML=(kg&&p?`Tiền hàng ${fm(kg)} × ${fm(p)} = ${fm(kg*p)}${sh?'<br>+ Vận chuyển '+fm(sh):''}<br>Giá lô: <b>${fm((kg*p+sh)/kg)} đ/kg</b> · `:'Gõ kg và giá nhập để tính giá lô · ')+`Số lô <b>${esc(lotCode(n.lot||n.code,f.date))}</b>`}
-  else if(f.kind==='sx'){const a=num(f.kgIn),b=num(f.kgOut),bw=num(f.bags)*num(f.bagW);cb.innerHTML=(a&&b?`Tỷ lệ ra ${fm(b/a*100,1)}% · hao hụt ${fm(a-b)} kg`:'Gõ kg vào và kg ra, app tự tính hao hụt.')+(bw?`<br>Bịch: ${fm(num(f.bags))} × ${fm(num(f.bagW))} kg = <b>${fm(bw)} kg</b>${b&&Math.abs(bw-b)>0.5?' <span style="color:var(--bad)">(khác kg ra '+fm(b)+')</span>':''}`:'')}
+  else if(f.kind==='sx'){const a=num(f.kgIn),bw=num(f.bags)*num(f.bagW),av=nvlLeft(C,f.nvl);cb.innerHTML=`Nguyên liệu còn tồn: <b>${fm(av)} kg</b>${a>av+0.001?' <span style="color:var(--bad)">(đưa vào nhiều hơn tồn)</span>':''}<br>Không cần cân bán thành phẩm – tỷ lệ thành phẩm app tính từ kg đóng gói ở bước ③ / ⑤.`+(bw?`<br>Bịch: ${fm(num(f.bags))} × ${fm(num(f.bagW))} kg = <b>${fm(bw)} kg</b>`:'')}
   else{const kg=packsKg(f),src=f.kind==='dg'?C.btp.get(f.item):C.kd.get(f.item);const use=useKg(f,src);
     cb.innerHTML=kg?`Thành phẩm <b>${fm(kg)} kg</b>${use?' · từ '+fm(use)+' kg ('+fm(kg/use*100,1)+'%)':''}${it.dm&&it.dm.baoBi?'<br>Túi, tem: tự trừ theo số gói':''}`:'Gõ trọng lượng, chọn g/kg và số gói.'}}
 function nccPick(f){if(f.ncc==='__new'){const n=String(f.nccNew||'').trim();return {name:n,code:'',lot:autoCode(n),fresh:true}}const nm=f.ncc||String(f.nccQ||'').trim();const x=(cfg().ncc||[]).find(n=>n.name===nm);return x?{name:x.name,code:x.code||'',lot:x.lot||autoCode(x.name)}:{name:nm,code:'',lot:autoCode(nm),fresh:!!nm}}
@@ -208,7 +224,7 @@ async function save(){const f=S.form,C=calc(),it=itemOf(f.item),msg=t=>$('#fMsg'
   else if(f.kind!=='xuat'){if(!f.item)return msg('Chọn mặt hàng.');d.item=f.item;if(f.kind==='sx')d.nvl=f.nvl}
   if(f.kind==='nvl'){const n=nccPick(f);if(!n.name)return msg('Chọn nhà cung cấp.');const kg=num(f.kg);if(kg<=0)return msg('Gõ số kg nhận.');const price=num(f.price),ship=num(f.ship);if(price<=0&&!confirm('Chưa gõ giá nhập. Vẫn lưu (kế toán điền sau)?'))return;Object.assign(d,{ncc:n.name,nccCode:n.code,kg,price,ship,lot:lotCode(n.lot,f.date)});
     if(n.fresh){const c=JSON.parse(JSON.stringify(cfg()));c.ncc.push({name:n.name,code:'',lot:n.lot,fresh:true,by:S.uid});try{await S.db.doc('mcfg/main').set(c)}catch(e){}}}
-  else if(f.kind==='sx'){const a=num(f.kgIn),b=num(f.kgOut);if(a<=0)return msg('Gõ số kg nguyên liệu đưa vào.');if(b<=0)return msg('Gõ số kg ra được.');if(b>a*1.05)return msg('Kg ra lớn hơn kg vào – kiểm tra lại.');Object.assign(d,{kgIn:a,kgOut:b,bags:num(f.bags),bagW:num(f.bagW)})}
+  else if(f.kind==='sx'){const a=num(f.kgIn);if(a<=0)return msg('Gõ số kg nguyên liệu đưa vào.');const bg=num(f.bags),bw=num(f.bagW);if(bg&&!bw)return msg('Gõ trọng lượng 1 bịch.');Object.assign(d,{kgIn:a,kgOut:r3(bg*bw),bags:bg,bagW:bw})}
   else if(f.kind==='dg'||f.kind==='dgl'){const packs=[];for(const p of f.packs){const g=gOf(p.w,p.u),q=num(p.q);if(!g&&!q)continue;if(!g)return msg('Có dòng chưa gõ trọng lượng.');if(!q)return msg('Có dòng chưa gõ số gói.');packs.push({g,q})}
     if(!packs.length)return msg('Gõ ít nhất 1 quy cách và số gói.');const kgTP=r3(packs.reduce((s,p)=>s+p.g*p.q/1000,0));const src=f.kind==='dg'?C.btp.get(f.item):C.kd.get(f.item);
     const bu=num(f.bagsUse);if(it.bich&&bu&&!num(f.bagW)&&!(src&&src.bags>0))return msg('Gõ trọng lượng 1 bịch.');let use=useKg(f,src);if(!use)use=kgTP;
@@ -257,7 +273,7 @@ function logDetail(l){if(!l)return;const C=calc();const mine=l.by===S.uid,adm=is
 /* ---------------- TỒN KHO ---------------- */
 function viewStock(v){const C=calc();let h='<h1 class="big">Tồn kho</h1>';
   const nv=nvls().map(i=>{const L=(C.lots.get(i.id)||[]).filter(x=>x.left>0.001);return L.length?`<div class="row"><div class="grow"><div class="t">${esc(i.name)} · ${fm(nvlLeft(C,i.id))} kg</div><div class="s">${L.map(x=>esc(x.lot)+' ('+dmy(x.date)+') '+fm(x.left)+' kg').join(' · ')}</div></div></div>`:''}).join('');
-  const bt=items().map(i=>{const b=C.btp.get(i.id);return b&&Math.abs(b.kg)>0.001?`<div class="row"><div class="grow t">${esc(i.name)}</div><div class="num">${fm(b.kg)} kg${b.bags?' · '+fm(b.bags)+' bịch':''}</div></div>`:''}).join('');
+  const bt=items().map(i=>{const b=C.btp.get(i.id);return b&&b.kg>0.001?`<div class="row"><div class="grow t">${esc(i.name)}</div><div class="num">${fm(b.kg)} kg${b.bags?' · '+fm(b.bags)+' bịch':''}</div></div>`:''}).join('');
   const kd=items().map(i=>{const b=C.kd.get(i.id);return b&&Math.abs(b.kg)>0.001?`<div class="row"><div class="grow"><div class="t">${esc(i.name)}</div><div class="s">${b.since?'gửi từ '+dmy(b.since)+' · '+Math.round((new Date(today())-new Date(b.since))/864e5)+' ngày':''}</div></div><div class="num">${fm(b.kg)} kg${b.bags?' · '+fm(b.bags)+' bịch':''}</div></div>`:''}).join('');
   const tp=[...C.tp.entries()].filter(([k,q])=>Math.abs(q)>1e-9).sort().map(([k,q])=>{const [id,g]=k.split('|');return `<div class="row"><div class="grow t">${esc(itemOf(id).name)} ${packLabel(+g)}</div><div class="num" style="${q<0?'color:var(--bad)':''}">${fm(q)} gói</div></div>`}).join('');
   h+=`<div class="sec">Nguyên liệu (theo lô)</div><div class="group">${nv||'<div class="empty">Không có.</div>'}</div>
