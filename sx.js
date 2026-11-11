@@ -1,4 +1,4 @@
-/* VIBA – Phân hệ Sản xuất (v115). Trang riêng sanxuat.html, dùng chung gas-shim (đăng nhập, đồng bộ).
+/* VIBA – Phân hệ Sản xuất (v115; v120 thêm Xưởng chuối – ủ rấm). Trang riêng sanxuat.html, dùng chung gas-shim (đăng nhập, đồng bộ).
    Dữ liệu: mcfg/main (mặt hàng, NCC, định mức, đơn giá) · mlog/<id> (phiếu 5 công đoạn).
    Tổ trưởng chỉ nhập số lượng + nhân công/giờ làm; tiền do app tính theo định mức Quản lý cài. */
 (function(){
@@ -23,6 +23,15 @@ const KIND={
   xuat:{n:'Xuất hàng',s:'Đi kho đông / ra Hà Nội',c:'#b85a12'},
   dgl:{n:'Đóng gói lại',s:'Lấy từ kho đông về đóng',c:'#6b4fa3'}};
 const KORDER=['nvl','sx','dg','xuat','dgl'];
+/* v120: Xưởng chuối – 4 công đoạn ủ rấm */
+Object.assign(KIND,{
+  cnx:{n:'Nhập chuối xanh',s:'NCC, loại chuối, kg, giá',c:'#1f8a52'},
+  cvu:{n:'Vào phòng ủ',s:'Lô xanh → phòng 1/2/3/4',c:'#1b6aa5'},
+  cloc:{n:'Lọc lựa – ra ủ',s:'Lấy lẫn nhiều mẻ · Win/GO · Hà Nội',c:'#0e7c86'},
+  cxuat:{n:'Xuất hàng',s:'Winmart, GO, Hà Nội, khách khác',c:'#b85a12'}});
+const CORDER=['cnx','cvu','cloc','cxuat'];
+const kOrd=k=>CORDER.includes(k)?CORDER.indexOf(k)+1:KORDER.indexOf(k)+1;
+const isCh=l=>CORDER.includes(l.kind);
 const DEST={hn:'Kho Hà Nội',dong:'Kho đông thuê',mau:'Hàng mẫu'};
 
 /* Định mức ban đầu: tính từ file "GIÁ THÀNH CHUNG NĂM 2026.xlsx" ngày 11/11/2026 (Quản lý sửa ở tab Định mức) */
@@ -50,8 +59,28 @@ const DEFAULT_CFG={v:2,gioCong:8,
   /* Nhà cung cấp: file "Danh sách nhà cung cấp" (11/11/2026). code = mã MISA; lot = 3 chữ dùng sinh số lô */
   ncc:[['001082047648','Lê Bá Quỳnh'],['001087041827','Trần văn Đặng'],['001161024959','Phùng Thị Dung'],['001168041185','Lê Thị Thu Hường'],['010086006385','Lý Seo Vư'],['014181006674','Phạm Thị Thúy'],['017093005472','Nguyễn Văn Chung','NVC'],['033182003306','Trần Thị Xoa'],['033191012442','Nguyễn Thị Mơ'],['035078011048','Trần Văn Hùng'],['037301001464','Đinh Thị Nhật Lệ','NLE'],['NCC00001','Dương Chi Chi'],['NCC 0010','Nguyễn Văn Ca'],['NCC 002','E Thoa Daklak'],['NCC 003','E Định Daklak'],['NCC 008','E Thiêm'],['NCC 014','A Châu'],['NCC 015','Trần Văn Ninh']].map(x=>({code:x[0],name:x[1],lot:x[2]||''})),
   xe:['28A-30735','28H-00259','30B-80630']};
+/* v120: cấu hình xưởng chuối (lưu ở mcfg/main.ch). marks: ngày thứ mấy lọc cho đâu */
+const CH0={rooms:4,users:['Nguyễn Thị Như Nhung'],
+  types:{tieu:{name:'Chuối tiêu',days:4,marks:{3:'Win/GO',4:'Hà Nội'},cong100:0},tay:{name:'Chuối tây',days:3,marks:{3:'Hà Nội'},cong100:0}},
+  dm:{rate:180000,khac:0},
+  prods:[
+    {id:'tkg',t:'tieu',name:'Chuối tiêu kg',u:'kg',kg:1},
+    {id:'tplus',t:'tieu',name:'Chuối tiêu Plus',u:'gói',kg:0.842},
+    {id:'tmini',t:'tieu',name:'Chuối tiêu Mini',u:'gói',kg:0.64},
+    {id:'t350',t:'tieu',name:'Chuối tiêu Pack 350g',u:'gói',kg:0.38},
+    {id:'tck',t:'tieu',name:'Quả Circle K',u:'kg',kg:1,note:'quả 140–200 g'},
+    {id:'twin',t:'tieu',name:'Winmart',u:'kg',kg:1},
+    {id:'tgop',t:'tieu',name:'GO Plus',u:'gói',kg:0.842},
+    {id:'tgom',t:'tieu',name:'GO Mini',u:'gói',kg:0.64},
+    {id:'tbep',t:'tieu',name:'Quả bếp trường',u:'kg',kg:1,note:'quả 90–120 g'},
+    {id:'ykg',t:'tay',name:'Chuối tây kg',u:'kg',kg:1},
+    {id:'yplus',t:'tay',name:'Chuối tây Plus',u:'gói',kg:0.762},
+    {id:'ymini',t:'tay',name:'Chuối tây Mini',u:'gói',kg:0.593},
+    {id:'ybep',t:'tay',name:'Quả loại bếp bánh',u:'kg',kg:1}]};
+const CDEST={wg:'Win / GO',hn:'Hà Nội',khac:'Khác'};
+const CXD={win:'Winmart',go:'GO',hn:'Hà Nội',ck:'Circle K',bep:'Bếp trường / bếp bánh',khac:'Khách khác'};
 
-const S={db:null,user:null,uid:null,owner:false,staff:null,cfg:null,logs:[],tab:'home',form:null,names:{},ui:{lp:'7',gtFrom:null,gtTo:null,ncDate:null,dmItem:'mia'},ready:false};
+const S={db:null,user:null,uid:null,owner:false,staff:null,cfg:null,logs:[],tab:'home',form:null,names:{},ui:{lp:'7',gtFrom:null,gtTo:null,ncDate:null,dmItem:'mia',xw:null},ready:false};
 const cfg=()=>(S.cfg&&S.cfg.v>=2)?S.cfg:DEFAULT_CFG; /* cấu hình cũ v1 → dùng mặc định v2 tới khi Quản lý mở app (tự nâng) */
 const items=()=>cfg().items.filter(i=>i.active!==false);
 const tpId=id=>id==='dua'||id==='duaq'?'duam':id; /* phiếu cũ v115 */
@@ -64,6 +93,11 @@ const role=()=>S.owner?'admin':(S.staff&&S.staff.active!==false?S.staff.role:nul
 const isAdmin=()=>role()==='admin';
 const canUse=()=>role()==='admin'||role()==='sx';
 const liveLogs=()=>S.logs.filter(l=>!l.deleted);
+const chc=()=>{const c=(S.cfg&&S.cfg.ch)||{};return Object.assign({},CH0,c,{types:Object.assign({},CH0.types,c.types||{}),dm:Object.assign({},CH0.dm,c.dm||{})})};
+function xw(){if(S.ui.xw)return S.ui.xw;let v=null;try{v=localStorage.getItem('sxXw')}catch(e){}
+  if(v!=='ch'&&v!=='nm'){const me=noAcc(S.names[S.uid]||'').trim();v=me&&(chc().users||[]).some(u=>noAcc(u).trim()===me)?'ch':'nm'}return v}
+function setXw(v){S.ui.xw=v;try{localStorage.setItem('sxXw',v)}catch(e){}}
+const modeLogs=L=>L.filter(l=>xw()==='ch'?isCh(l):!isCh(l));
 const nameOf=uid=>S.names[uid]||(uid===S.uid?'Tôi':'…');
 /* quy cách: trọng lượng + đơn vị g/kg → gram */
 const gOf=(w,u)=>r3(num(w)*(u==='kg'?1000:1));
@@ -117,9 +151,9 @@ function render(){const v=$('#view');
   $('#tabs').innerHTML=T.map(([k,l,i])=>`<button data-tab="${k}" class="${S.tab===k?'on':''}"><span style="font-size:20px;line-height:1">${i}</span><span>${l}</span></button>`).join('');$('#tabbar').hidden=false;
   $$('#tabs [data-tab]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;S.form=null;S.post=null;render();scrollTo(0,0)});
   if(isAdmin())$('#modeSw').innerHTML='<a class="btn sm" href="quanly.html">↩ App bán hàng</a>';
-  if(S.form)return viewForm(v);
+  if(S.form)return CORDER.includes(S.form.kind)?viewFormCh(v):viewForm(v);
   if(S.post&&S.tab==='home')return viewPost(v);
-  ({home:viewHome,stock:viewStock,list:viewList,nc:viewNC,dm:viewDM,gt:viewGT})[S.tab](v);
+  const ch=xw()==='ch';({home:ch?viewHomeCh:viewHome,stock:ch?viewStockCh:viewStock,list:viewList,nc:viewNC,dm:ch?viewDMCh:viewDM,gt:ch?viewGTCh:viewGT})[S.tab](v);
   syncLine(v)}
 function syncLine(v){const s=window.vibaSync;if(!s)return;const t=s.last?new Date(s.last).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'}):'…';
   v.insertAdjacentHTML('afterbegin',`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span class="tiny muted" style="font-weight:600">${s.err?'⚠️ Mạng yếu – đang thử lại · dữ liệu lúc '+t:'🔄 Cập nhật lúc '+t}</span><button class="btn sm" id="sxRef" style="min-height:0;padding:4px 12px">↻ Làm mới</button></div>`);
@@ -132,18 +166,20 @@ function viewHome(v){const C=calc();
   for(const it of items()){const a=0,b=C.btp.get(it.id),d=C.kd.get(it.id);const tps=[...C.tp.entries()].filter(([k,q])=>k.startsWith(it.id+'|')&&q).map(([k,q])=>fm(q)+' × '+packLabel(+k.split('|')[1]));
     const parts=[];if(a>0.001)parts.push('NVL '+fm(a)+' kg');if(b&&b.kg>0.001)parts.push('BTP '+fm(b.kg)+' kg'+(it.bich&&b.bags?' ('+fm(b.bags)+' bịch)':''));if(d&&d.kg>0.001)parts.push('❄️ '+fm(d.kg)+' kg'+(d.bags?' ('+fm(d.bags)+' bịch)':''));if(tps.length)parts.push('TP '+tps.join(', '));
     if(parts.length)rows.push(`<div class="row"><div class="grow"><div class="t">${esc(it.name)}</div><div class="s">${parts.join(' · ')}</div></div></div>`)}
-  const td=liveLogs().filter(l=>l.date===today());
-  v.innerHTML=`<h1 class="big" style="margin-bottom:10px">Hôm nay ${dmy(today())}</h1>${KORDER.map(btn).join('')}
+  const td=liveLogs().filter(l=>!isCh(l)&&l.date===today());
+  v.innerHTML=`${xwSeg()}<h1 class="big" style="margin-bottom:10px">Hôm nay ${dmy(today())}</h1>${KORDER.map(btn).join('')}
    <div class="sec">Hàng đang có</div><div class="group">${rows.join('')||'<div class="empty">Chưa có hàng tồn.</div>'}</div>
    <div class="sec">Đã nhập hôm nay (${td.length})</div><div class="group">${td.slice().sort((a,b)=>b.at-a.at).map(logRow).join('')||'<div class="empty">Chưa có phiếu nào hôm nay.</div>'}</div>`;
-  $$('.sxbig').forEach(b=>b.onclick=()=>openForm(b.dataset.k));bindLogRows()}
-function logSum(l){const it=itemOf(l.item).name;
+  $$('.sxbig').forEach(b=>b.onclick=()=>openForm(b.dataset.k));bindLogRows();bindXw()}
+function xwSeg(){return `<div class="opt" style="margin-bottom:12px">${[['nm','🏭 Nhà máy'],['ch','🍌 Xưởng chuối']].map(([k,l])=>`<button data-xw="${k}" class="${xw()===k?'on':''}">${l}</button>`).join('')}</div>`}
+function bindXw(){$$('[data-xw]').forEach(b=>b.onclick=()=>{setXw(b.dataset.xw);S.form=null;render();scrollTo(0,0)})}
+function logSum(l){if(isCh(l))return logSumCh(l);const it=itemOf(l.item).name;
   if(l.kind==='nvl')return `${esc(nvlOf(nvlId(l)).name)} · ${esc(l.ncc||'')} · ${fm(l.kg)} kg${l.price?' × '+fm(l.price)+' đ':''} · lô ${esc(l.lot||'')}`;
   if(l.kind==='sx')return `${esc(nvlOf(nvlId(l)).name)} → ${it} · ${fm(l.kgIn)} kg vào${l.bags?' → '+fm(l.bags)+' bịch × '+fm(l.bagW)+' kg':''}`;
   if(l.kind==='dg'||l.kind==='dgl')return `${it} · ${(l.packs||[]).map(p=>fm(p.q)+' × '+packLabel(p.g)).join(', ')} = ${fm(l.kgTP)} kg TP`;
   if(l.kind==='xuat')return `→ ${DEST[l.dest]||l.dest} · ${(l.lines||[]).map(x=>x.t==='tp'?itemOf(x.item).name+' '+packLabel(x.g)+' × '+fm(x.q):itemOf(x.item).name+' '+fm(x.kg)+' kg'+(x.bags?' ('+fm(x.bags)+' bịch)':'')).join(', ')}`;
   return ''}
-function logRow(l){return `<div class="row tap" data-lid="${esc(l.id)}"><div class="grow"><div class="t"><span class="chip" style="background:${KIND[l.kind].c};color:#fff">${KIND[l.kind].n}</span> ${dmy(l.date)}${l.deleted?' <span class="chip r">Đã xoá</span>':''}</div><div class="s ell">${logSum(l)}</div><div class="tiny muted">👷 ${hTxt(l)} · ${esc(nameOf(l.by))}</div></div><span class="chev">›</span></div>`}
+function logRow(l){return `<div class="row tap" data-lid="${esc(l.id)}"><div class="grow"><div class="t"><span class="chip" style="background:${KIND[l.kind].c};color:#fff">${KIND[l.kind].n}</span>${isCh(l)?' 🍌':''} ${dmy(l.date)}${l.deleted?' <span class="chip r">Đã xoá</span>':''}</div><div class="s ell">${logSum(l)}</div><div class="tiny muted">👷 ${hTxt(l)} · ${esc(nameOf(l.by))}</div></div><span class="chev">›</span></div>`}
 function bindLogRows(){$$('[data-lid]').forEach(r=>r.onclick=()=>logDetail(S.logs.find(x=>x.id===r.dataset.lid)))}
 
 /* ---------------- PHIẾU 5 CÔNG ĐOẠN ---------------- */
@@ -210,7 +246,7 @@ function bindNcc(){const f=S.form,q=$('#nccQ'),box=$('#nccL');if(!q)return;
   q.onfocus=show;q.oninput=()=>{f.nccQ=q.value;if(f.ncc&&f.ncc!=='__new'&&q.value!==f.ncc)f.ncc='';show()};q.onblur=()=>setTimeout(()=>box.hidden=true,150)}
 function useKg(f,src){const bu=num(f.bagsUse);if(bu){const w=num(f.bagW)||(src&&src.bags>0?src.kg/src.bags:0);return r3(bu*w)}return num(f.kgUse)}
 function packsKg(f){let kg=0;for(const p of f.packs){const g=gOf(p.w,p.u),q=num(p.q);if(g>0&&q>0)kg+=g*q/1000}return r3(kg)}
-function upd(){const f=S.form,C=calc(),it=itemOf(f.item);const lt=$('#lbTot');if(lt){const t=num(f.hours),o=num(f.ot),gc=cfg().gioCong||8;lt.innerHTML=t||o?'Chính thức: <b>'+fm(num(f.people))+' người · '+fm(t)+' giờ</b> ('+fm(t/gc,2)+' công)'+(o||num(f.pot)?'<br>Tăng ca: <b>'+fm(num(f.pot))+' người · '+fm(o)+' giờ</b> ('+fm(o/gc,2)+' công)':''):'Tổng số giờ = cộng giờ của cả nhóm (VD 5 người × 8 giờ = 40). Tăng ca ghi riêng số người và tổng giờ tăng ca.'}
+function upd(){if(S.form&&CORDER.includes(S.form.kind))return updCh();const f=S.form,C=calc(),it=itemOf(f.item);const lt=$('#lbTot');if(lt){const t=num(f.hours),o=num(f.ot),gc=cfg().gioCong||8;lt.innerHTML=t||o?'Chính thức: <b>'+fm(num(f.people))+' người · '+fm(t)+' giờ</b> ('+fm(t/gc,2)+' công)'+(o||num(f.pot)?'<br>Tăng ca: <b>'+fm(num(f.pot))+' người · '+fm(o)+' giờ</b> ('+fm(o/gc,2)+' công)':''):'Tổng số giờ = cộng giờ của cả nhóm (VD 5 người × 8 giờ = 40). Tăng ca ghi riêng số người và tổng giờ tăng ca.'}
   f.packs.forEach((p,i)=>{const e=$('#pk'+i);if(e){const g=gOf(p.w,p.u),q=num(p.q);e.textContent=g&&q?'= '+fm(g*q/1000)+' kg':''}});
   const sb=$('#sugBox');if(sb&&f.kind==='sx'){sb.innerHTML=sugHTML(f);$$('#sugBox [data-f]').forEach(el=>el.onchange=()=>{f.plan=el.value;upd()})}
   const cb=$('#calcBox');if(!cb)return;
@@ -220,7 +256,7 @@ function upd(){const f=S.form,C=calc(),it=itemOf(f.item);const lt=$('#lbTot');if
     cb.innerHTML=kg?`Thành phẩm <b>${fm(kg)} kg</b>${use?' · từ '+fm(use)+' kg ('+fm(kg/use*100,1)+'%)':''}${it.dm&&it.dm.baoBi?'<br>Túi, tem: tự trừ theo số gói':''}`:'Gõ trọng lượng, chọn g/kg và số gói.'}}
 function nccPick(f){if(f.ncc==='__new'){const n=String(f.nccNew||'').trim();return {name:n,code:'',lot:autoCode(n),fresh:true}}const nm=f.ncc||String(f.nccQ||'').trim();const x=(cfg().ncc||[]).find(n=>n.name===nm);return x?{name:x.name,code:x.code||'',lot:x.lot||autoCode(x.name)}:{name:nm,code:'',lot:autoCode(nm),fresh:!!nm}}
 function autoCode(n){const w=noAcc(n).toUpperCase().replace(/[^A-Z ]/g,'').split(/\s+/).filter(Boolean);if(!w.length)return 'NCC';return (w.length>=3?w.slice(-3).map(x=>x[0]).join(''):w.length===2?w[0][0]+w[1].slice(0,2):w[0].slice(0,3)).padEnd(3,'X')}
-function lotCode(code,date){const base=(code||'NCC')+date.slice(8,10)+date.slice(5,7);const used=new Set(liveLogs().filter(l=>l.kind==='nvl').map(l=>l.lot));if(!used.has(base))return base;for(let i=2;i<50;i++)if(!used.has(base+'-'+i))return base+'-'+i;return base+'-'+Date.now()%1000}
+function lotCode(code,date){const base=(code||'NCC')+date.slice(8,10)+date.slice(5,7);const used=new Set(liveLogs().filter(l=>l.kind==='nvl'||l.kind==='cnx').map(l=>l.lot));if(!used.has(base))return base;for(let i=2;i<50;i++)if(!used.has(base+'-'+i))return base+'-'+i;return base+'-'+Date.now()%1000}
 function newId(date){return 'P'+date.replace(/-/g,'').slice(2)+'-'+Date.now().toString(36).slice(-5)+Math.random().toString(36).slice(2,4)}
 async function save(){const f=S.form,C=calc(),it=itemOf(f.item),msg=t=>$('#fMsg').innerHTML='<div class="alert r">'+esc(t)+'</div>';
   const people=num(f.people),hours=num(f.hours),ot=num(f.ot),pot=num(f.pot);
@@ -262,11 +298,12 @@ function sheet(title,html){const s=$('#sheet');s.innerHTML=`<div class="pane"><d
   const close=()=>{s.hidden=true;s.innerHTML='';if(S._pend){S._pend=false;render()}};$('#shX').onclick=close;s.onclick=e=>{if(e.target===s)close()};return close}
 function logDetail(l){if(!l)return;const C=calc();const mine=l.by===S.uid,adm=isAdmin();const canEdit=adm||(mine&&l.date===today()&&!l.deleted);
   let det=`<div class="s">${logSum(l)}</div>`;
+  if(isCh(l))det+=detCh(l);
   if(l.kind==='sx'){const u=C.use.get(l.id)||[];det+=`<div class="tiny muted" style="margin-top:4px">Lô đã dùng: ${u.map(x=>esc(x.lot)+' '+fm(x.kg)+' kg').join(' · ')||'—'}</div>`}
   if(l.xe)det+=`<div class="tiny muted">Xe: ${esc(l.xe)}</div>`;if(l.note)det+=`<div class="tiny">📝 ${esc(l.note)}</div>`;
   if(l.edits&&l.edits.length)det+=`<div class="tiny muted" style="margin-top:4px">Đã sửa: ${l.edits.map(e=>esc(nameOf(e.by))+' '+new Date(e.at).toLocaleString('vi-VN',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})+' ('+esc(e.what)+')').join('; ')}</div>`;
   let ed='';if(canEdit&&!l.deleted){ed=`<div class="sec">Nhân công</div><div class="grid2"><label class="f"><span class="lab">Số người</span><input id="eP" value="${fm(l.people)}" inputmode="numeric"></label></div><div class="grid2"><label class="f"><span class="lab">Tổng số giờ làm</span><input id="eH" value="${String(HW(l)||'').replace('.',',')}" inputmode="decimal"></label></div><div class="grid2"><label class="f"><span class="lab">Số người tăng ca</span><input id="ePo" value="${num(l.pot)?fm(l.pot):''}" inputmode="numeric"></label><label class="f"><span class="lab">Tổng giờ tăng ca</span><input id="eO" value="${String(HO(l)||'').replace('.',',')}" inputmode="decimal"></label></div>`;
-    if(l.kind==='nvl'&&adm)ed+=`<div class="sec">Giá mua (kế toán điền theo phiếu MISA)</div><div class="grid2"><label class="f"><span class="lab">Đơn giá (đ/kg)</span><input id="ePr" value="${l.price?fm(l.price):''}" inputmode="decimal"></label><label class="f"><span class="lab">Vận chuyển (đ)</span><input id="eSh" value="${l.ship?fm(l.ship):''}" inputmode="decimal"></label></div><label class="f"><span class="lab">Chi phí khác (đ)</span><input id="eEx" value="${l.extra?fm(l.extra):''}" inputmode="decimal"></label><label class="f"><span class="lab">Số phiếu MISA</span><input id="eMs" value="${esc(l.misa||'')}"></label>`;
+    if((l.kind==='nvl'||l.kind==='cnx')&&adm)ed+=`<div class="sec">Giá mua (kế toán điền theo phiếu MISA)</div><div class="grid2"><label class="f"><span class="lab">Đơn giá (đ/kg)</span><input id="ePr" value="${l.price?fm(l.price):''}" inputmode="decimal"></label><label class="f"><span class="lab">Vận chuyển (đ)</span><input id="eSh" value="${l.ship?fm(l.ship):''}" inputmode="decimal"></label></div><label class="f"><span class="lab">Chi phí khác (đ)</span><input id="eEx" value="${l.extra?fm(l.extra):''}" inputmode="decimal"></label><label class="f"><span class="lab">Số phiếu MISA</span><input id="eMs" value="${esc(l.misa||'')}"></label>`;
     ed+=`<div id="eMsg"></div><button class="btn block pri" id="eSave">Lưu thay đổi</button><button class="btn block" id="eDel" style="color:var(--bad)">Xoá phiếu</button>`}
   const close=sheet(`${KIND[l.kind].n} · ${dmy(l.date)}`,`${det}<div class="tiny muted" style="margin-top:6px">Người nhập: ${esc(nameOf(l.by))} · ${new Date(l.at).toLocaleString('vi-VN')}</div>${ed}`);
   if(!ed)return;
@@ -289,19 +326,19 @@ function viewStock(v){const C=calc();let h='<h1 class="big">Tồn kho</h1>';
   v.innerHTML=h}
 
 /* ---------------- ĐÃ NHẬP ---------------- */
-function viewList(v){const n=S.ui.lp;const from=n==='all'?'0000':addDays(today(),-(+n-1));const L=S.logs.filter(l=>l.date>=from&&(isAdmin()||!l.deleted)).sort((a,b)=>(b.date+String(b.at)).localeCompare(a.date+String(a.at)));
-  v.innerHTML=`<h1 class="big">Đã nhập</h1><div class="opt" style="margin-bottom:10px">${[['1','Hôm nay'],['7','7 ngày'],['31','31 ngày'],['all','Tất cả']].map(([k,l])=>`<button data-lp="${k}" class="${n===k?'on':''}">${l}</button>`).join('')}</div>
+function viewList(v){const n=S.ui.lp;const from=n==='all'?'0000':addDays(today(),-(+n-1));const L=modeLogs(S.logs).filter(l=>l.date>=from&&(isAdmin()||!l.deleted)).sort((a,b)=>(b.date+String(b.at)).localeCompare(a.date+String(a.at)));
+  v.innerHTML=`<h1 class="big">Đã nhập${xw()==='ch'?' · Xưởng chuối':''}</h1><div class="opt" style="margin-bottom:10px">${[['1','Hôm nay'],['7','7 ngày'],['31','31 ngày'],['all','Tất cả']].map(([k,l])=>`<button data-lp="${k}" class="${n===k?'on':''}">${l}</button>`).join('')}</div>
    <div class="group">${L.map(logRow).join('')||'<div class="empty">Không có phiếu.</div>'}</div>`;
   $$('[data-lp]').forEach(b=>b.onclick=()=>{S.ui.lp=b.dataset.lp;render()});bindLogRows()}
 
 /* ---------------- QUẢN LÝ: NHÂN CÔNG ---------------- */
-function viewNC(v){const d=S.ui.ncDate||today();const L=liveLogs().filter(l=>l.date===d).sort((a,b)=>KORDER.indexOf(a.kind)-KORDER.indexOf(b.kind)||String(a.item).localeCompare(String(b.item)));const gc=cfg().gioCong||8;
-  const by=new Map();for(const l of L){const k=l.kind==='nvl'||l.kind==='xuat'?'_chung':tpId(l.item);const x=by.get(k)||{h:0,kg:0};x.h+=HW(l)+HO(l);if(l.kind==='dg'||l.kind==='dgl')x.kg+=num(l.kgTP);by.set(k,x)}
-  const sum=[...by.entries()].map(([k,x])=>{if(k==='_chung')return `<div class="row"><div class="grow t">Nhập NVL + Xuất hàng (chung)</div><div class="num">${fm(x.h)} giờ · ${fm(x.h/gc,2)} công</div></div>`;const it=itemOf(k),dm=it.dm||{};const c100=x.kg?x.h/gc/x.kg*100:null;const ok=c100!=null&&dm.cong100?c100<=dm.cong100*1.05:null;
+function viewNC(v){const d=S.ui.ncDate||today();const ch=xw()==='ch';const L=modeLogs(liveLogs()).filter(l=>l.date===d).sort((a,b)=>kOrd(a.kind)-kOrd(b.kind)||String(a.item||a.loai).localeCompare(String(b.item||b.loai)));const gc=cfg().gioCong||8;
+  const by=new Map();for(const l of L){const k=ch?(l.kind==='cnx'||l.kind==='cxuat'?'_chung':'c|'+l.loai):(l.kind==='nvl'||l.kind==='xuat'?'_chung':tpId(l.item));const x=by.get(k)||{h:0,kg:0};x.h+=HW(l)+HO(l);if(l.kind==='dg'||l.kind==='dgl')x.kg+=num(l.kgTP);if(l.kind==='cloc')x.kg+=num(l.kgOk);by.set(k,x)}
+  const sum=[...by.entries()].map(([k,x])=>{if(k==='_chung')return `<div class="row"><div class="grow t">${ch?'Nhập chuối xanh + Xuất hàng (chung)':'Nhập NVL + Xuất hàng (chung)'}</div><div class="num">${fm(x.h)} giờ · ${fm(x.h/gc,2)} công</div></div>`;const it=k.startsWith('c|')?{name:(chc().types[k.slice(2)]||{}).name||k,dm:{cong100:(chc().types[k.slice(2)]||{}).cong100}}:itemOf(k),dm=it.dm||{};const c100=x.kg?x.h/gc/x.kg*100:null;const ok=c100!=null&&dm.cong100?c100<=dm.cong100*1.05:null;
     return `<div class="row"><div class="grow"><div class="t">${esc(it.name)}</div><div class="s">${fm(x.h)} giờ = ${fm(x.h/gc,2)} công${x.kg?' · '+fm(x.kg)+' kg TP':''}</div></div>${c100!=null?`<span class="chip ${ok?'g':'r'}">${fm(c100,2)} công/100kg · ĐM ${fm(dm.cong100,2)}</span>`:''}</div>`}).join('');
-  v.innerHTML=`<h1 class="big">Nhân công</h1><label class="f"><span class="lab">Ngày</span><input type="date" id="ncD" value="${d}" max="${today()}"></label>
+  v.innerHTML=`<h1 class="big">Nhân công${ch?' · Xưởng chuối':''}</h1><label class="f"><span class="lab">Ngày</span><input type="date" id="ncD" value="${d}" max="${today()}"></label>
    <div class="tiny muted" style="margin:4px 0 8px">Số người, tổng giờ chính thức và tăng ca lấy từ phiếu tổ trưởng. Sửa trực tiếp rồi bấm Lưu – app ghi lại ai sửa. Quy đổi ${gc} giờ = 1 công.</div>
-   ${L.length?'<div class="nchd"><span>Người</span><span>Giờ</span><span>Người TC</span><span>Giờ TC</span></div>':''}<div class="group">${L.map(l=>`<div class="row"><div class="grow"><div class="t">${esc(l.kind==='nvl'?nvlOf(nvlId(l)).name+' (NVL)':l.item?itemOf(l.item).name:'Chung')}</div><div class="s">${KORDER.indexOf(l.kind)+1}. ${KIND[l.kind].n} · ${esc(nameOf(l.by))}</div></div><input class="ncin" data-nid="${l.id}" data-nk="people" value="${fm(l.people)}" inputmode="numeric"><input class="ncin" data-nid="${l.id}" data-nk="hours" value="${String(HW(l)||0).replace('.',',')}" inputmode="decimal"><input class="ncin" data-nid="${l.id}" data-nk="pot" value="${fm(num(l.pot))}" inputmode="numeric"><input class="ncin" data-nid="${l.id}" data-nk="ot" value="${String(HO(l)||0).replace('.',',')}" inputmode="decimal"></div>`).join('')||'<div class="empty">Không có phiếu ngày này.</div>'}</div>
+   ${L.length?'<div class="nchd"><span>Người</span><span>Giờ</span><span>Người TC</span><span>Giờ TC</span></div>':''}<div class="group">${L.map(l=>`<div class="row"><div class="grow"><div class="t">${esc(isCh(l)?(chc().types[l.loai]||{}).name||'Chuối':l.kind==='nvl'?nvlOf(nvlId(l)).name+' (NVL)':l.item?itemOf(l.item).name:'Chung')}</div><div class="s">${kOrd(l.kind)}. ${KIND[l.kind].n} · ${esc(nameOf(l.by))}</div></div><input class="ncin" data-nid="${l.id}" data-nk="people" value="${fm(l.people)}" inputmode="numeric"><input class="ncin" data-nid="${l.id}" data-nk="hours" value="${String(HW(l)||0).replace('.',',')}" inputmode="decimal"><input class="ncin" data-nid="${l.id}" data-nk="pot" value="${fm(num(l.pot))}" inputmode="numeric"><input class="ncin" data-nid="${l.id}" data-nk="ot" value="${String(HO(l)||0).replace('.',',')}" inputmode="decimal"></div>`).join('')||'<div class="empty">Không có phiếu ngày này.</div>'}</div>
    ${L.length?'<button class="btn block pri" id="ncSave">Lưu</button>':''}
    <div class="sec">Tổng theo mặt hàng</div><div class="group">${sum||'<div class="empty">—</div>'}</div>`;
   $('#ncD').onchange=e=>{S.ui.ncDate=e.target.value;render()};
@@ -337,7 +374,7 @@ function viewDM(v){const c=cfg();const id=S.ui.dmItem&&c.items.some(i=>i.id===S.
   $('#iAdd').onclick=()=>{const n=$('#iN').value.trim();if(!n)return toast('Gõ tên mặt hàng');const c2=JSON.parse(JSON.stringify(c));const nid=noAcc(n).replace(/[^a-z0-9]/g,'').slice(0,8)+Date.now().toString(36).slice(-3);c2.items.push({id:nid,name:n,nvl:$('#dmV').value,bich:false,packs:[],dm:{tl:0,cong100:0,rate:180000,baoBi:0,dienGa:0,kh:0,thung:0,guiKho:0},src:'thêm mới'});S.ui.dmItem=nid;saveCfg(c2,'✓ Đã thêm '+n)}}
 
 /* ---------------- QUẢN LÝ: GIÁ THÀNH ---------------- */
-function costs(from,to){const C=calc(),gc=cfg().gioCong||8;const L=liveLogs().filter(l=>l.date>=from&&l.date<=to);const R=new Map();
+function costs(from,to){const C=calc(),gc=cfg().gioCong||8;const L=liveLogs().filter(l=>!isCh(l)&&l.date>=from&&l.date<=to);const R=new Map();
   const G=id=>{if(!R.has(id))R.set(id,{id,kgIn:0,kgTP:0,nvl:0,nvlMiss:0,h:0,packs:new Map(),bb:0});return R.get(id)};
   let xh=0;
   for(const l of L){if(l.kind==='xuat'||l.kind==='nvl'){xh+=HC(l);continue}const x=G(tpId(l.item));x.h+=HC(l);
@@ -367,9 +404,206 @@ function exportXlsx(from,to,X){if(!window.XLSX)return toast('Chưa tải đượ
   for(const x of X)a.push([itemOf(x.id).name,r3(x.kgIn),r3(x.kgTP),x.kgIn?r3(x.kgTP/x.kgIn*100):'',x.dm.tl||'',r3(x.h),r3(x.cong),x.dmCong!=null?r3(x.dmCong):'',Math.round(x.nvl),r3(x.nvlMiss),Math.round(x.lab),Math.round(x.bb),Math.round(x.oth),Math.round(x.tot),Math.round(x.perKg)]);
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),'Giá thành');
   const b=[['Ngày','Công đoạn','Mặt hàng','Chi tiết','Số người','Tổng giờ làm','Số người tăng ca','Giờ tăng ca','Người nhập','Ghi chú']];
-  for(const l of liveLogs().filter(l=>l.date>=from&&l.date<=to).sort((p,q)=>p.date.localeCompare(q.date)))b.push([l.date,KIND[l.kind].n,l.item?itemOf(l.item).name:'',logSum(l).replace(/<[^>]+>/g,''),num(l.people),r3(HW(l)),num(l.pot),r3(HO(l)),nameOf(l.by),l.note||'']);
+  for(const l of liveLogs().filter(l=>!isCh(l)&&l.date>=from&&l.date<=to).sort((p,q)=>p.date.localeCompare(q.date)))b.push([l.date,KIND[l.kind].n,l.item?itemOf(l.item).name:'',logSum(l).replace(/<[^>]+>/g,''),num(l.people),r3(HW(l)),num(l.pot),r3(HO(l)),nameOf(l.by),l.note||'']);
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(b),'Phiếu');
   XLSX.writeFile(wb,`Gia thanh san xuat ${from} den ${to}.xlsx`)}
+
+/* ================= v120: XƯỞNG CHUỐI (ủ rấm) =================
+   cnx  {loai,ncc,nccCode,kg,price,ship,lot}
+   cvu  {loai,room,gio,code,takes:[{id(lô cnx),lot,kg}],kg}
+   cloc {loai,dest,takes:[{b(mẻ cvu),kg}],kgIn,outs:[{p,q,kg}],kgOk,hong}
+   cxuat{dest,lines:[{p,q}],xe} */
+const tName=t=>(chc().types[t]||{}).name||t||'?';
+const prods=t=>(chc().prods||[]).filter(p=>p.active!==false&&(!t||p.t===t));
+const prodOf=id=>(chc().prods||[]).find(p=>p.id===id)||{id,name:id,u:'kg',kg:1};
+const qU=(p,q)=>fm(q)+' '+(p.u||'kg');
+const dayN=(d,ref)=>Math.round((new Date((ref||today())+'T00:00:00Z')-new Date(d+'T00:00:00Z'))/864e5)+1;
+function calcCh(){const L=liveLogs().filter(isCh).sort((a,b)=>(a.date+String(a.at).padStart(15,'0')).localeCompare(b.date+String(b.at).padStart(15,'0')));
+  const lots=new Map(),lotById=new Map(),bat=new Map(),tp=new Map();
+  for(const l of L){
+    if(l.kind==='cnx'){const x={id:l.id,lot:l.lot,date:l.date,kg:num(l.kg),left:num(l.kg),price:lotPrice(l),ncc:l.ncc,loai:l.loai};if(!lots.has(l.loai))lots.set(l.loai,[]);lots.get(l.loai).push(x);lotById.set(l.id,x)}
+    else if(l.kind==='cvu'){const b={id:l.id,code:l.code,room:+l.room,loai:l.loai,date:l.date,gio:l.gio||'',kg:0,left:0,cost:0,kgP:0,miss:0,took:0,ok:0,hong:0,src:[],outs:[]};
+      for(const t of l.takes||[]){const x=lotById.get(t.id),kg=num(t.kg);if(x)x.left=r3(x.left-kg);b.kg=r3(b.kg+kg);b.src.push({lot:t.lot||(x&&x.lot)||'?',kg,ncc:x&&x.ncc});if(x&&x.price!=null){b.cost+=kg*x.price;b.kgP+=kg}else b.miss+=kg}
+      b.left=b.kg;bat.set(l.id,b)}
+    else if(l.kind==='cloc'){const kin=num(l.kgIn)||(l.takes||[]).reduce((s,t)=>s+num(t.kg),0);
+      for(const t of l.takes||[]){const b=bat.get(t.b);if(!b)continue;const kg=num(t.kg),sh=kin?kg/kin:0;b.left=r3(b.left-kg);b.took=r3(b.took+kg);b.ok+=num(l.kgOk)*sh;b.hong+=num(l.hong)*sh;b.outs.push({log:l.id,date:l.date,kg});b.last=l.date}
+      for(const o of l.outs||[])tp.set(o.p,(tp.get(o.p)||0)+num(o.q))}
+    else if(l.kind==='cxuat'){for(const x of l.lines||[])tp.set(x.p,(tp.get(x.p)||0)-num(x.q))}}
+  return {lots,lotById,bat,tp}}
+const openBats=(C,t)=>[...C.bat.values()].filter(b=>b.left>0.05&&(!t||b.loai===t)).sort((a,b)=>(a.date+a.gio).localeCompare(b.date+b.gio));
+const unitCost=b=>b.kgP?b.cost/b.kgP:null;
+function batStat(b){const T=chc().types[b.loai]||{days:4,marks:{}},n=dayN(b.date);const m=(T.marks||{})[n];
+  if(n>T.days)return {n,tag:`<span class="chip r">Quá hạn ${n-T.days} ngày</span>`,lv:3};
+  if(m)return {n,tag:`<span class="chip ${n===T.days?'g':'w'}">Ngày ${n} – lọc ${esc(m)}</span>`,lv:n===T.days?2:1};
+  return {n,tag:`<span class="chip">Ngày ${n}</span>`,lv:0}}
+function dayBar(b){const T=chc().types[b.loai]||{days:4,marks:{}},n=dayN(b.date);let h='';
+  for(let i=1;i<=T.days;i++){const m=(T.marks||{})[i];const st=i<n?'background:var(--accent);color:#fff':i===n?(m?(i===T.days?'background:#2E8B57;color:#fff':'background:#F2A900;color:#fff'):'background:var(--accent);color:#fff'):'background:var(--sunk);color:var(--muted)';
+    h+=`<span style="flex:1;text-align:center;font-size:11.5px;font-weight:700;padding:3px 0;border-radius:6px;${st}">N${i}${m?' '+esc(m):''}${i===n?' •':''}</span>`}
+  return `<div style="display:flex;gap:3px;margin-top:5px">${h}</div>`}
+function batRow(b){const s=batStat(b);return `<div class="row tap" data-bid="${esc(b.id)}" style="${s.lv===3?'background:rgba(220,50,50,.07)':''}"><div class="grow"><div class="t">${esc(b.code)} · ${esc(tName(b.loai))} ${s.tag}</div><div class="s">vào ${dmy(b.date)}${b.gio?' '+esc(b.gio):''} · ${fm(b.kg)} kg · <b>còn ${fm(b.left)} kg</b>${b.took?' · đã lấy '+fm(b.took):''}</div>${dayBar(b)}</div><span class="chev">›</span></div>`}
+function roomsHTML(C){let h='';for(let r=1;r<=(chc().rooms||4);r++){const B=openBats(C).filter(b=>b.room===r);
+  h+=`<div class="sec">Phòng ${r}${B.length?' · '+fm(B.reduce((s,b)=>s+b.left,0))+' kg':' · trống'}</div><div class="group">${B.map(batRow).join('')||'<div class="empty">Phòng trống.</div>'}</div>`}return h}
+function bindBats(){$$('[data-bid]').forEach(r=>r.onclick=()=>batDetail(r.dataset.bid))}
+function batDetail(id){const C=calcCh(),b=C.bat.get(id);if(!b)return;const s=batStat(b),uc=unitCost(b);
+  const html=`<div class="s">${esc(tName(b.loai))} · Phòng ${b.room} · vào ${dmy(b.date)} ${esc(b.gio)} · ${s.tag}</div>${dayBar(b)}
+   <table class="gt"><tr><td>Kg vào phòng</td><td><b>${fm(b.kg)}</b></td></tr><tr><td>Đã lấy ra lọc</td><td>${fm(b.took)}</td></tr><tr><td>Còn trong phòng</td><td><b>${fm(b.left)}</b></td></tr>
+   <tr><td>Kg đạt (chia theo tỷ lệ)</td><td>${fm(b.ok)}${b.took?' ('+fm(b.ok/b.took*100,1)+'%)':''}</td></tr><tr><td>Loại / hỏng</td><td>${fm(b.hong)}</td></tr>${isAdmin()&&uc!=null?`<tr><td>Giá chuối xanh bình quân</td><td>${fm(uc)} đ/kg</td></tr>`:''}</table>
+   <div class="tiny muted" style="margin-top:6px">Lô xanh: ${b.src.map(x=>esc(x.lot)+' '+fm(x.kg)+' kg').join(' · ')||'—'}</div>
+   <div class="tiny muted">Các lần lấy: ${b.outs.map(o=>dmy(o.date)+' '+fm(o.kg)+' kg').join(' · ')||'chưa lấy'}</div>
+   ${b.left>0.05?`<button class="btn block pri" id="bLoc" style="margin-top:12px">Lọc lựa mẻ này</button><button class="btn block" id="bClose" style="color:var(--bad)">Đóng mẻ – ghi ${fm(b.left)} kg còn lại là hỏng</button>`:''}`;
+  const close=sheet('Mẻ '+esc(b.code),html);
+  const lb=$('#bLoc');if(lb)lb.onclick=()=>{close();const q={};q[b.id]=String(b.left).replace('.',',');openFormCh('cloc',{loai:b.loai,tk:q})};
+  const bc=$('#bClose');if(bc)bc.onclick=async()=>{if(!confirm(`Đóng mẻ ${b.code}: ghi ${fm(b.left)} kg còn lại là loại/hỏng?`))return;
+    const d={kind:'cloc',date:today(),loai:b.loai,dest:'khac',takes:[{b:b.id,kg:b.left}],kgIn:b.left,outs:[],kgOk:0,hong:b.left,people:0,hours:0,hv:2,note:'Đóng mẻ – phần còn lại ghi hỏng',by:S.uid,at:Date.now()};
+    try{await S.db.doc('mlog/'+newId(d.date)).set(d);toast('✓ Đã đóng mẻ');close()}catch(e){if(e&&e.code==='queued'){toast('⏳ Đã giữ trên máy, tự gửi lại');close()}else toast('Chưa lưu được')}}}
+function logSumCh(l){
+  if(l.kind==='cnx')return `${esc(tName(l.loai))} xanh · ${esc(l.ncc||'')} · ${fm(l.kg)} kg${l.price?' × '+fm(l.price)+' đ':''} · lô ${esc(l.lot||'')}`;
+  if(l.kind==='cvu')return `${esc(l.code||'')} · Phòng ${esc(l.room)} · ${esc(tName(l.loai))} · ${fm(l.kg)} kg vào ủ`;
+  if(l.kind==='cloc'){const C=calcCh();return `${esc(tName(l.loai))} → ${CDEST[l.dest]||l.dest} · lấy ${fm(l.kgIn)} kg (${(l.takes||[]).map(t=>{const b=C.bat.get(t.b);return esc(b?b.code:'?')+' '+fm(t.kg)}).join(', ')}) · đạt ${fm(l.kgOk)} kg · hỏng ${fm(l.hong)} kg`}
+  if(l.kind==='cxuat')return `→ ${esc(CXD[l.dest]||l.dest)} · ${(l.lines||[]).map(x=>{const p=prodOf(x.p);return esc(p.name)+' '+qU(p,x.q)}).join(', ')}`;
+  return ''}
+function detCh(l){if(l.kind==='cloc'&&(l.outs||[]).length)return `<table class="gt">${l.outs.map(o=>{const p=prodOf(o.p);return `<tr><td>${esc(p.name)}</td><td>${qU(p,o.q)}${p.u!=='kg'?' = '+fm(o.kg)+' kg':''}</td></tr>`}).join('')}<tr><td>Loại / hỏng</td><td>${fm(l.hong)} kg</td></tr></table>`;return ''}
+
+/* ---- Màn chính xưởng chuối ---- */
+function viewHomeCh(v){const C=calcCh();
+  const btn=k=>`<button class="sxbig" data-k="${k}" style="background:${KIND[k].c}"><span class="n">${kOrd(k)}</span><span><b>${KIND[k].n}</b><small>${KIND[k].s}</small></span></button>`;
+  const ob=openBats(C),rem=ob.map(b=>({b,s:batStat(b)})).filter(x=>x.s.lv>0).sort((a,b)=>b.s.lv-a.s.lv);
+  const green=Object.keys(chc().types).map(t=>{const a=r3((C.lots.get(t)||[]).reduce((s,x)=>s+Math.max(0,x.left),0));return a>0.05?tName(t)+' '+fm(a)+' kg':''}).filter(Boolean);
+  const td=liveLogs().filter(l=>isCh(l)&&l.date===today());
+  v.innerHTML=`${xwSeg()}<h1 class="big" style="margin-bottom:10px">Xưởng chuối · ${dmy(today())}</h1>${CORDER.map(btn).join('')}
+   <div class="sec">Việc hôm nay</div><div class="group">${rem.map(x=>`<div class="row tap" data-bid="${esc(x.b.id)}"><div class="grow"><div class="t">P${x.b.room} · ${esc(x.b.code)} ${x.s.tag}</div><div class="s">${esc(tName(x.b.loai))} · còn ${fm(x.b.left)} kg</div></div><span class="chev">›</span></div>`).join('')||'<div class="empty">Không có mẻ đến ngày lọc.</div>'}
+    <div class="row"><div class="grow"><div class="t">Chuối xanh chưa ủ</div><div class="s">${green.join(' · ')||'0 kg'}</div></div></div></div>
+   ${roomsHTML(C)}
+   <div class="sec">Đã nhập hôm nay (${td.length})</div><div class="group">${td.slice().sort((a,b)=>b.at-a.at).map(logRow).join('')||'<div class="empty">Chưa có phiếu nào hôm nay.</div>'}</div>`;
+  $$('.sxbig').forEach(b=>b.onclick=()=>openFormCh(b.dataset.k));bindLogRows();bindBats();bindXw()}
+function viewStockCh(v){const C=calcCh();
+  const gl=Object.keys(chc().types).map(t=>{const L=(C.lots.get(t)||[]).filter(x=>x.left>0.05);return L.length?`<div class="row"><div class="grow"><div class="t">${esc(tName(t))} · ${fm(L.reduce((s,x)=>s+x.left,0))} kg</div><div class="s">${L.map(x=>esc(x.lot)+' ('+dmy(x.date)+') '+fm(x.left)+' kg').join(' · ')}</div></div></div>`:''}).join('');
+  const tp=prods().map(p=>{const q=C.tp.get(p.id)||0;return Math.abs(q)>1e-9?`<div class="row"><div class="grow t">${esc(p.name)}</div><div class="num" style="${q<0?'color:var(--bad)':''}">${qU(p,q)}</div></div>`:''}).join('');
+  v.innerHTML=`<h1 class="big">Tồn kho xưởng chuối</h1><div class="sec">Chuối xanh (theo lô)</div><div class="group">${gl||'<div class="empty">Không có.</div>'}</div>
+   <div class="sec" style="font-size:14px;color:var(--fg)">Đang ủ</div>${roomsHTML(C)}<div class="sec">Thành phẩm sau lọc (chưa xuất)</div><div class="group">${tp||'<div class="empty">Không có.</div>'}</div>`;
+  bindBats()}
+
+/* ---- Phiếu xưởng chuối ---- */
+function openFormCh(kind,pre){const t0=Object.keys(chc().types)[0];S.form={kind,date:today(),loai:t0,room:'1',gio:new Date(Date.now()+7*36e5).toISOString().slice(11,16),people:'',hours:'',pot:'',ot:'',packs:[],tk:{},o:{},q:{},dest:kind==='cxuat'?'win':'wg',xe:'',xeO:'',ncc:'',nccQ:'',note:'',hong:''};
+  if(pre)Object.assign(S.form,pre);S.post=null;render();scrollTo(0,0)}
+const optB=(f,k,L)=>`<div class="opt" style="flex-wrap:wrap">${L.map(([v,l])=>`<button data-o="${k}" data-ov="${esc(v)}" class="${String(f[k])===String(v)?'on':''}" style="min-width:64px">${l}</button>`).join('')}</div>`;
+function viewFormCh(v){const f=S.form,K=KIND[f.kind],C=calcCh(),T=chc().types;let body='';
+  const loaiSel=`<label class="f"><span class="lab">Loại chuối</span>${optB(f,'loai',Object.keys(T).map(t=>[t,esc(T[t].name)]))}</label>`;
+  if(f.kind==='cnx'){
+    body=`${loaiSel}<label class="f"><span class="lab">Nhà cung cấp – gõ tìm</span><input id="nccQ" value="${esc(f.ncc&&f.ncc!=='__new'?f.ncc:f.nccQ)}" placeholder="Gõ tên nhà cung cấp…" class="sxin" autocomplete="off"></label><div id="nccL" class="nccl" hidden></div>
+     ${f.ncc==='__new'?inp(f,'nccNew','Tên nhà cung cấp mới','','text'):''}${inp(f,'kg','Số kg chuối xanh nhận','0')}<div class="grid2">${inp(f,'price','Giá nhập (đ/kg)','0')}${inp(f,'ship','Chi phí vận chuyển (đ)','0')}</div>${xeSel(f)}<div class="auto" id="calcBox"></div>`}
+  else if(f.kind==='cvu'){const L=(C.lots.get(f.loai)||[]).filter(x=>x.left>0.05),Td=T[f.loai]||{days:4,marks:{}};
+    const ms=Object.entries(Td.marks||{}).map(([n,m])=>'Ngày '+n+' ('+dmy(addDays(f.date,+n-1))+'): lọc '+esc(m)).join(' · ');
+    body=`<label class="f"><span class="lab">Phòng ủ</span>${optB(f,'room',Array.from({length:chc().rooms||4},(_,i)=>[String(i+1),'Phòng '+(i+1)]))}</label>${loaiSel}
+     <div class="sec">Lấy từ lô chuối xanh (lô cũ trước)</div><div class="group">${L.map(x=>`<div class="row"><div class="grow"><div class="t">${esc(x.lot)}</div><div class="s">${esc(x.ncc||'')} · ${dmy(x.date)} · còn ${fm(x.left)} kg</div></div><button class="lnk" style="color:var(--accent)" data-all="${esc(x.id)}" data-v="${x.left}">Lấy hết</button><input class="xq" data-tk="${esc(x.id)}" value="${esc(f.tk[x.id]??'')}" inputmode="decimal" placeholder="kg"></div>`).join('')||'<div class="empty">Không còn chuối xanh '+esc(tName(f.loai))+' – nhập ở bước ① trước.</div>'}</div>
+     <div class="grid2"><label class="f"><span class="lab">Giờ vào</span><input type="time" data-f="gio" value="${esc(f.gio)}" class="sxin"></label><div class="auto" style="margin:22px 0 12px">Ủ ${Td.days} ngày</div></div><div class="auto">${ms}</div><div class="auto" id="calcBox"></div>`}
+  else if(f.kind==='cloc'){const B=openBats(C,f.loai),P=prods(f.loai);
+    body=`${loaiSel}<label class="f"><span class="lab">Lọc cho</span>${optB(f,'dest',Object.entries(CDEST))}</label>
+     <div class="sec">Lấy từ các mẻ đang ủ – gõ kg lấy ra (lấy lẫn nhiều mẻ được)</div><div class="group">${B.map(b=>{const s=batStat(b);return `<div class="row"><div class="grow"><div class="t">${esc(b.code)} · P${b.room} ${s.tag}</div><div class="s">vào ${dmy(b.date)} · còn ${fm(b.left)} kg</div></div><button class="lnk" style="color:var(--accent)" data-all="${esc(b.id)}" data-v="${b.left}">Hết</button><input class="xq" data-tk="${esc(b.id)}" value="${esc(f.tk[b.id]??'')}" inputmode="decimal" placeholder="kg"></div>`}).join('')||'<div class="empty">Không có mẻ '+esc(tName(f.loai))+' đang ủ.</div>'}</div>
+     <div class="sec">Kết quả lọc – ${esc(tName(f.loai))}</div><div class="group">${P.map(p=>`<div class="row"><div class="grow"><div class="t">${esc(p.name)}</div><div class="s">${p.u==='kg'?'theo kg':'theo '+esc(p.u)+' · '+String(p.kg).replace('.',',')+' kg/'+esc(p.u)}${p.note?' · <b>'+esc(p.note)+'</b>':''}</div></div><input class="xq" data-oo="${esc(p.id)}" value="${esc(f.o[p.id]??'')}" inputmode="decimal" placeholder="${esc(p.u)}"></div>`).join('')}
+      <div class="row"><div class="grow"><div class="t" style="color:var(--bad)">Loại / hỏng (kg)</div></div><input class="xq" data-f="hong" value="${esc(f.hong)}" inputmode="decimal" placeholder="kg"></div></div><div class="auto" id="calcBox"></div>`}
+  else if(f.kind==='cxuat'){const P=prods().filter(p=>Math.abs(C.tp.get(p.id)||0)>1e-9||f.q[p.id]);
+    body=`<label class="f"><span class="lab">Xuất cho</span><select data-f="dest" class="sxsel">${Object.entries(CXD).map(([k,l])=>`<option value="${k}" ${f.dest===k?'selected':''}>${esc(l)}</option>`).join('')}</select></label>
+     <div class="sec">Số lượng xuất</div><div class="group">${P.map(p=>`<div class="row"><div class="grow"><div class="t">${esc(p.name)}</div><div class="s">đang có ${qU(p,C.tp.get(p.id)||0)}</div></div><input class="xq" data-xq="${esc(p.id)}" value="${esc(f.q[p.id]??'')}" inputmode="decimal" placeholder="${esc(p.u)}"></div>`).join('')||'<div class="empty">Chưa có thành phẩm sau lọc – lập phiếu ③ trước.</div>'}</div>${xeSel(f)}`}
+  v.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><h1 class="big" style="margin:0"><span class="kn" style="background:${K.c}">${kOrd(f.kind)}</span> ${K.n}</h1><button class="btn sm" id="fX">✕ Đóng</button></div>
+   <label class="f" style="margin-top:10px"><span class="lab">Ngày</span><input type="date" data-f="date" value="${esc(f.date)}" max="${today()}" class="sxin"></label>
+   ${body}${laborBox(f)}${inp(f,'note','Ghi chú (nếu có)','','text')}<div id="fMsg"></div><button class="btn block pri sxsave" id="fSave">Lưu</button>`;
+  bindFormCh()}
+function bindFormCh(){const f=S.form;$('#fX').onclick=()=>{S.form=null;render()};
+  $$('[data-f]').forEach(el=>{const k=el.dataset.f;const h=()=>{f[k]=el.value;if(k==='date'||k==='xe'||k==='dest')render();else updCh()};el.oninput=h;el.onchange=h});
+  $$('[data-o]').forEach(b=>b.onclick=()=>{const k=b.dataset.o;if(f[k]===b.dataset.ov)return;f[k]=b.dataset.ov;if(k==='loai'){f.tk={};f.o={};f.ncc='';f.nccQ=''}render()});
+  $$('[data-tk]').forEach(el=>el.oninput=()=>{f.tk[el.dataset.tk]=el.value;updCh()});
+  $$('[data-all]').forEach(b=>b.onclick=()=>{const e=$(`[data-tk="${b.dataset.all}"]`);const v=String(r3(+b.dataset.v)).replace('.',',');f.tk[b.dataset.all]=v;if(e)e.value=v;updCh()});
+  $$('[data-oo]').forEach(el=>el.oninput=()=>{f.o[el.dataset.oo]=el.value;updCh()});
+  $$('[data-xq]').forEach(el=>el.oninput=()=>{f.q[el.dataset.xq]=el.value});
+  if(f.kind==='cnx'){f.nvl='__chuoi';bindNcc()}$('#fSave').onclick=saveCh;updCh()}
+const sumTk=f=>r3(Object.values(f.tk||{}).reduce((s,v)=>s+num(v),0));
+const sumOk=f=>r3(Object.entries(f.o||{}).reduce((s,[id,q])=>s+num(q)*(prodOf(id).kg||1),0));
+function updCh(){const f=S.form;if(!f)return;const lt=$('#lbTot');if(lt){const t=num(f.hours),o=num(f.ot),gc=cfg().gioCong||8;lt.innerHTML=t||o?'Chính thức: <b>'+fm(num(f.people))+' người · '+fm(t)+' giờ</b> ('+fm(t/gc,2)+' công)'+(o||num(f.pot)?'<br>Tăng ca: <b>'+fm(num(f.pot))+' người · '+fm(o)+' giờ</b>':''):'Tổng số giờ = cộng giờ của cả nhóm (VD 5 người × 8 giờ = 40).'}
+  const cb=$('#calcBox');if(!cb)return;
+  if(f.kind==='cnx'){const n=nccPick(f),kg=num(f.kg),p=num(f.price),sh=num(f.ship);cb.innerHTML=(kg&&p?`Tiền hàng ${fm(kg)} × ${fm(p)} = ${fm(kg*p)}${sh?' + vận chuyển '+fm(sh):''} · Giá lô <b>${fm((kg*p+sh)/kg)} đ/kg</b><br>`:'')+`Số lô <b>${esc(lotCode('CX'+(n.lot||'NCC'),f.date))}</b>`}
+  else if(f.kind==='cvu'){cb.innerHTML=`Tổng vào phòng ${esc(f.room)}: <b>${fm(sumTk(f))} kg</b> · Số mẻ <b>${esc(batCode(f.date))}</b>`}
+  else if(f.kind==='cloc'){const a=sumTk(f),ok=sumOk(f),h=num(f.hong),d=r3(a-ok-h);
+    cb.innerHTML=a?`Đưa ra lọc <b>${fm(a)} kg</b> · Đạt <b>${fm(ok)} kg</b> (${fm(ok/a*100,1)}%) · Hỏng ${fm(h)} kg (${fm(h/a*100,1)}%)<br>${Math.abs(d)>0.05?'Chênh (hao, quy đổi gói) <b style="color:'+(Math.abs(d)>a*0.03?'var(--bad)':'inherit')+'">'+fm(d)+' kg</b>':'Khớp kg'}`:'Gõ kg lấy từ từng mẻ, rồi gõ kết quả lọc.'}}
+function batCode(date){const ym=date.slice(2,4)+date.slice(5,7);const used=new Set(liveLogs().filter(l=>l.kind==='cvu').map(l=>l.code));let i=1;while(used.has('M'+ym+'-'+String(i).padStart(2,'0')))i++;return 'M'+ym+'-'+String(i).padStart(2,'0')}
+async function saveCh(){const f=S.form,C=calcCh(),msg=t=>$('#fMsg').innerHTML='<div class="alert r">'+esc(t)+'</div>';
+  const people=num(f.people),hours=num(f.hours),ot=num(f.ot),pot=num(f.pot);
+  if(!f.date)return msg('Chọn ngày.');if(f.date>today())return msg('Ngày không được sau hôm nay.');
+  const d={kind:f.kind,date:f.date,people,hours,pot,ot,hv:2,note:String(f.note||'').trim(),by:S.uid,at:Date.now()};
+  if(f.kind!=='cxuat')d.loai=f.loai;
+  if(f.kind==='cnx'){const n=nccPick(f);if(!n.name)return msg('Chọn nhà cung cấp.');const kg=num(f.kg);if(kg<=0)return msg('Gõ số kg chuối xanh.');const price=num(f.price);if(price<=0&&!confirm('Chưa gõ giá nhập. Vẫn lưu (kế toán điền sau)?'))return;
+    Object.assign(d,{ncc:n.name,nccCode:n.code,kg,price,ship:num(f.ship),lot:lotCode('CX'+(n.lot||'NCC'),f.date),xe:xeVal(f)});
+    if(n.fresh){const c=JSON.parse(JSON.stringify(cfg()));c.ncc.push({name:n.name,code:'',lot:n.lot,fresh:true,by:S.uid});try{await S.db.doc('mcfg/main').set(c)}catch(e){}}}
+  else if(f.kind==='cvu'){const takes=[];for(const [id,v] of Object.entries(f.tk)){const kg=num(v);if(!kg)continue;const x=C.lotById.get(id);if(x&&kg>x.left+0.5&&!confirm(`Lô ${x.lot}: lấy ${fm(kg)} kg nhưng chỉ còn ${fm(x.left)} kg. Vẫn lưu?`))return;takes.push({id,lot:x?x.lot:'',kg})}
+    if(!takes.length)return msg('Gõ số kg lấy từ lô chuối xanh.');Object.assign(d,{room:+f.room,gio:f.gio||'',code:batCode(f.date),takes,kg:r3(takes.reduce((s,t)=>s+t.kg,0))})}
+  else if(f.kind==='cloc'){const takes=[];for(const [b,v] of Object.entries(f.tk)){const kg=num(v);if(!kg)continue;const x=C.bat.get(b);if(x&&kg>x.left+0.5&&!confirm(`Mẻ ${x.code}: lấy ${fm(kg)} kg nhưng chỉ còn ${fm(x.left)} kg. Vẫn lưu?`))return;takes.push({b,kg})}
+    if(!takes.length)return msg('Gõ số kg lấy từ ít nhất 1 mẻ.');const outs=[];for(const [p,v] of Object.entries(f.o)){const q=num(v);if(!q)continue;outs.push({p,q,kg:r3(q*(prodOf(p).kg||1))})}
+    const kgIn=r3(takes.reduce((s,t)=>s+t.kg,0)),kgOk=r3(outs.reduce((s,o)=>s+o.kg,0)),hong=num(f.hong);
+    if(!outs.length&&!hong)return msg('Gõ kết quả lọc (số lượng từng sản phẩm, hỏng).');
+    if(kgOk+hong>kgIn*1.05&&!confirm(`Đạt + hỏng = ${fm(kgOk+hong)} kg lớn hơn số lấy ra ${fm(kgIn)} kg. Vẫn lưu?`))return;
+    Object.assign(d,{dest:f.dest,takes,kgIn,outs,kgOk,hong})}
+  else if(f.kind==='cxuat'){const lines=[];for(const [p,v] of Object.entries(f.q)){const q=num(v);if(!q)continue;const have=C.tp.get(p)||0;if(q>have+1e-9&&!confirm(`${prodOf(p).name}: xuất ${fm(q)} nhưng chỉ có ${fm(have)}. Vẫn lưu?`))return;lines.push({p,q})}
+    if(!lines.length)return msg('Gõ số lượng xuất.');Object.assign(d,{dest:f.dest,lines,xe:xeVal(f)})}
+  if(ot&&!pot)return msg('Gõ số người tăng ca.');if(!people||!(hours||ot)){if(!confirm('Chưa ghi số người / tổng số giờ làm. Vẫn lưu?'))return}
+  const btn=$('#fSave');btn.disabled=true;btn.textContent='Đang lưu…';
+  try{await S.db.doc('mlog/'+newId(f.date)).set(d);toast('✓ Đã lưu '+KIND[f.kind].n.toLowerCase());const nx=f.kind==='cloc'&&d.outs.length?{lines:d.outs}:null;S.form=null;S.tab='home';
+    if(nx){const q={};for(const o of nx.lines)q[o.p]=String(o.q).replace('.',',');const dest=f.dest==='hn'?'hn':'win';if(confirm('Đã lưu lọc lựa. Mở luôn phiếu ④ Xuất hàng với số vừa lọc?'))return openFormCh('cxuat',{q,dest})}
+    render();scrollTo(0,0)}
+  catch(e){if(e&&e.code==='queued'){toast('⏳ Mạng yếu: đã giữ phiếu trên máy, app tự gửi lại');S.form=null;S.tab='home';render();return}btn.disabled=false;btn.textContent='Lưu';msg('Chưa lưu được: '+(e.message||'lỗi mạng')+'. Thử lại.')}}
+
+/* ---- Quản lý: cài đặt xưởng chuối ---- */
+function viewDMCh(v){const c=chc();
+  v.innerHTML=`<h1 class="big">Cài đặt xưởng chuối</h1>
+   <div class="group"><div class="row"><div class="grow t">Số phòng ủ</div><input class="dmin" id="cR" value="${c.rooms}" inputmode="numeric"></div>
+    <div class="row"><div class="grow"><div class="t">Đơn giá 1 công (đ)</div></div><input class="dmin" id="cRate" value="${fm(c.dm.rate)}" inputmode="decimal"></div>
+    <div class="row"><div class="grow"><div class="t">Chi phí khác (đ / kg đạt)</div><div class="s">điện phòng lạnh, Ethylene, khấu hao… theo định mức</div></div><input class="dmin" id="cKh" value="${fm(c.dm.khac)}" inputmode="decimal"></div></div>
+   ${Object.entries(c.types).map(([t,T])=>`<div class="sec">${esc(T.name)}</div><div class="group"><div class="row"><div class="grow t">Số ngày ủ</div><input class="dmin" data-td="${t}" value="${T.days}" inputmode="numeric"></div>
+    <div class="row"><div class="grow"><div class="t">Ngày lọc</div><div class="s">dạng 3:Win/GO, 4:Hà Nội</div></div><input data-tm="${t}" value="${esc(Object.entries(T.marks||{}).map(([n,m])=>n+':'+m).join(', '))}" style="width:150px"></div>
+    <div class="row"><div class="grow t">Định mức công / 100 kg đạt</div><input class="dmin" data-tc="${t}" value="${String(T.cong100||0).replace('.',',')}" inputmode="decimal"></div></div>`).join('')}
+   <div class="sec">Danh mục sản phẩm sau lọc</div><div class="tiny muted" style="margin:0 4px 6px">ĐVT kg hoặc gói · kg/ĐVT dùng quy đổi ra kg · túi tem (đ/ĐVT) cộng vào giá thành.</div>
+   <div class="group">${(c.prods||[]).map((p,i)=>`<div class="row" style="flex-wrap:wrap;gap:4px"><select data-pi="${i}" data-pk="t" style="width:62px;min-height:0;padding:4px">${Object.keys(c.types).map(t=>`<option value="${t}" ${p.t===t?'selected':''}>${t==='tieu'?'Tiêu':t==='tay'?'Tây':esc(t)}</option>`).join('')}</select><input data-pi="${i}" data-pk="name" value="${esc(p.name)}" style="flex:1;min-width:120px"><select data-pi="${i}" data-pk="u" style="width:62px;min-height:0;padding:4px"><option ${p.u==='kg'?'selected':''}>kg</option><option ${p.u==='gói'?'selected':''}>gói</option></select><input data-pi="${i}" data-pk="kg" value="${String(p.kg).replace('.',',')}" style="width:58px" title="kg/ĐVT" inputmode="decimal"><input data-pi="${i}" data-pk="bb" value="${p.bb?fm(p.bb):''}" placeholder="túi tem" style="width:64px" inputmode="decimal"><input data-pi="${i}" data-pk="note" value="${esc(p.note||'')}" placeholder="ghi chú quy cách" style="width:120px"><label class="tiny"><input type="checkbox" data-pi="${i}" data-pk="active" ${p.active!==false?'checked':''} style="width:16px;height:16px;min-height:0"> dùng</label></div>`).join('')}</div>
+   <div class="grid2"><input id="pN" placeholder="Tên sản phẩm mới"><button class="btn" id="pAdd2">＋ Thêm</button></div>
+   <label class="f" style="margin-top:12px"><span class="lab">Tài khoản mở thẳng Xưởng chuối (họ tên, cách nhau dấu phẩy)</span><input id="cU" value="${esc((c.users||[]).join(', '))}"></label>
+   <button class="btn block pri" id="cSave">Lưu cài đặt</button>`;
+  const collect=()=>{const c2=JSON.parse(JSON.stringify(c));c2.rooms=Math.max(1,Math.round(num($('#cR').value))||4);c2.dm={rate:num($('#cRate').value),khac:num($('#cKh').value)};c2.users=$('#cU').value.split(',').map(s=>s.trim()).filter(Boolean);
+    for(const t of Object.keys(c2.types)){c2.types[t].days=Math.max(1,Math.round(num($(`[data-td="${t}"]`).value))||c2.types[t].days);c2.types[t].cong100=num($(`[data-tc="${t}"]`).value);const mk={};$(`[data-tm="${t}"]`).value.split(',').forEach(x=>{const m=x.split(':');const n=Math.round(num(m[0]));if(n&&m[1])mk[n]=m.slice(1).join(':').trim()});c2.types[t].marks=mk}
+    $$('[data-pi]').forEach(el=>{const p=c2.prods[+el.dataset.pi],k=el.dataset.pk;if(k==='active')p.active=el.checked;else if(k==='kg')p.kg=num(el.value)||1;else if(k==='bb')p.bb=num(el.value);else p[k]=el.value});return c2};
+  const save=async(c2,m)=>{const all=JSON.parse(JSON.stringify(cfg()));all.ch=c2;try{await S.db.doc('mcfg/main').set(all);S.cfg=all;toast(m||'✓ Đã lưu');render()}catch(e){toast('Chưa lưu được')}};
+  $('#cSave').onclick=()=>save(collect());
+  $('#pAdd2').onclick=()=>{const n=$('#pN').value.trim();if(!n)return toast('Gõ tên sản phẩm');const c2=collect();c2.prods.push({id:'p'+Date.now().toString(36),t:Object.keys(c2.types)[0],name:n,u:'kg',kg:1});save(c2,'✓ Đã thêm '+n)}}
+
+/* ---- Quản lý: giá thành xưởng chuối ---- */
+function costsCh(from,to){const C=calcCh(),c=chc(),gc=cfg().gioCong||8;const L=liveLogs().filter(l=>isCh(l)&&l.date>=from&&l.date<=to);const R={};
+  const G=t=>R[t]||(R[t]={t,kgIn:0,kgOk:0,hong:0,nvl:0,miss:0,h:0,outs:new Map(),bb:0});let hc=0;
+  for(const l of L){if(l.kind==='cnx'||l.kind==='cxuat'){hc+=HC(l);continue}const x=G(l.loai);x.h+=HC(l);
+    if(l.kind==='cloc'){x.kgIn+=num(l.kgIn);x.kgOk+=num(l.kgOk);x.hong+=num(l.hong);for(const t of l.takes||[]){const b=C.bat.get(t.b),uc=b&&unitCost(b);if(uc==null)x.miss+=num(t.kg);else x.nvl+=num(t.kg)*uc}for(const o of l.outs||[])x.outs.set(o.p,(x.outs.get(o.p)||0)+num(o.q))}}
+  const tot=Object.values(R).reduce((s,x)=>s+x.kgOk,0);
+  for(const x of Object.values(R)){x.h+=tot?hc*x.kgOk/tot:0;x.cong=x.h/gc;x.lab=x.cong*(c.dm.rate||0);x.oth=x.kgOk*(c.dm.khac||0);x.outs.forEach((q,p)=>x.bb+=q*(prodOf(p).bb||0));x.tot=x.nvl+x.lab+x.oth+x.bb;x.perKg=x.kgOk?(x.nvl+x.lab+x.oth)/x.kgOk:0;
+    const c1=(c.types[x.t]||{}).cong100;x.dmCong=c1?x.kgOk*c1/100:null}
+  const bats=[...C.bat.values()].filter(b=>b.outs.some(o=>o.date>=from&&o.date<=to)||(b.date>=from&&b.date<=to)).sort((a,b)=>a.date.localeCompare(b.date));
+  return {rows:Object.values(R).filter(x=>x.kgIn||x.h),bats}}
+function viewGTCh(v){const to=S.ui.gtTo||today(),from=S.ui.gtFrom||today().slice(0,8)+'01';const X=costsCh(from,to);
+  const card=x=>`<div class="card" style="margin-bottom:10px"><div style="display:flex;justify-content:space-between"><b style="font-size:17px">${esc(tName(x.t))}</b><span class="tiny muted">lấy ${fm(x.kgIn)} kg → đạt ${fm(x.kgOk)} kg</span></div>
+    <table class="gt"><tr><td>Tỷ lệ đạt / hỏng</td><td>${x.kgIn?fm(x.kgOk/x.kgIn*100,1)+'% / '+fm(x.hong/x.kgIn*100,1)+'%':'—'}</td></tr><tr><td>Nhân công (công)</td><td>${fm(x.cong,1)}${x.dmCong!=null?' · ĐM '+fm(x.dmCong,1):''}</td></tr></table>
+    <table class="gt"><tr><td>Chuối xanh${x.miss?` <span class="chip r">${fm(x.miss)} kg chưa có giá</span>`:''}</td><td>${fm(x.nvl)}</td></tr><tr><td>Nhân công ${fm(x.h)} giờ</td><td>${fm(x.lab)}</td></tr><tr><td>Chi phí khác (định mức)</td><td>${fm(x.oth)}</td></tr><tr><td>Túi, tem</td><td>${fm(x.bb)}</td></tr><tr><td><b>Tổng</b></td><td><b>${fm(x.tot)}</b></td></tr><tr><td><b>Giá / kg đạt (chưa túi tem)</b></td><td><b>${x.kgOk?fm(x.perKg):'—'}</b></td></tr>
+    ${[...x.outs.entries()].map(([p,q])=>{const P=prodOf(p);return `<tr><td>${esc(P.name)} · ${qU(P,q)}</td><td><b>${fm(x.perKg*(P.kg||1)+(P.bb||0))}</b> đ/${esc(P.u)}</td></tr>`}).join('')}</table></div>`;
+  const bt=X.bats.map(b=>`<tr><td>${esc(b.code)} P${b.room}<br><span class="tiny muted">${esc(tName(b.loai))} · ${dmy(b.date)}</span></td><td>${fm(b.kg)}</td><td>${fm(b.took)}</td><td>${fm(b.ok)}</td><td>${fm(b.hong)}</td><td>${b.took?fm(b.ok/b.took*100,1)+'%':'—'}</td></tr>`).join('');
+  v.innerHTML=`<h1 class="big">Giá thành xưởng chuối</h1><div class="grid2"><label class="f"><span class="lab">Từ ngày</span><input type="date" id="gF" value="${from}"></label><label class="f"><span class="lab">Đến ngày</span><input type="date" id="gT" value="${to}"></label></div>
+   <div class="tiny muted" style="margin:4px 0 10px">Chuối xanh tính theo kg lấy ra lọc × giá bình quân của mẻ (theo lô xanh). Công theo giờ thực tế (tăng ca × ${fm(otK(),2)}); công nhập + xuất chia theo kg đạt. Kết quả lọc chung nhiều mẻ được chia về từng mẻ theo kg lấy ra.</div>
+   ${X.rows.map(card).join('')||'<div class="empty">Không có phiếu lọc trong kỳ.</div>'}
+   ${bt?`<div class="sec">Theo mẻ ủ</div><div class="card"><table class="gt"><tr><th>Mẻ</th><th>Vào</th><th>Lấy</th><th>Đạt</th><th>Hỏng</th><th>TL đạt</th></tr>${bt}</table></div>`:''}
+   ${X.rows.length||bt?'<button class="btn block" id="gX" style="margin-top:10px">⬇ Xuất Excel</button>':''}`;
+  $('#gF').onchange=e=>{S.ui.gtFrom=e.target.value;render()};$('#gT').onchange=e=>{S.ui.gtTo=e.target.value;render()};
+  const gx=$('#gX');if(gx)gx.onclick=()=>{if(!window.XLSX)return toast('Chưa tải được thư viện Excel – thử lại');const wb=XLSX.utils.book_new();
+    const a=[['Loại chuối','Kg lấy ra lọc','Kg đạt','Kg hỏng','Tỷ lệ đạt %','Giờ công','Công','ĐM công','CP chuối xanh','Kg chưa có giá','CP nhân công','CP khác','Túi tem','Tổng CP','Giá/kg đạt']];
+    for(const x of X.rows)a.push([tName(x.t),r3(x.kgIn),r3(x.kgOk),r3(x.hong),x.kgIn?r3(x.kgOk/x.kgIn*100):'',r3(x.h),r3(x.cong),x.dmCong!=null?r3(x.dmCong):'',Math.round(x.nvl),r3(x.miss),Math.round(x.lab),Math.round(x.oth),Math.round(x.bb),Math.round(x.tot),Math.round(x.perKg)]);
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),'Giá thành chuối');
+    const b=[['Mẻ','Phòng','Loại','Ngày vào','Kg vào','Đã lấy','Còn','Kg đạt (chia)','Kg hỏng (chia)','TL đạt %','Lô xanh']];
+    for(const x of X.bats)b.push([x.code,x.room,tName(x.loai),x.date,r3(x.kg),r3(x.took),r3(x.left),r3(x.ok),r3(x.hong),x.took?r3(x.ok/x.took*100):'',x.src.map(s=>s.lot+' '+s.kg).join('; ')]);
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(b),'Mẻ ủ');
+    const c=[['Ngày','Công đoạn','Chi tiết','Số người','Tổng giờ','Người TC','Giờ TC','Người nhập','Ghi chú']];
+    for(const l of liveLogs().filter(l=>isCh(l)&&l.date>=from&&l.date<=to).sort((p,q)=>p.date.localeCompare(q.date)))c.push([l.date,KIND[l.kind].n,logSumCh(l).replace(/<[^>]+>/g,''),num(l.people),r3(HW(l)),num(l.pot),r3(HO(l)),nameOf(l.by),l.note||'']);
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(c),'Phiếu');XLSX.writeFile(wb,`Gia thanh xuong chuoi ${from} den ${to}.xlsx`)}}
 
 /* ---------------- KẾT NỐI ---------------- */
 async function loadNames(){if(!S.user)return;const ids=[...new Set(S.logs.map(l=>l.by).concat(S.uid,...S.logs.flatMap(l=>(l.edits||[]).map(e=>e.by))))].filter(i=>i&&!(i in S.names));if(!ids.length)return;try{const ps=await S.user.profiles(ids);ids.forEach(i=>S.names[i]=(ps[i]&&ps[i].name)||'');soon()}catch(e){}}
@@ -392,6 +626,6 @@ function upgradeCfg(old){const c=JSON.parse(JSON.stringify(DEFAULT_CFG));if(!old
   if(old.gioCong)c.gioCong=old.gioCong;
   for(const x of old.xe||[])if(!c.xe.includes(x))c.xe.push(x);
   return c}
-window.__sx={S,calc,costs,num,gOf,packLabel,DEFAULT_CFG};
+window.__sx={S,calc,costs,num,gOf,packLabel,DEFAULT_CFG,calcCh,costsCh,CH0};
 init();
 })();
