@@ -50,7 +50,7 @@ let perm=null;async function syncNow(onFirst){if(syncing)return;syncing=true;let
 let firstLoad=null;let lastOk=0,syncErr=0;
 /* v103: HÀNG CHỜ GỬI – đơn chưa lên được máy chủ (mạng yếu/treo) được giữ trên máy (localStorage), hiện nhãn "Chưa đồng bộ" và tự gửi lại.
    Trước đây lệnh ghi không có hạn chờ: mạng treo → đơn chỉ nằm trên máy người lên, máy chủ không có (vụ DH2611-495 Mộc Trà 05/11). */
-const OBP=p=>/^orders\//.test(p);
+const OBP=p=>/^(orders|mlog)\//.test(p);/* v115: phiếu sản xuất cũng giữ trên máy khi mạng yếu */
 const OBK=()=>me&&me.uid?'viba.ob.'+me.uid:null;
 const qErr=p=>Object.assign(new Error('Chưa đồng bộ – đã lưu trên máy, app sẽ tự gửi lại'),{code:'queued',path:p});
 function obSave(){const k=OBK();if(!k)return;try{if(OB.length)localStorage.setItem(k,JSON.stringify(OB));else localStorage.removeItem(k)}catch(e){}}

@@ -1997,7 +1997,7 @@ function templateXls(T){if(T==='products')xlsxFile('Mau_san_pham.xlsx',[{name:'S
 
 /* ================= v31: NHÂN VIÊN DÙNG APP (đăng nhập bằng SĐT) =================
    config/staffPre = {list:[{name,phone,role:'sale'|'ship'|'kho',email,active}]}. Máy chủ chỉ cho tạo tài khoản <sđt>@sdt.viba nếu SĐT có trong danh sách và tự gán staff/{uid}. */
-const PRE_ROLE={ship:'Giao hàng',sale:'Bán hàng',kho:'Thủ kho',admin:'Quản lý',view:'Chỉ xem (thực tập)'};
+const PRE_ROLE={ship:'Giao hàng',sale:'Bán hàng',kho:'Thủ kho',admin:'Quản lý',view:'Chỉ xem (thực tập)',sx:'Sản xuất (nhà máy)'};
 const normPhone=v=>{let d=String(v||'').replace(/\D/g,'');if(d.startsWith('84')&&d.length===11)d='0'+d.slice(2);return d};
 const fmtPhone=p=>String(p||'').replace(/^(\d{4})(\d{3})(\d+)$/,'$1 $2 $3');
 const loginLabel=e=>{const m=String(e||'').match(/^(\d+)@sdt\.viba$/);return m?'Số điện thoại: <b>'+esc(fmtPhone(m[1]))+'</b>':'Email: <b>'+esc(e)+'</b>'};
@@ -2162,11 +2162,12 @@ function render(){const role=myRole();const who=$('#who');
     $('#view').innerHTML=R.checked?'<h1 class="big">VIBA FOOD</h1><div class="alert r">Không kết nối được máy chủ dữ liệu. Kiểm tra mạng rồi tải lại trang.</div>':'<div class="empty">Đang tải…</div>';$('#tabbar').hidden=true;return}
   if(!role){who.innerHTML=`<span class="chip">${esc(R.names[R.uid]||'Tài khoản mới')}</span>${window.vibaChangePw?'<button class="btn sm" onclick="vibaChangePw()">Đổi MK</button>':''}<button class="btn sm" onclick="vibaLogout()">Đăng xuất</button>`;$('#tabbar').hidden=true;$('#modeSw').innerHTML='';
     $('#view').innerHTML=`<h1 class="big">Xin chào</h1><div class="card stack"><div style="font-weight:700;font-size:17px">Tài khoản chưa được phân quyền</div><div class="muted">App đã gửi yêu cầu tới quản lý. Khi được giao vai trò (Bán hàng, Giao hàng hoặc Thủ kho), màn hình làm việc sẽ tự hiện ra.</div>${R.staff.get(R.uid)&&R.staff.get(R.uid).active===false?'<div class="alert r">Tài khoản đang bị khóa. Nếu bạn đã có tài khoản khác (đăng nhập bằng số điện thoại), bấm nút dưới để đăng nhập lại.</div>':''}<button class="btn block pri" onclick="vibaLogout()">🔄 Đăng xuất – đăng nhập tài khoản khác</button></div>`;return}
+  /* v115: tài khoản Sản xuất dùng trang riêng sanxuat.html */if(role==='sx'){location.replace('sanxuat.html');return}
   if(role!=='admin')R.mode=role;else if(!R.mode)R.mode='admin';
   const tabs=TABS[R.mode];if(!tabs.some(t=>t[0]===R.tab)&&!(R.mode==='admin'&&R.tab==='orders'))R.tab=tabs[0][0];
   who.innerHTML=`<span class="chip g">${ROLE_NAME[role]}</span><span>${esc(staffName(R.uid))}</span>${window.vibaChangePw?'<button class="btn sm" onclick="vibaChangePw()">Đổi MK</button>':''}<button class="btn sm" onclick="vibaLogout()">Đăng xuất</button>`;
-  $('#modeSw').innerHTML=role==='admin'?`<select id="modeSel" aria-label="Chế độ xem" style="min-height:36px;padding:6px 10px;font-size:14px;width:auto">${Object.entries(ROLE_NAME).map(([k,l])=>`<option value="${k}" ${R.mode===k?'selected':''}>${k==='admin'?'Xem: Quản lý':'Xem như '+l}</option>`).join('')}</select>`:'';
-  const ms=$('#modeSel');if(ms)ms.onchange=()=>{R.mode=ms.value;R.tab=TABS[R.mode][0][0];try{localStorage.setItem('viba.tab',R.mode+':'+R.tab)}catch(e){}render()};
+  $('#modeSw').innerHTML=role==='admin'?`<select id="modeSel" aria-label="Chế độ xem" style="min-height:36px;padding:6px 10px;font-size:14px;width:auto">${Object.entries(ROLE_NAME).map(([k,l])=>`<option value="${k}" ${R.mode===k?'selected':''}>${k==='admin'?'Xem: Quản lý':'Xem như '+l}</option>`).join('')}<option value="__sx">🏭 Mở Sản xuất</option></select>`:'';
+  const ms=$('#modeSel');if(ms)ms.onchange=()=>{if(ms.value==='__sx'){location.href='sanxuat.html';return}R.mode=ms.value;R.tab=TABS[R.mode][0][0];try{localStorage.setItem('viba.tab',R.mode+':'+R.tab)}catch(e){}render()};
   const pend=[...R.requests.keys()].filter(id=>!R.staff.has(id)).length;
   $('#tabs').innerHTML=tabs.map(([k,l,ic])=>`<button data-tab="${k}" class="${R.tab===k?'on':''}" aria-current="${R.tab===k?'page':'false'}">${ICON[ic]}<span>${l}${k==='catalog'&&pend&&R.isOwner?' •':''}${k==='todo'?' ('+shipTodoCount()+')':''}${k==='orders'&&R.mode==='sale'?(n=>n?' ('+n+')':'')(psUnseen()):''}${k==='stock'&&R.mode==='kho'?(n=>n?' ⚠'+n:'')(lowList().length):''}</span></button>`).join('');$('#tabbar').hidden=false;
   $$('#tabs [data-tab]').forEach(b=>b.onclick=()=>go(b.dataset.tab));
@@ -2221,7 +2222,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='114';
+const APP_BUILD='115';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
