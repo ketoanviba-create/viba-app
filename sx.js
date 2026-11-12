@@ -31,7 +31,7 @@ const KORDER=['nvl','sx','dg','xuat','dgl'];
 Object.assign(KIND,{
   cnx:{n:'Nhập chuối xanh',s:'Vào kho 1 · NCC, loại chuối, thùng, giá',c:'#1f8a52'},
   cvu:{n:'Vào phòng ủ',s:'Lô xanh (kho 1) → kho ủ 2/4/5/6',c:'#1b6aa5'},
-  cloc:{n:'Lọc lựa – ra ủ (Kho 3)',s:'Lấy từ các kho ủ về kho 3 · 1 phiếu chung Winmart + khách khác',c:'#0e7c86'},
+  cloc:{n:'Lọc lựa',s:'Lấy từ các kho ủ về kho 3 · 1 phiếu chung Winmart + khách khác',c:'#0e7c86'},
   cxuat:{n:'Xuất hàng',s:'Tích hàng xuất · bốc 80.000 đ/tấn',c:'#b85a12'}});
 const CORDER=['cnx','cvu','cloc','cxuat'];
 const kOrd=k=>CORDER.includes(k)?CORDER.indexOf(k)+1:KORDER.indexOf(k)+1;
@@ -608,7 +608,7 @@ function dayBar(b){const T=chc().types[b.loai]||{days:4,marks:{}},n=dayN(b.date)
   return `<div style="display:flex;gap:3px;margin-top:5px">${h}</div>`}
 function batRow(b){const s=batStat(b);return `<div class="row tap" data-bid="${esc(b.id)}" style="${s.lv===3?'background:rgba(220,50,50,.07)':''}"><div class="grow"><div class="t">${esc(b.code)} · ${esc(tName(b.loai))} ${s.tag}</div><div class="s">vào ${dmy(b.date)}${b.gio?' '+esc(b.gio):''} · ${b.th?fm(b.th)+' thùng · ':''}${fm(b.kg)} kg${abTxt(b)} · <b>còn ${fm(b.left)} kg</b>${b.took?' · đã lấy '+fm(b.took):''}</div>${dayBar(b)}</div><span class="chev">›</span></div>`}
 function roomsHTML(C,tpH){let h='';const ALL=openBats(C),TP=ALL.filter(b=>atTP(b)),OB=ALL.filter(b=>!atTP(b));const RL=[...new Set([...roomList(),...OB.map(b=>+b.room).filter(Boolean)])].sort((a,b)=>a-b);for(const r of RL){const B=OB.filter(b=>b.room===r);
-  h+=`<div class="sec">Kho ${r}${roomList().includes(r)?'':' (ngoài kho ủ)'} <span style="font-weight:400">(${fm(capOf(r)/1000)} tấn)</span>${B.length?' · '+fm(B.reduce((s,b)=>s+b.left,0))+' kg':' · trống'}</div><div class="group">${B.map(batRow).join('')||'<div class="empty">Phòng trống.</div>'}</div>`}h+=`<div class="sec">Kho ${KHO_TP} – lọc lựa ra ủ &amp; thành phẩm tồn</div><div class="group"><div class="row" style="background:var(--sunk)"><div class="grow t" style="color:var(--accent)">Chuối ra ủ từ các kho (rấm đủ ${ramOf('tieu')} ngày)</div><div class="num" style="font-weight:800">${fm(TP.reduce((s,b)=>s+b.left,0))} kg</div></div>${TP.map(batRow).join('')||'<div class="empty">Chưa có mẻ ra ủ.</div>'}${tpH!=null?`<div class="row" style="background:var(--sunk)"><div class="grow t" style="color:var(--accent)">Thành phẩm sau lọc (chưa xuất)</div></div>${tpH||'<div class="empty">Không có.</div>'}`:''}</div>`;return h}
+  h+=`<div class="sec">Kho ${r}${roomList().includes(r)?'':' (ngoài kho ủ)'} <span style="font-weight:400">(${fm(capOf(r)/1000)} tấn)</span>${B.length?' · '+fm(B.reduce((s,b)=>s+b.left,0))+' kg':' · trống'}</div><div class="group">${B.map(batRow).join('')||'<div class="empty">Phòng trống.</div>'}</div>`}h+=`<div class="sec">Kho ${KHO_TP} – lọc lựa &amp; thành phẩm tồn</div><div class="group"><div class="row" style="background:var(--sunk)"><div class="grow t" style="color:var(--accent)">Chuối ra ủ từ các kho (rấm đủ ${ramOf('tieu')} ngày)</div><div class="num" style="font-weight:800">${fm(TP.reduce((s,b)=>s+b.left,0))} kg</div></div>${TP.map(batRow).join('')||'<div class="empty">Chưa có mẻ ra ủ.</div>'}${tpH!=null?`<div class="row" style="background:var(--sunk)"><div class="grow t" style="color:var(--accent)">Thành phẩm sau lọc (chưa xuất)</div></div>${tpH||'<div class="empty">Không có.</div>'}`:''}</div>`;return h}
 function bindBats(){$$('[data-bid]').forEach(r=>r.onclick=()=>batDetail(r.dataset.bid))}
 function batDetail(id){const C=calcCh(),b=C.bat.get(id);if(!b)return;const s=batStat(b),uc=unitCost(b);
   const html=`<div class="s">${esc(tName(b.loai))} · ${atTP(b)?'Kho '+KHO_TP+' (từ kho '+b.room+')':'Kho '+b.room} · vào ${dmy(b.date)} ${esc(b.gio)} · ${s.tag}</div>${dayBar(b)}
@@ -652,7 +652,9 @@ function viewStockCh(v){const C=calcCh();
 
 /* ---- Phiếu xưởng chuối ---- */
 function openFormCh(kind,pre){const t0=Object.keys(chc().types)[0];S.form={kind,date:today(),loai:t0,room:'1',gio:new Date(Date.now()+7*36e5).toISOString().slice(11,16),people:'',hours:'',pot:'',ot:'',packs:[],tk:{},o:{},q:{},dest:kind==='cloc'?'all':'win',xe:'',xeO:'',ncc:'',nccQ:'',note:'',hong:''};
-  if(pre)Object.assign(S.form,pre);S.post=null;render();scrollTo(0,0)}
+  if(pre)Object.assign(S.form,pre);if(kind==='cxuat'&&!(pre&&pre.q))S.form.q=xAuto(S.form.date);S.post=null;render();scrollTo(0,0)}
+/* v139: phiếu xuất tự điền số lượng = thành phẩm lọc lựa trong ngày − đã xuất trong ngày (không quá tồn kho 3) */
+function xAuto(date){const m={},C=calcCh();for(const l of liveLogs()){if(l.date!==date)continue;if(l.kind==='cloc')for(const o of l.outs||[])m[o.p]=(m[o.p]||0)+num(o.q);else if(l.kind==='cxuat')for(const x of l.lines||[])m[x.p]=(m[x.p]||0)-num(x.q)}const q={};for(const [p,v] of Object.entries(m)){const t=Math.min(v,C.tp.get(p)||0);if(t>1e-9)q[p]=String(r3(t)).replace('.',',')}return q}
 const optB=(f,k,L)=>`<div class="opt" style="flex-wrap:wrap">${L.map(([v,l])=>`<button data-o="${k}" data-ov="${esc(v)}" class="${String(f[k])===String(v)?'on':''}" style="min-width:64px">${l}</button>`).join('')}</div>`;
 function viewFormCh(v){const f=S.form,K=KIND[f.kind],C=calcCh(),T=chc().types;let body='';
   const loaiSel=`<label class="f"><span class="lab">Loại chuối</span>${optB(f,'loai',Object.keys(T).map(t=>[t,esc(T[t].name)]))}</label>`;
@@ -687,7 +689,7 @@ function viewFormCh(v){const f=S.form,K=KIND[f.kind],C=calcCh(),T=chc().types;le
    ${body}${f.kind==='cxuat'?bocBox(f):laborBox(f)}${inp(f,'note','Ghi chú (nếu có)','','text')}<div id="fMsg"></div><button class="btn block pri sxsave" id="fSave">Lưu</button>`;
   bindFormCh()}
 function bindFormCh(){const f=S.form;$('#fX').onclick=()=>{S.form=null;render()};
-  $$('[data-f]').forEach(el=>{const k=el.dataset.f;const h=()=>{f[k]=el.value;if(k==='date'||k==='xe'||k==='dest')render();else updCh()};el.oninput=h;el.onchange=h});
+  $$('[data-f]').forEach(el=>{const k=el.dataset.f;const h=()=>{f[k]=el.value;if(k==='date'&&f.kind==='cxuat'){f.q=xAuto(f.date);f.gs=null;f.saved=null}if(k==='date'||k==='xe'||k==='dest')render();else updCh()};el.oninput=h;el.onchange=h});
   $$('[data-o]').forEach(b=>b.onclick=()=>{const k=b.dataset.o;if(f[k]===b.dataset.ov)return;f[k]=b.dataset.ov;if(k==='loai'){f.tk={};f.o={};f.ncc='';f.nccQ=''}render()});
   $$('[data-tk]').forEach(el=>el.oninput=()=>{f.tk[el.dataset.tk]=el.value;updCh()});
   $$('[data-all]').forEach(b=>b.onclick=()=>{const e=$(`[data-tk="${b.dataset.all}"]`);const v=String(r3(+b.dataset.v)).replace('.',',');f.tk[b.dataset.all]=v;if(e)e.value=v;if(b.dataset.vt){f.tt=f.tt||{};f.tt[b.dataset.all]=b.dataset.vt;const t=$(`[data-tth="${b.dataset.all}"]`);if(t)t.value=b.dataset.vt}updCh()});
