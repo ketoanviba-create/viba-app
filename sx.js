@@ -31,7 +31,7 @@ const KORDER=['nvl','sx','dg','xuat','dgl'];
 Object.assign(KIND,{
   cnx:{n:'Nhập chuối xanh',s:'Vào kho 1 · NCC, loại chuối, thùng, giá',c:'#1f8a52'},
   cvu:{n:'Vào phòng ủ',s:'Lô xanh (kho 1) → kho ủ 2/4/5/6',c:'#1b6aa5'},
-  cloc:{n:'Lọc lựa – ra ủ',s:'Tại kho 3 · 1 phiếu chung Winmart + khách khác',c:'#0e7c86'},
+  cloc:{n:'Lọc lựa – ra ủ (Kho 3)',s:'Lấy từ các kho ủ về kho 3 · 1 phiếu chung Winmart + khách khác',c:'#0e7c86'},
   cxuat:{n:'Xuất hàng',s:'Winmart, GO, Hà Nội, khách khác',c:'#b85a12'}});
 const CORDER=['cnx','cvu','cloc','cxuat'];
 const kOrd=k=>CORDER.includes(k)?CORDER.indexOf(k)+1:KORDER.indexOf(k)+1;
@@ -581,8 +581,8 @@ function dayBar(b){const T=chc().types[b.loai]||{days:4,marks:{}},n=dayN(b.date)
     h+=`<span style="flex:1;text-align:center;font-size:11.5px;font-weight:700;padding:3px 0;border-radius:6px;${st}">N${i}${m?' '+esc(m):''}${i===n?' •':''}</span>`}
   return `<div style="display:flex;gap:3px;margin-top:5px">${h}</div>`}
 function batRow(b){const s=batStat(b);return `<div class="row tap" data-bid="${esc(b.id)}" style="${s.lv===3?'background:rgba(220,50,50,.07)':''}"><div class="grow"><div class="t">${esc(b.code)} · ${esc(tName(b.loai))} ${s.tag}</div><div class="s">vào ${dmy(b.date)}${b.gio?' '+esc(b.gio):''} · ${b.th?fm(b.th)+' thùng · ':''}${fm(b.kg)} kg${abTxt(b)} · <b>còn ${fm(b.left)} kg</b>${b.took?' · đã lấy '+fm(b.took):''}</div>${dayBar(b)}</div><span class="chev">›</span></div>`}
-function roomsHTML(C){let h='';const ALL=openBats(C),TP=ALL.filter(b=>atTP(b)),OB=ALL.filter(b=>!atTP(b));const RL=[...new Set([...roomList(),...OB.map(b=>+b.room).filter(Boolean)])].sort((a,b)=>a-b);for(const r of RL){const B=OB.filter(b=>b.room===r);
-  h+=`<div class="sec">Kho ${r}${roomList().includes(r)?'':' (ngoài kho ủ)'} <span style="font-weight:400">(${fm(capOf(r)/1000)} tấn)</span>${B.length?' · '+fm(B.reduce((s,b)=>s+b.left,0))+' kg':' · trống'}</div><div class="group">${B.map(batRow).join('')||'<div class="empty">Phòng trống.</div>'}</div>`}h+=`<div class="sec">Kho ${KHO_TP} – chờ lọc lựa (đã rấm đủ ${ramOf('tieu')} ngày)${TP.length?' · '+fm(TP.reduce((s,b)=>s+b.left,0))+' kg':' · trống'}</div><div class="group">${TP.map(batRow).join('')||'<div class="empty">Chưa có mẻ chuyển về.</div>'}</div>`;return h}
+function roomsHTML(C,tpH){let h='';const ALL=openBats(C),TP=ALL.filter(b=>atTP(b)),OB=ALL.filter(b=>!atTP(b));const RL=[...new Set([...roomList(),...OB.map(b=>+b.room).filter(Boolean)])].sort((a,b)=>a-b);for(const r of RL){const B=OB.filter(b=>b.room===r);
+  h+=`<div class="sec">Kho ${r}${roomList().includes(r)?'':' (ngoài kho ủ)'} <span style="font-weight:400">(${fm(capOf(r)/1000)} tấn)</span>${B.length?' · '+fm(B.reduce((s,b)=>s+b.left,0))+' kg':' · trống'}</div><div class="group">${B.map(batRow).join('')||'<div class="empty">Phòng trống.</div>'}</div>`}h+=`<div class="sec">Kho ${KHO_TP} – lọc lựa ra ủ &amp; thành phẩm tồn</div><div class="group"><div class="row" style="background:var(--sunk)"><div class="grow t" style="color:var(--accent)">Chuối ra ủ từ các kho (rấm đủ ${ramOf('tieu')} ngày)</div><div class="num" style="font-weight:800">${fm(TP.reduce((s,b)=>s+b.left,0))} kg</div></div>${TP.map(batRow).join('')||'<div class="empty">Chưa có mẻ ra ủ.</div>'}${tpH!=null?`<div class="row" style="background:var(--sunk)"><div class="grow t" style="color:var(--accent)">Thành phẩm sau lọc (chưa xuất)</div></div>${tpH||'<div class="empty">Không có.</div>'}`:''}</div>`;return h}
 function bindBats(){$$('[data-bid]').forEach(r=>r.onclick=()=>batDetail(r.dataset.bid))}
 function batDetail(id){const C=calcCh(),b=C.bat.get(id);if(!b)return;const s=batStat(b),uc=unitCost(b);
   const html=`<div class="s">${esc(tName(b.loai))} · ${atTP(b)?'Kho '+KHO_TP+' (từ kho '+b.room+')':'Kho '+b.room} · vào ${dmy(b.date)} ${esc(b.gio)} · ${s.tag}</div>${dayBar(b)}
@@ -621,7 +621,7 @@ function viewStockCh(v){const C=calcCh();
   const gl=Object.keys(chc().types).map(t=>{const L=(C.lots.get(t)||[]).filter(x=>x.left>0.05);return L.length?`<div class="row"><div class="grow"><div class="t">${esc(tName(t))} · ${fm(L.reduce((s,x)=>s+x.left,0))} kg</div><div class="s">${L.map(x=>esc(x.lot)+' ('+dmy(x.date)+') '+(x.th?fm(x.thLeft)+' thùng · ':'')+fm(x.left)+' kg').join(' · ')}</div></div></div>`:''}).join('');
   const tp=prods().map(p=>{const q=C.tp.get(p.id)||0;return Math.abs(q)>1e-9?`<div class="row"><div class="grow t">${esc(p.name)}</div><div class="num" style="${q<0?'color:var(--bad)':''}">${qU(p,q)}</div></div>`:''}).join('');
   v.innerHTML=`<h1 class="big">Tồn kho xưởng chuối</h1><div class="sec">Kho 1 – chuối xanh nguyên liệu (theo lô)</div><div class="group">${gl||'<div class="empty">Không có.</div>'}</div>
-   <div class="sec" style="font-size:14px;color:var(--fg)">Đang ủ</div>${roomsHTML(C)}<div class="sec">Kho 3 – thành phẩm sau lọc (chưa xuất)</div><div class="group">${tp||'<div class="empty">Không có.</div>'}</div>`;
+   <div class="sec" style="font-size:14px;color:var(--fg)">Kho ủ rấm</div>${roomsHTML(C,tp)}`;
   bindBats()}
 
 /* ---- Phiếu xưởng chuối ---- */
