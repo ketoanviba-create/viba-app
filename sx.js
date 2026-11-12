@@ -1,4 +1,4 @@
-/* VIBA – Phân hệ Sản xuất (v115; v120–124 thêm Xưởng chuối – ủ rấm, kế hoạch, loại A/B). Trang riêng sanxuat.html, dùng chung gas-shim (đăng nhập, đồng bộ).
+/* VIBA – Phân hệ Sản xuất (v115; v120–125 thêm Xưởng chuối – ủ rấm, kế hoạch, loại A/B, nhập theo thùng). Trang riêng sanxuat.html, dùng chung gas-shim (đăng nhập, đồng bộ).
    Dữ liệu: mcfg/main (mặt hàng, NCC, định mức, đơn giá) · mlog/<id> (phiếu 5 công đoạn).
    Tổ trưởng chỉ nhập số lượng + nhân công/giờ làm; tiền do app tính theo định mức Quản lý cài. */
 (function(){
@@ -14,6 +14,10 @@ const today=()=>{const d=new Date(Date.now()+7*36e5);return d.toISOString().slic
 const dmy=s=>s?s.slice(8,10)+'/'+s.slice(5,7)+(s.slice(0,4)!==today().slice(0,4)?'/'+s.slice(0,4):''):'';
 const addDays=(s,n)=>{const d=new Date(s+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
 const noAcc=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/g,'d').replace(/Đ/g,'D').toLowerCase();
+/* v125: hộp xác nhận trong trang (thay confirm – một số trình duyệt/khung app chặn confirm nên không lưu được) */
+function ask(m){return new Promise(res=>{const o=document.createElement('div');o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px';
+  o.innerHTML=`<div style="background:var(--card,#fff);color:var(--fg,#111);border-radius:16px;padding:18px;max-width:420px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3)"><div style="font-size:16px;font-weight:600;line-height:1.45;margin-bottom:14px;white-space:pre-wrap">${esc(m)}</div><div style="display:flex;gap:10px"><button class="btn block" data-a="0" style="flex:1">Hủy</button><button class="btn block pri" data-a="1" style="flex:1">Đồng ý</button></div></div>`;
+  const done=v=>{o.remove();res(v)};o.querySelector('[data-a="0"]').onclick=()=>done(false);o.querySelector('[data-a="1"]').onclick=()=>done(true);document.body.appendChild(o)})}
 function toast(t){const e=$('#toast');e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,2600)}
 
 const KIND={
@@ -61,7 +65,7 @@ const DEFAULT_CFG={v:2,gioCong:8,
   xe:['28A-30735','28H-00259','30B-80630']};
 /* v120: cấu hình xưởng chuối (lưu ở mcfg/main.ch). marks: ngày thứ mấy lọc cho đâu */
 const CH0={rooms:6,caps:{1:10000,2:5000,3:5000,4:5000,5:5000,6:5000},users:['Nguyễn Thị Như Nhung','Phan Xuân Tùng'],
-  types:{tieu:{name:'Chuối tiêu',days:4,marks:{3:'Win/GO',4:'Hà Nội'},cong100:0},tay:{name:'Chuối tây',days:3,marks:{3:'Hà Nội'},cong100:0}},
+  types:{tieu:{name:'Chuối tiêu',days:4,thung:16,marks:{3:'Win',4:'Khách khác'},cong100:0},tay:{name:'Chuối tây',days:3,thung:15,marks:{3:'Khách khác'},cong100:0}},
   dm:{rate:180000,khac:0},
   prods:[
     {id:'tkg',t:'tieu',gr:'B',name:'Chuối tiêu kg',u:'kg',kg:1},
@@ -69,15 +73,16 @@ const CH0={rooms:6,caps:{1:10000,2:5000,3:5000,4:5000,5:5000,6:5000},users:['Ngu
     {id:'tmini',t:'tieu',gr:'A',name:'Chuối tiêu Mini',u:'gói',kg:0.64},
     {id:'t350',t:'tieu',gr:'A',name:'Chuối tiêu Pack 350g',u:'gói',kg:0.38},
     {id:'tck',t:'tieu',gr:'A',name:'Quả Circle K',u:'kg',kg:1,note:'quả 140–200 g'},
-    {id:'twin',t:'tieu',gr:'A',name:'Winmart',u:'kg',kg:1,g:'wg'},
-    {id:'tgop',t:'tieu',gr:'A',name:'GO Plus',u:'gói',kg:0.842,g:'wg'},
-    {id:'tgom',t:'tieu',gr:'A',name:'GO Mini',u:'gói',kg:0.64,g:'wg'},
+    {id:'twin',t:'tieu',gr:'A',name:'Winmart',u:'kg',kg:1,g:'win'},
+    {id:'tgop',t:'tieu',gr:'A',name:'GO Plus',u:'gói',kg:0.842},
+    {id:'tgom',t:'tieu',gr:'A',name:'GO Mini',u:'gói',kg:0.64},
     {id:'tbep',t:'tieu',gr:'B',name:'Quả bếp trường',u:'kg',kg:1,note:'quả 90–120 g'},
     {id:'ykg',t:'tay',name:'Chuối tây kg',u:'kg',kg:1},
     {id:'yplus',t:'tay',name:'Chuối tây Plus',u:'gói',kg:0.762},
     {id:'ymini',t:'tay',name:'Chuối tây Mini',u:'gói',kg:0.593},
     {id:'ybep',t:'tay',name:'Quả loại bếp bánh',u:'kg',kg:1}]};
-const CDEST={wg:'Win / GO',hn:'Hà Nội',khac:'Khác'};
+const CDEST={win:'Winmart',khac:'Khách khác',wg:'Win / GO',hn:'Hà Nội'};
+const CDEST_NEW=[['win','Winmart'],['khac','Khách khác']];
 const CXD={win:'Winmart',go:'GO',hn:'Hà Nội',ck:'Circle K',bep:'Bếp trường / bếp bánh',khac:'Khách khác'};
 
 const S={db:null,user:null,uid:null,owner:false,staff:null,cfg:null,logs:[],plans:{},tab:'home',form:null,names:{},ui:{lp:'7',gtFrom:null,gtTo:null,ncDate:null,dmItem:'mia',xw:null},ready:false};
@@ -93,7 +98,7 @@ const role=()=>S.owner?'admin':(S.staff&&S.staff.active!==false?S.staff.role:nul
 const isAdmin=()=>role()==='admin';
 const canUse=()=>role()==='admin'||role()==='sx';
 const liveLogs=()=>S.logs.filter(l=>!l.deleted);
-const chc=()=>{const c=(S.cfg&&S.cfg.ch)||{};return Object.assign({},CH0,c,c.v122?{}:{rooms:CH0.rooms,caps:CH0.caps},{types:Object.assign({},CH0.types,c.types||{}),dm:Object.assign({},CH0.dm,c.dm||{})})};
+const chc=()=>{const c=(S.cfg&&S.cfg.ch)||{};return Object.assign({},CH0,c,c.v122?{}:{rooms:CH0.rooms,caps:CH0.caps},{types:(()=>{const T=Object.assign({},CH0.types,c.types||{});if(!c.v125)for(const k of Object.keys(CH0.types))T[k]=Object.assign({},T[k],{marks:CH0.types[k].marks,thung:CH0.types[k].thung,days:CH0.types[k].days});return T})(),dm:Object.assign({},CH0.dm,c.dm||{})})};
 function chUser(){const me=noAcc(S.names[S.uid]||'').trim();return !!me&&(chc().users||[]).some(u=>noAcc(u).trim()===me)}
 /* v122: nhân viên Sản xuất khoá theo xưởng (tên trong ch.users → Xưởng chuối, còn lại → Nhà máy); chỉ Quản lý chuyển qua lại */
 function xw(){if(!isAdmin())return chUser()?'ch':'nm';if(S.ui.xw)return S.ui.xw;let v=null;try{v=new URLSearchParams(location.search).get('x')||localStorage.getItem('sxXw')}catch(e){}
@@ -266,22 +271,22 @@ async function save(){const f=S.form,C=calc(),it=itemOf(f.item),msg=t=>$('#fMsg'
   const d={kind:f.kind,date:f.date,people,hours,pot,ot,hv:2,note:String(f.note||'').trim(),by:S.uid,at:Date.now()};
   if(f.kind==='nvl'){if(!f.nvl)return msg('Chọn nguyên liệu.');d.nvl=f.nvl}
   else if(f.kind!=='xuat'){if(!f.item)return msg('Chọn mặt hàng.');d.item=f.item;if(f.kind==='sx')d.nvl=f.nvl}
-  if(f.kind==='nvl'){const n=nccPick(f);if(!n.name)return msg('Chọn nhà cung cấp.');const kg=num(f.kg);if(kg<=0)return msg('Gõ số kg nhận.');const price=num(f.price),ship=num(f.ship);if(price<=0&&!confirm('Chưa gõ giá nhập. Vẫn lưu (kế toán điền sau)?'))return;Object.assign(d,{ncc:n.name,nccCode:n.code,kg,price,ship,lot:lotCode(n.lot,f.date)});
+  if(f.kind==='nvl'){const n=nccPick(f);if(!n.name)return msg('Chọn nhà cung cấp.');const kg=num(f.kg);if(kg<=0)return msg('Gõ số kg nhận.');const price=num(f.price),ship=num(f.ship);if(price<=0&&!await ask('Chưa gõ giá nhập. Vẫn lưu (kế toán điền sau)?'))return;Object.assign(d,{ncc:n.name,nccCode:n.code,kg,price,ship,lot:lotCode(n.lot,f.date)});
     if(n.fresh){const c=JSON.parse(JSON.stringify(cfg()));c.ncc.push({name:n.name,code:'',lot:n.lot,fresh:true,by:S.uid});try{await S.db.doc('mcfg/main').set(c)}catch(e){}}}
   else if(f.kind==='sx'){const a=num(f.kgIn);if(a<=0)return msg('Gõ số kg nguyên liệu đưa vào.');const bg=num(f.bags),bw=num(f.bagW);if(bg&&!bw)return msg('Gõ trọng lượng 1 bịch.');Object.assign(d,{kgIn:a,kgOut:r3(bg*bw),bags:bg,bagW:bw})}
   else if(f.kind==='dg'||f.kind==='dgl'){const packs=[];for(const p of f.packs){const g=gOf(p.w,p.u),q=num(p.q);if(!g&&!q)continue;if(!g)return msg('Có dòng chưa gõ trọng lượng.');if(!q)return msg('Có dòng chưa gõ số gói.');packs.push({g,q})}
     if(!packs.length)return msg('Gõ ít nhất 1 quy cách và số gói.');const kgTP=r3(packs.reduce((s,p)=>s+p.g*p.q/1000,0));const src=f.kind==='dg'?C.btp.get(f.item):C.kd.get(f.item);
     const bu=num(f.bagsUse);if(it.bich&&bu&&!num(f.bagW)&&!(src&&src.bags>0))return msg('Gõ trọng lượng 1 bịch.');let use=useKg(f,src);if(!use)use=kgTP;
-    if(src&&use>src.kg+0.5&&!confirm(`Dùng ${fm(use)} kg nhưng ${f.kind==='dg'?'nhà máy':'kho đông'} chỉ còn ${fm(src.kg)} kg. Vẫn lưu?`))return;
-    if(use<kgTP*0.95&&!confirm(`Thành phẩm ${fm(kgTP)} kg lớn hơn số dùng ${fm(use)} kg. Vẫn lưu?`))return;
+    if(src&&use>src.kg+0.5&&!await ask(`Dùng ${fm(use)} kg nhưng ${f.kind==='dg'?'nhà máy':'kho đông'} chỉ còn ${fm(src.kg)} kg. Vẫn lưu?`))return;
+    if(use<kgTP*0.95&&!await ask(`Thành phẩm ${fm(kgTP)} kg lớn hơn số dùng ${fm(use)} kg. Vẫn lưu?`))return;
     Object.assign(d,{packs,kgTP,kgUse:use,bagsUse:bu,bagW:num(f.bagW)||(bu?r3(use/bu):0)});if(f.kind==='dgl')d.xe=xeVal(f);
     const known=new Set((it.packs||[]).map(p=>gOf(p[0],p[1])));const fresh=packs.filter(p=>!known.has(p.g));if(fresh.length){const c=JSON.parse(JSON.stringify(cfg()));const ci=c.items.find(i=>i.id===f.item);if(ci){ci.packs=(ci.packs||[]).concat(fresh.map(p=>p.g>=1000?[r3(p.g/1000),'kg']:[p.g,'g']));try{await S.db.doc('mcfg/main').set(c)}catch(e){}}}}
   else if(f.kind==='xuat'){const lines=[];
-    if(f.xt==='tp'){for(const [k,q0] of C.tp.entries()){const q=num(f.q[k]);if(!q)continue;if(q>q0+1e-9&&!confirm(`${itemOf(k.split('|')[0]).name} ${packLabel(+k.split('|')[1])}: xuất ${fm(q)} nhưng chỉ có ${fm(q0)}. Vẫn lưu?`))return;const [id,g]=k.split('|');lines.push({t:'tp',item:id,g:+g,q})}}
+    if(f.xt==='tp'){for(const [k,q0] of C.tp.entries()){const q=num(f.q[k]);if(!q)continue;if(q>q0+1e-9&&!await ask(`${itemOf(k.split('|')[0]).name} ${packLabel(+k.split('|')[1])}: xuất ${fm(q)} nhưng chỉ có ${fm(q0)}. Vẫn lưu?`))return;const [id,g]=k.split('|');lines.push({t:'tp',item:id,g:+g,q})}}
     else{for(const i of items()){const kg=num(f.q['k|'+i.id]),bags=num(f.q['b|'+i.id]);if(!kg&&!bags)continue;const b=C.btp.get(i.id);let k2=kg;if(!k2&&bags&&b&&b.bags>0)k2=r3(bags*b.kg/b.bags);if(!k2)return msg('Gõ số kg '+i.name+'.');lines.push({t:'btp',item:i.id,kg:k2,bags})}}
     if(!lines.length)return msg('Gõ số lượng xuất.');Object.assign(d,{dest:f.dest,lines,xe:xeVal(f)});
     if(f.xt==='tp'&&f.dest==='hn'&&f.mau){const rest=[],its=new Set(lines.map(x=>x.item));for(const [k,q0] of C.tp.entries()){if(!its.has(k.split('|')[0]))continue;const q=q0-num(f.q[k]);if(q>0){const [id,g]=k.split('|');rest.push({t:'tp',item:id,g:+g,q})}}if(rest.length)d.mauLines=rest}}
-  if(ot&&!pot)return msg('Gõ số người tăng ca.');if(!people||!(hours||ot)){if(!confirm('Chưa ghi số người / tổng số giờ làm. Vẫn lưu?'))return}
+  if(ot&&!pot)return msg('Gõ số người tăng ca.');if(!people||!(hours||ot)){if(!await ask('Chưa ghi số người / tổng số giờ làm. Vẫn lưu?'))return}
   const btn=$('#fSave');btn.disabled=true;btn.textContent='Đang lưu…';
   try{const id=newId(f.date);await S.db.doc('mlog/'+id).set(d);
     if(d.mauLines){const m={kind:'xuat',date:f.date,dest:'mau',lines:d.mauLines,people:0,hours:0,hv:2,note:'Phần còn lại sau xuất Hà Nội',by:S.uid,at:Date.now()+1};delete d.mauLines;await S.db.doc('mlog/'+newId(f.date)).set(m)}
@@ -313,7 +318,7 @@ function logDetail(l){if(!l)return;const C=calc();const mine=l.by===S.uid,adm=is
     if($('#ePr')){p.price=num($('#ePr').value);p.extra=num($('#eEx').value);p.ship=num($('#eSh').value);p.misa=$('#eMs').value.trim();if(p.price!==num(l.price)||p.extra!==num(l.extra)||p.ship!==num(l.ship))what.push('giá')}
     if(what.length)p.edits=(l.edits||[]).concat([{by:S.uid,at:Date.now(),what:what.join(', ')}]);
     try{await S.db.doc('mlog/'+l.id).update(p);toast('✓ Đã lưu');close()}catch(e){$('#eMsg').innerHTML='<div class="alert r">Chưa lưu được.</div>'}};
-  $('#eDel').onclick=async()=>{if(!confirm('Xoá phiếu này? (Phiếu được đánh dấu đã xoá, Quản lý vẫn xem lại được.)'))return;try{await S.db.doc('mlog/'+l.id).update({deleted:true,edits:(l.edits||[]).concat([{by:S.uid,at:Date.now(),what:'xoá'}])});toast('Đã xoá phiếu');close()}catch(e){toast('Chưa xoá được')}}}
+  $('#eDel').onclick=async()=>{if(!await ask('Xoá phiếu này? (Phiếu được đánh dấu đã xoá, Quản lý vẫn xem lại được.)'))return;try{await S.db.doc('mlog/'+l.id).update({deleted:true,edits:(l.edits||[]).concat([{by:S.uid,at:Date.now(),what:'xoá'}])});toast('Đã xoá phiếu');close()}catch(e){toast('Chưa xoá được')}}}
 
 /* ---------------- TỒN KHO ---------------- */
 function viewStock(v){const C=calc();let h='<h1 class="big">Tồn kho</h1>';
@@ -370,7 +375,7 @@ function viewDM(v){const c=cfg();const id=S.ui.dmItem&&c.items.some(i=>i.id===S.
   $('#dmI').onchange=e=>{S.ui.dmItem=e.target.value;render()};
   const saveCfg=async(c2,m)=>{try{await S.db.doc('mcfg/main').set(c2);S.cfg=c2;toast(m||'✓ Đã lưu');render()}catch(e){toast('Chưa lưu được')}};
   $('#dmSave').onclick=()=>{const c2=JSON.parse(JSON.stringify(c));const i2=c2.items.find(i=>i.id===id);i2.dm=i2.dm||{};$$('[data-dk]').forEach(el=>i2.dm[el.dataset.dk]=num(el.value));i2.bich=$('#dmB').value==='1';i2.nvl=$('#dmV').value;i2.name=$('#dmN').value.trim()||i2.name;i2.active=$('#dmA').checked;c2.gioCong=num($('#dmG').value)||8;c2.otK=num($('#dmOt').value)||1.5;c2.xe=$('#dmX').value.split(',').map(s=>s.trim()).filter(Boolean);i2.dmBy=S.uid;i2.dmAt=Date.now();saveCfg(c2)};
-  $$('[data-nrm]').forEach(b=>b.onclick=()=>{if(!confirm('Bỏ nhà cung cấp này khỏi danh sách chọn?'))return;const c2=JSON.parse(JSON.stringify(c));c2.ncc.splice(+b.dataset.nrm,1);saveCfg(c2)});
+  $$('[data-nrm]').forEach(b=>b.onclick=async()=>{if(!await ask('Bỏ nhà cung cấp này khỏi danh sách chọn?'))return;const c2=JSON.parse(JSON.stringify(c));c2.ncc.splice(+b.dataset.nrm,1);saveCfg(c2)});
   $('#nAdd').onclick=()=>{const n=$('#nN').value.trim();if(!n)return toast('Gõ tên nhà cung cấp');const c2=JSON.parse(JSON.stringify(c));c2.ncc.push({name:n,code:$('#nC').value.trim(),lot:autoCode(n)});saveCfg(c2,'✓ Đã thêm nhà cung cấp')};
   $('#vAdd').onclick=()=>{const n=$('#vN').value.trim();if(!n)return toast('Gõ tên nguyên liệu');const c2=JSON.parse(JSON.stringify(c));c2.nvls=c2.nvls||[];const nid='v'+noAcc(n).replace(/[^a-z0-9]/g,'').slice(0,8)+Date.now().toString(36).slice(-3);c2.nvls.push({id:nid,name:n});saveCfg(c2,'✓ Đã thêm nguyên liệu '+n)};
   $('#iAdd').onclick=()=>{const n=$('#iN').value.trim();if(!n)return toast('Gõ tên mặt hàng');const c2=JSON.parse(JSON.stringify(c));const nid=noAcc(n).replace(/[^a-z0-9]/g,'').slice(0,8)+Date.now().toString(36).slice(-3);c2.items.push({id:nid,name:n,nvl:$('#dmV').value,bich:false,packs:[],dm:{tl:0,cong100:0,rate:180000,baoBi:0,dienGa:0,kh:0,thung:0,guiKho:0},src:'thêm mới'});S.ui.dmItem=nid;saveCfg(c2,'✓ Đã thêm '+n)}}
@@ -423,6 +428,9 @@ const qU=(p,q)=>fm(q)+' '+(p.u||'kg');
 const AB=t=>t==='tieu';
 const grOf=p=>AB(p.t)?(p.gr||(['tkg','tbep'].includes(p.id)?'B':'A')):'';
 const lotGr=l=>AB(l.loai)?(l.grade||'A'):'';
+const thungOf=t=>num((chc().types[t]||{}).thung)||(t==='tay'?15:16);
+/* v125: chuối xanh nhập theo thùng → kg */
+function thKg(f){const k=thungOf(f.loai);if(AB(f.loai)){f.kgA=num(f.thA)*k;f.kgB=num(f.thB)*k}else f.kg=num(f.th)*k}
 const dayN=(d,ref)=>Math.round((new Date((ref||today())+'T00:00:00Z')-new Date(d+'T00:00:00Z'))/864e5)+1;
 function calcCh(){const L=liveLogs().filter(isCh).sort((a,b)=>(a.date+String(a.at).padStart(15,'0')).localeCompare(b.date+String(b.at).padStart(15,'0')));
   const lots=new Map(),lotById=new Map(),bat=new Map(),tp=new Map();
@@ -462,11 +470,11 @@ function batDetail(id){const C=calcCh(),b=C.bat.get(id);if(!b)return;const s=bat
    ${b.left>0.05?`<button class="btn block pri" id="bLoc" style="margin-top:12px">Lọc lựa mẻ này</button><button class="btn block" id="bClose" style="color:var(--bad)">Đóng mẻ – ghi ${fm(b.left)} kg còn lại là hỏng</button>`:''}`;
   const close=sheet('Mẻ '+esc(b.code),html);
   const lb=$('#bLoc');if(lb)lb.onclick=()=>{close();const q={};q[b.id]=String(b.left).replace('.',',');openFormCh('cloc',{loai:b.loai,tk:q})};
-  const bc=$('#bClose');if(bc)bc.onclick=async()=>{if(!confirm(`Đóng mẻ ${b.code}: ghi ${fm(b.left)} kg còn lại là loại/hỏng?`))return;
+  const bc=$('#bClose');if(bc)bc.onclick=async()=>{if(!await ask(`Đóng mẻ ${b.code}: ghi ${fm(b.left)} kg còn lại là loại/hỏng?`))return;
     const d={kind:'cloc',date:today(),loai:b.loai,dest:'khac',takes:[{b:b.id,kg:b.left}],kgIn:b.left,outs:[],kgOk:0,hong:b.left,people:0,hours:0,hv:2,note:'Đóng mẻ – phần còn lại ghi hỏng',by:S.uid,at:Date.now()};
     try{await S.db.doc('mlog/'+newId(d.date)).set(d);toast('✓ Đã đóng mẻ');close()}catch(e){if(e&&e.code==='queued'){toast('⏳ Đã giữ trên máy, tự gửi lại');close()}else toast('Chưa lưu được')}}}
 function logSumCh(l){
-  if(l.kind==='cnx')return `${esc(tName(l.loai))} xanh${l.grade?' loại '+esc(l.grade):''} · ${esc(l.ncc||'')} · ${fm(l.kg)} kg${l.price?' × '+fm(l.price)+' đ':''} · lô ${esc(l.lot||'')}`;
+  if(l.kind==='cnx')return `${esc(tName(l.loai))} xanh${l.grade?' loại '+esc(l.grade):''} · ${esc(l.ncc||'')} · ${l.thung?fm(l.thung)+' thùng = ':''}${fm(l.kg)} kg${l.price?' × '+fm(l.price)+' đ':''} · lô ${esc(l.lot||'')}`;
   if(l.kind==='cvu')return `${esc(l.code||'')} · Phòng ${esc(l.room)} · ${esc(tName(l.loai))} · ${fm(l.kg)} kg vào ủ`;
   if(l.kind==='cloc'){const C=calcCh();return `${esc(tName(l.loai))} → ${CDEST[l.dest]||l.dest} · lấy ${fm(l.kgIn)} kg (${(l.takes||[]).map(t=>{const b=C.bat.get(t.b);return esc(b?b.code:'?')+' '+fm(t.kg)}).join(', ')}) · đạt ${fm(l.kgOk)} kg · hỏng ${fm(l.hong)} kg`}
   if(l.kind==='cxuat')return `→ ${esc(CXD[l.dest]||l.dest)} · ${(l.lines||[]).map(x=>{const p=prodOf(x.p);return esc(p.name)+' '+qU(p,x.q)}).join(', ')}`;
@@ -494,21 +502,21 @@ function viewStockCh(v){const C=calcCh();
   bindBats()}
 
 /* ---- Phiếu xưởng chuối ---- */
-function openFormCh(kind,pre){const t0=Object.keys(chc().types)[0];S.form={kind,date:today(),loai:t0,room:'1',gio:new Date(Date.now()+7*36e5).toISOString().slice(11,16),people:'',hours:'',pot:'',ot:'',packs:[],tk:{},o:{},q:{},dest:kind==='cxuat'?'win':'wg',xe:'',xeO:'',ncc:'',nccQ:'',note:'',hong:''};
+function openFormCh(kind,pre){const t0=Object.keys(chc().types)[0];S.form={kind,date:today(),loai:t0,room:'1',gio:new Date(Date.now()+7*36e5).toISOString().slice(11,16),people:'',hours:'',pot:'',ot:'',packs:[],tk:{},o:{},q:{},dest:'win',xe:'',xeO:'',ncc:'',nccQ:'',note:'',hong:''};
   if(pre)Object.assign(S.form,pre);S.post=null;render();scrollTo(0,0)}
 const optB=(f,k,L)=>`<div class="opt" style="flex-wrap:wrap">${L.map(([v,l])=>`<button data-o="${k}" data-ov="${esc(v)}" class="${String(f[k])===String(v)?'on':''}" style="min-width:64px">${l}</button>`).join('')}</div>`;
 function viewFormCh(v){const f=S.form,K=KIND[f.kind],C=calcCh(),T=chc().types;let body='';
   const loaiSel=`<label class="f"><span class="lab">Loại chuối</span>${optB(f,'loai',Object.keys(T).map(t=>[t,esc(T[t].name)]))}</label>`;
   if(f.kind==='cnx'){
     body=`${loaiSel}<label class="f"><span class="lab">Nhà cung cấp – gõ tìm</span><input id="nccQ" value="${esc(f.ncc&&f.ncc!=='__new'?f.ncc:f.nccQ)}" placeholder="Gõ tên nhà cung cấp…" class="sxin" autocomplete="off"></label><div id="nccL" class="nccl" hidden></div>
-     ${f.ncc==='__new'?inp(f,'nccNew','Tên nhà cung cấp mới','','text'):''}${AB(f.loai)?`<div class="sec">Loại A</div><div class="grid2">${inp(f,'kgA','Số kg loại A','0')}${inp(f,'priceA','Giá A (đ/kg)','0')}</div><div class="sec">Loại B</div><div class="grid2">${inp(f,'kgB','Số kg loại B','0')}${inp(f,'priceB','Giá B (đ/kg)','0')}</div>${inp(f,'ship','Chi phí vận chuyển cả xe (đ)','0')}`:`${inp(f,'kg','Số kg chuối xanh nhận','0')}<div class="grid2">${inp(f,'price','Giá nhập (đ/kg)','0')}${inp(f,'ship','Chi phí vận chuyển (đ)','0')}</div>`}${xeSel(f)}<div class="auto" id="calcBox"></div>`}
+     ${f.ncc==='__new'?inp(f,'nccNew','Tên nhà cung cấp mới','','text'):''}<div class="auto">Quy cách: <b>${fm(thungOf(f.loai))} kg/thùng</b> – nhập số thùng, app tự đổi ra kg.</div>${AB(f.loai)?`<div class="sec">Loại A</div><div class="grid2">${inp(f,'thA','Số thùng loại A','0','numeric')}${inp(f,'priceA','Giá A (đ/kg)','0')}</div><div class="sec">Loại B</div><div class="grid2">${inp(f,'thB','Số thùng loại B','0','numeric')}${inp(f,'priceB','Giá B (đ/kg)','0')}</div>${inp(f,'ship','Chi phí vận chuyển cả xe (đ)','0')}`:`<div class="grid2">${inp(f,'th','Số thùng','0','numeric')}${inp(f,'price','Giá nhập (đ/kg)','0')}</div>${inp(f,'ship','Chi phí vận chuyển (đ)','0')}`}${xeSel(f)}<div class="auto" id="calcBox"></div>`}
   else if(f.kind==='cvu'){const L=(C.lots.get(f.loai)||[]).filter(x=>x.left>0.05),Td=T[f.loai]||{days:4,marks:{}};
     const ms=Object.entries(Td.marks||{}).map(([n,m])=>'Ngày '+n+' ('+dmy(addDays(f.date,+n-1))+'): lọc '+esc(m)).join(' · ');
     body=`<label class="f"><span class="lab">Phòng ủ</span>${optB(f,'room',Array.from({length:chc().rooms||6},(_,i)=>{const r=i+1,bz=openBats(C).some(b=>b.room===r);return [String(r),'P'+r+'<br><small style="font-weight:400">'+fm(capOf(r)/1000)+' t'+(bz?' · có mẻ':'')+'</small>']}))}</label>${loaiSel}
      <div class="sec">Lấy từ lô chuối xanh (lô cũ trước)</div><div class="group">${L.map(x=>`<div class="row"><div class="grow"><div class="t">${esc(x.lot)}${x.gr?' <span class="chip '+(x.gr==='A'?'g':'w')+'">Loại '+x.gr+'</span>':''}</div><div class="s">${esc(x.ncc||'')} · ${dmy(x.date)} · còn ${fm(x.left)} kg</div></div><button class="lnk" style="color:var(--accent)" data-all="${esc(x.id)}" data-v="${x.left}">Lấy hết</button><input class="xq" data-tk="${esc(x.id)}" value="${esc(f.tk[x.id]??'')}" inputmode="decimal" placeholder="kg"></div>`).join('')||'<div class="empty">Không còn chuối xanh '+esc(tName(f.loai))+' – nhập ở bước ① trước.</div>'}${L.length?'<div class="row" style="background:var(--sunk)"><div class="grow t">Tổng vào phòng</div><div class="num" id="tkSum" style="font-weight:800;font-size:17px">0 kg</div></div>':''}</div>
      <div class="grid2"><label class="f"><span class="lab">Giờ vào</span><input type="time" data-f="gio" value="${esc(f.gio)}" class="sxin"></label><div class="auto" style="margin:22px 0 12px">Ủ ${Td.days} ngày</div></div><div class="auto">${ms}</div><div class="auto" id="calcBox"></div>`}
   else if(f.kind==='cloc'){const B=openBats(C,f.loai),P=prods(f.loai);
-    body=`${loaiSel}<label class="f"><span class="lab">Lọc cho</span>${optB(f,'dest',Object.entries(CDEST))}</label>
+    body=`${loaiSel}<label class="f"><span class="lab">Lọc cho</span>${optB(f,'dest',CDEST_NEW)}</label>
      <div class="sec">Lấy từ các mẻ đang ủ – gõ kg lấy ra (lấy lẫn nhiều mẻ được)</div><div class="group">${B.map(b=>{const s=batStat(b);return `<div class="row"><div class="grow"><div class="t">${esc(b.code)} · P${b.room} ${s.tag}</div><div class="s">vào ${dmy(b.date)} · còn ${fm(b.left)} kg</div></div><button class="lnk" style="color:var(--accent)" data-all="${esc(b.id)}" data-v="${b.left}">Hết</button><input class="xq" data-tk="${esc(b.id)}" value="${esc(f.tk[b.id]??'')}" inputmode="decimal" placeholder="kg"></div>`}).join('')||'<div class="empty">Không có mẻ '+esc(tName(f.loai))+' đang ủ.</div>'}${B.length?'<div class="row" style="background:var(--sunk)"><div class="grow t">Tổng lấy ra lọc</div><div class="num" id="tkSum" style="font-weight:800;font-size:17px">0 kg</div></div>':''}</div>
      <div class="sec">Kết quả lọc – ${esc(tName(f.loai))}</div><div class="group">${(AB(f.loai)?[...P].sort((a,b)=>grOf(a).localeCompare(grOf(b))):P).map((p,i,arr)=>(AB(f.loai)&&(i===0||grOf(arr[i-1])!==grOf(p))?`<div class="row" style="background:var(--sunk)"><div class="grow t" style="color:var(--accent)">Loại ${grOf(p)}</div><div class="num" data-grs="${grOf(p)}" style="font-weight:800"></div></div>`:'')+`<div class="row"><div class="grow"><div class="t">${esc(p.name)}</div><div class="s">${p.u==='kg'?'theo kg':'theo '+esc(p.u)+' · '+String(p.kg).replace('.',',')+' kg/'+esc(p.u)}${p.note?' · <b>'+esc(p.note)+'</b>':''}</div><div class="s" data-kgo="${esc(p.id)}" style="color:var(--accent);font-weight:700"></div></div><input class="xq" data-oo="${esc(p.id)}" value="${esc(f.o[p.id]??'')}" inputmode="decimal" placeholder="${esc(p.u)}"></div>`).join('')}
       <div class="row"><div class="grow"><div class="t" style="color:var(--bad)">Loại / hỏng (kg)</div></div><input class="xq" data-f="hong" value="${esc(f.hong)}" inputmode="decimal" placeholder="kg"></div>
@@ -537,8 +545,9 @@ function updCh(){const f=S.form;if(!f)return;const lt=$('#lbTot');if(lt){const t
   $$('[data-grs]').forEach(e=>{const g=e.dataset.grs;const k=r3(Object.entries(f.o||{}).reduce((s,[id,q])=>{const p=prodOf(id);return s+(grOf(p)===g?num(q)*(p.kg||1):0)},0));e.textContent=k?fm(k,1)+' kg':''});
   const os=$('#okSum');if(os){os.textContent=fm(sumOk(f),1)+' kg';$('#allSum').textContent=fm(r3(sumOk(f)+num(f.hong)),1)+' kg'}
   const cb=$('#calcBox');if(!cb)return;
-  if(f.kind==='cnx'&&AB(f.loai)){const n=nccPick(f),a=num(f.kgA),b=num(f.kgB),pa=num(f.priceA),pb=num(f.priceB),sh=num(f.ship),T=a+b,base=lotCode('CX'+(n.lot||'NCC'),f.date);cb.innerHTML=T?`Tổng <b>${fm(T)} kg</b> (A ${fm(a)} · B ${fm(b)})${sh?' · vận chuyển chia theo kg '+fm(sh/T)+' đ/kg':''}<br>${a&&pa?'Giá lô A <b>'+fm(pa+(sh/T))+' đ/kg</b> · ':''}${b&&pb?'Giá lô B <b>'+fm(pb+(sh/T))+' đ/kg</b>':''}<br>Số lô <b>${esc(base)}-A</b>, <b>${esc(base)}-B</b>`:'Gõ kg và giá loại A, loại B.'}
-  else if(f.kind==='cnx'){const n=nccPick(f),kg=num(f.kg),p=num(f.price),sh=num(f.ship);cb.innerHTML=(kg&&p?`Tiền hàng ${fm(kg)} × ${fm(p)} = ${fm(kg*p)}${sh?' + vận chuyển '+fm(sh):''} · Giá lô <b>${fm((kg*p+sh)/kg)} đ/kg</b><br>`:'')+`Số lô <b>${esc(lotCode('CX'+(n.lot||'NCC'),f.date))}</b>`}
+  if(f.kind==='cnx')thKg(f);
+  if(f.kind==='cnx'&&AB(f.loai)){const n=nccPick(f),a=num(f.kgA),b=num(f.kgB),pa=num(f.priceA),pb=num(f.priceB),sh=num(f.ship),T=a+b,base=lotCode('CX'+(n.lot||'NCC'),f.date);cb.innerHTML=T?`${fm(num(f.thA)+num(f.thB))} thùng × ${fm(thungOf(f.loai))} kg = <b>${fm(T)} kg</b> (A ${fm(num(f.thA))} thùng = ${fm(a)} kg · B ${fm(num(f.thB))} thùng = ${fm(b)} kg)${sh?' · vận chuyển chia theo kg '+fm(sh/T)+' đ/kg':''}<br>${a&&pa?'Giá lô A <b>'+fm(pa+(sh/T))+' đ/kg</b> · ':''}${b&&pb?'Giá lô B <b>'+fm(pb+(sh/T))+' đ/kg</b>':''}<br>Số lô <b>${esc(base)}-A</b>, <b>${esc(base)}-B</b>`:'Gõ số thùng và giá loại A, loại B.'}
+  else if(f.kind==='cnx'){const n=nccPick(f),kg=num(f.kg),p=num(f.price),sh=num(f.ship);cb.innerHTML=(kg?`${fm(num(f.th))} thùng × ${fm(thungOf(f.loai))} kg = <b>${fm(kg)} kg</b><br>`:'')+(kg&&p?`Tiền hàng ${fm(kg)} × ${fm(p)} = ${fm(kg*p)}${sh?' + vận chuyển '+fm(sh):''} · Giá lô <b>${fm((kg*p+sh)/kg)} đ/kg</b><br>`:'')+`Số lô <b>${esc(lotCode('CX'+(n.lot||'NCC'),f.date))}</b>`}
   else if(f.kind==='cvu'){cb.innerHTML=`Tổng vào phòng ${esc(f.room)}: <b>${fm(sumTk(f))} kg</b> · Số mẻ <b>${esc(batCode(f.date))}</b>`}
   else if(f.kind==='cloc'){const a=sumTk(f),ok=sumOk(f),h=num(f.hong),d=r3(a-ok-h);
     cb.innerHTML=a?`Đưa ra lọc <b>${fm(a)} kg</b> · Đạt <b>${fm(ok,1)} kg</b> (${fm(ok/a*100,1)}%) · Hỏng ${fm(h)} kg (${fm(h/a*100,1)}%)<br>${Math.abs(d)>0.05?'Chênh (hao, quy đổi gói) <b style="color:'+(Math.abs(d)>a*0.03?'var(--bad)':'inherit')+'">'+fm(d,1)+' kg</b>':'Khớp kg'}`:'Gõ kg lấy từ từng mẻ, rồi gõ kết quả lọc.'}}
@@ -548,48 +557,50 @@ async function saveCh(){const f=S.form,C=calcCh(),msg=t=>$('#fMsg').innerHTML='<
   if(!f.date)return msg('Chọn ngày.');if(f.date>today())return msg('Ngày không được sau hôm nay.');
   const d={kind:f.kind,date:f.date,people,hours,pot,ot,hv:2,note:String(f.note||'').trim(),by:S.uid,at:Date.now()};
   if(f.kind!=='cxuat')d.loai=f.loai;
-  if(f.kind==='cnx'&&AB(f.loai)){const n=nccPick(f);if(!n.name)return msg('Chọn nhà cung cấp.');const a=num(f.kgA),b=num(f.kgB),T=a+b;if(T<=0)return msg('Gõ số kg loại A hoặc loại B.');if(((a&&!num(f.priceA))||(b&&!num(f.priceB)))&&!confirm('Chưa gõ đủ giá A/B. Vẫn lưu (kế toán điền sau)?'))return;
-    if(ot&&!pot)return msg('Gõ số người tăng ca.');if(!people||!(hours||ot)){if(!confirm('Chưa ghi số người / tổng số giờ làm. Vẫn lưu?'))return}
+  if(f.kind==='cnx')thKg(f);
+  if(f.kind==='cnx'&&AB(f.loai)){const n=nccPick(f);if(!n.name)return msg('Chọn nhà cung cấp.');const a=num(f.kgA),b=num(f.kgB),T=a+b;if(T<=0)return msg('Gõ số thùng loại A hoặc loại B.');if(((a&&!num(f.priceA))||(b&&!num(f.priceB)))&&!await ask('Chưa gõ đủ giá A/B. Vẫn lưu (kế toán điền sau)?'))return;
+    if(ot&&!pot)return msg('Gõ số người tăng ca.');if(!people||!(hours||ot)){if(!await ask('Chưa ghi số người / tổng số giờ làm. Vẫn lưu?'))return}
     const base=lotCode('CX'+(n.lot||'NCC'),f.date),sh=num(f.ship),btn=$('#fSave');btn.disabled=true;btn.textContent='Đang lưu…';let first=true;
-    try{for(const [g,kg,pr] of [['A',a,num(f.priceA)],['B',b,num(f.priceB)]]){if(!kg)continue;const d2=Object.assign({},d,{grade:g,ncc:n.name,nccCode:n.code,kg,price:pr,ship:Math.round(sh*kg/T),lot:base+'-'+g,xe:xeVal(f),at:Date.now()+(g==='B'?1:0)});if(!first){d2.people=0;d2.hours=0;d2.pot=0;d2.ot=0}first=false;await S.db.doc('mlog/'+newId(f.date)).set(d2)}
+    try{for(const [g,kg,pr] of [['A',a,num(f.priceA)],['B',b,num(f.priceB)]]){if(!kg)continue;const d2=Object.assign({},d,{grade:g,thung:num(g==='A'?f.thA:f.thB),kgThung:thungOf(f.loai),ncc:n.name,nccCode:n.code,kg,price:pr,ship:Math.round(sh*kg/T),lot:base+'-'+g,xe:xeVal(f),at:Date.now()+(g==='B'?1:0)});if(!first){d2.people=0;d2.hours=0;d2.pot=0;d2.ot=0}first=false;await S.db.doc('mlog/'+newId(f.date)).set(d2)}
       if(n.fresh){const c=JSON.parse(JSON.stringify(cfg()));c.ncc.push({name:n.name,code:'',lot:n.lot,fresh:true,by:S.uid});try{await S.db.doc('mcfg/main').set(c)}catch(e){}}
       toast('✓ Đã lưu nhập chuối xanh A/B');S.form=null;S.tab='home';render();scrollTo(0,0)}
     catch(e){if(e&&e.code==='queued'){toast('⏳ Mạng yếu: đã giữ phiếu trên máy, app tự gửi lại');S.form=null;S.tab='home';render();return}btn.disabled=false;btn.textContent='Lưu';msg('Chưa lưu được: '+(e.message||'lỗi mạng')+'. Thử lại.')}return}
-  if(f.kind==='cnx'){const n=nccPick(f);if(!n.name)return msg('Chọn nhà cung cấp.');const kg=num(f.kg);if(kg<=0)return msg('Gõ số kg chuối xanh.');const price=num(f.price);if(price<=0&&!confirm('Chưa gõ giá nhập. Vẫn lưu (kế toán điền sau)?'))return;
+  if(f.kind==='cnx'){const n=nccPick(f);if(!n.name)return msg('Chọn nhà cung cấp.');const kg=num(f.kg);if(kg<=0)return msg('Gõ số thùng chuối xanh.');d.thung=num(f.th);d.kgThung=thungOf(f.loai);const price=num(f.price);if(price<=0&&!await ask('Chưa gõ giá nhập. Vẫn lưu (kế toán điền sau)?'))return;
     Object.assign(d,{ncc:n.name,nccCode:n.code,kg,price,ship:num(f.ship),lot:lotCode('CX'+(n.lot||'NCC'),f.date),xe:xeVal(f)});
     if(n.fresh){const c=JSON.parse(JSON.stringify(cfg()));c.ncc.push({name:n.name,code:'',lot:n.lot,fresh:true,by:S.uid});try{await S.db.doc('mcfg/main').set(c)}catch(e){}}}
-  else if(f.kind==='cvu'){const takes=[];for(const [id,v] of Object.entries(f.tk)){const kg=num(v);if(!kg)continue;const x=C.lotById.get(id);if(x&&kg>x.left+0.5&&!confirm(`Lô ${x.lot}: lấy ${fm(kg)} kg nhưng chỉ còn ${fm(x.left)} kg. Vẫn lưu?`))return;takes.push({id,lot:x?x.lot:'',kg})}
-    if(!takes.length)return msg('Gõ số kg lấy từ lô chuối xanh.');{const r=+f.room,bz=openBats(C).filter(b=>b.room===r),tk=takes.reduce((s,t)=>s+t.kg,0);if(bz.length&&!confirm(`Phòng ${r} đang có mẻ ${bz.map(b=>b.code).join(', ')} (còn ${fm(bz.reduce((s,b)=>s+b.left,0))} kg). Vẫn cho vào?`))return;if(tk>capOf(r)&&!confirm(`${fm(tk)} kg vượt sức chứa phòng ${r} (${fm(capOf(r))} kg). Vẫn lưu?`))return}Object.assign(d,{room:+f.room,gio:f.gio||'',code:batCode(f.date),takes,kg:r3(takes.reduce((s,t)=>s+t.kg,0))})}
-  else if(f.kind==='cloc'){const takes=[];for(const [b,v] of Object.entries(f.tk)){const kg=num(v);if(!kg)continue;const x=C.bat.get(b);if(x&&kg>x.left+0.5&&!confirm(`Mẻ ${x.code}: lấy ${fm(kg)} kg nhưng chỉ còn ${fm(x.left)} kg. Vẫn lưu?`))return;takes.push({b,kg})}
+  else if(f.kind==='cvu'){const takes=[];for(const [id,v] of Object.entries(f.tk)){const kg=num(v);if(!kg)continue;const x=C.lotById.get(id);if(x&&kg>x.left+0.5&&!await ask(`Lô ${x.lot}: lấy ${fm(kg)} kg nhưng chỉ còn ${fm(x.left)} kg. Vẫn lưu?`))return;takes.push({id,lot:x?x.lot:'',kg})}
+    if(!takes.length)return msg('Gõ số kg lấy từ lô chuối xanh.');{const r=+f.room,bz=openBats(C).filter(b=>b.room===r),tk=takes.reduce((s,t)=>s+t.kg,0);if(bz.length&&!await ask(`Phòng ${r} đang có mẻ ${bz.map(b=>b.code).join(', ')} (còn ${fm(bz.reduce((s,b)=>s+b.left,0))} kg). Vẫn cho vào?`))return;if(tk>capOf(r)&&!await ask(`${fm(tk)} kg vượt sức chứa phòng ${r} (${fm(capOf(r))} kg). Vẫn lưu?`))return}Object.assign(d,{room:+f.room,gio:f.gio||'',code:batCode(f.date),takes,kg:r3(takes.reduce((s,t)=>s+t.kg,0))})}
+  else if(f.kind==='cloc'){const takes=[];for(const [b,v] of Object.entries(f.tk)){const kg=num(v);if(!kg)continue;const x=C.bat.get(b);if(x&&kg>x.left+0.5&&!await ask(`Mẻ ${x.code}: lấy ${fm(kg)} kg nhưng chỉ còn ${fm(x.left)} kg. Vẫn lưu?`))return;takes.push({b,kg})}
     if(!takes.length)return msg('Gõ số kg lấy từ ít nhất 1 mẻ.');const outs=[];for(const [p,v] of Object.entries(f.o)){const q=num(v);if(!q)continue;outs.push({p,q,kg:r3(q*(prodOf(p).kg||1))})}
     const kgIn=r3(takes.reduce((s,t)=>s+t.kg,0)),kgOk=r3(outs.reduce((s,o)=>s+o.kg,0)),hong=num(f.hong);
     if(!outs.length&&!hong)return msg('Gõ kết quả lọc (số lượng từng sản phẩm, hỏng).');
-    if(kgOk+hong>kgIn*1.05&&!confirm(`Đạt + hỏng = ${fm(kgOk+hong)} kg lớn hơn số lấy ra ${fm(kgIn)} kg. Vẫn lưu?`))return;
+    if(kgOk+hong>kgIn*1.05&&!await ask(`Đạt + hỏng = ${fm(kgOk+hong)} kg lớn hơn số lấy ra ${fm(kgIn)} kg. Vẫn lưu?`))return;
     Object.assign(d,{dest:f.dest,takes,kgIn,outs,kgOk,hong})}
-  else if(f.kind==='cxuat'){const lines=[];for(const [p,v] of Object.entries(f.q)){const q=num(v);if(!q)continue;const have=C.tp.get(p)||0;if(q>have+1e-9&&!confirm(`${prodOf(p).name}: xuất ${fm(q)} nhưng chỉ có ${fm(have)}. Vẫn lưu?`))return;lines.push({p,q})}
+  else if(f.kind==='cxuat'){const lines=[];for(const [p,v] of Object.entries(f.q)){const q=num(v);if(!q)continue;const have=C.tp.get(p)||0;if(q>have+1e-9&&!await ask(`${prodOf(p).name}: xuất ${fm(q)} nhưng chỉ có ${fm(have)}. Vẫn lưu?`))return;lines.push({p,q})}
     if(!lines.length)return msg('Gõ số lượng xuất.');Object.assign(d,{dest:f.dest,lines,xe:xeVal(f)})}
-  if(ot&&!pot)return msg('Gõ số người tăng ca.');if(!people||!(hours||ot)){if(!confirm('Chưa ghi số người / tổng số giờ làm. Vẫn lưu?'))return}
+  if(ot&&!pot)return msg('Gõ số người tăng ca.');if(!people||!(hours||ot)){if(!await ask('Chưa ghi số người / tổng số giờ làm. Vẫn lưu?'))return}
   const btn=$('#fSave');btn.disabled=true;btn.textContent='Đang lưu…';
   try{await S.db.doc('mlog/'+newId(f.date)).set(d);toast('✓ Đã lưu '+KIND[f.kind].n.toLowerCase());const nx=f.kind==='cloc'&&d.outs.length?{lines:d.outs}:null;S.form=null;S.tab='home';
-    if(nx){const q={};for(const o of nx.lines)q[o.p]=String(o.q).replace('.',',');const dest=f.dest==='hn'?'hn':'win';if(confirm('Đã lưu lọc lựa. Mở luôn phiếu ④ Xuất hàng với số vừa lọc?'))return openFormCh('cxuat',{q,dest})}
+    if(nx){const q={};for(const o of nx.lines)q[o.p]=String(o.q).replace('.',',');const dest=f.dest==='win'?'win':'hn';if(await ask('Đã lưu lọc lựa. Mở luôn phiếu ④ Xuất hàng với số vừa lọc?'))return openFormCh('cxuat',{q,dest})}
     render();scrollTo(0,0)}
   catch(e){if(e&&e.code==='queued'){toast('⏳ Mạng yếu: đã giữ phiếu trên máy, app tự gửi lại');S.form=null;S.tab='home';render();return}btn.disabled=false;btn.textContent='Lưu';msg('Chưa lưu được: '+(e.message||'lỗi mạng')+'. Thử lại.')}}
 
 /* ---- v122: ⓪ Kế hoạch theo ngày giao (tổ trưởng nhập) ----
    mlog/KH<yyyy-mm-dd> {kind:'cplan',date:<ngày giao>,q:{pid:sl}}. Thực tế = phiếu ③ lọc ngày giao−1.
    Vào phòng ngày D phục vụ: mỗi mốc n trong marks → lọc D+n−1, giao D+n. */
-const grpOf=p=>p.g||(['twin','tgop','tgom'].includes(p.id)?'wg':'hn');
-const grpOfMark=m=>/win|go/i.test(m)?'wg':'hn';
+/* v125: nhóm giao – Winmart lọc chiều ngày 3, giao sáng ngày 4; khách khác lọc + xuất trong ngày 4 (ngày cuối). Kế hoạch theo ngày giao = ngày cuối của mẻ */
+const grpOf=p=>(p.g==='win'||p.id==='twin')?'win':'khac';
+const lagOf=p=>grpOf(p)==='win'?1:0; /* số ngày lọc trước ngày giao */
 const capOf=r=>{const c=chc().caps||{};return num(c[r])||(r===1?10000:5000)};
 function planKg(date,t,g,gr){const P=S.plans[date];if(!P)return 0;let s=0;for(const p of prods(t))if((!g||grpOf(p)===g)&&(!gr||grOf(p)===gr))s+=num((P.q||{})[p.id])*(p.kg||1);return r3(s)}
-function actualOuts(giao){const d=addDays(giao,-1),m={};for(const l of liveLogs())if(l.kind==='cloc'&&l.date===d)for(const o of l.outs||[])m[o.p]=(m[o.p]||0)+num(o.q);return m}
+function actualOuts(giao){const m={};for(const l of liveLogs())if(l.kind==='cloc')for(const o of l.outs||[]){const p=prodOf(o.p);if(l.date===addDays(giao,-lagOf(p)))m[o.p]=(m[o.p]||0)+num(o.q)}return m}
 function yieldOf(t){const T=chc().types[t]||{};if(num(T.yield)>0)return num(T.yield)/100;let a=0,b=0;const from=addDays(today(),-14);for(const l of liveLogs())if(l.kind==='cloc'&&l.loai===t&&l.date>=from&&num(l.kgOk)>0){a+=num(l.kgIn);b+=num(l.kgOk)}return a>50?b/a:0.88}
 function schedule(nDays){const C=calcCh(),c=chc(),out=[];const occ=[];
   for(const b of openBats(C)){const T=c.types[b.loai]||{days:4};occ.push({room:b.room,to:addDays(b.date,T.days-1)})}
   const green={};for(const t of Object.keys(c.types)){green[t]=r3((C.lots.get(t)||[]).reduce((s,x)=>s+Math.max(0,x.left),0));if(AB(t))for(const g of ['A','B'])green[t+g]=r3((C.lots.get(t)||[]).filter(x=>x.gr===g).reduce((s,x)=>s+Math.max(0,x.left),0))}
   for(let i=0;i<nDays;i++){const D=addDays(today(),i);
     for(const [t,T] of Object.entries(c.types)){let kg=0;const serve=[];
-      let kA=0,kB=0;for(const [n,m] of Object.entries(T.marks||{})){const giao=addDays(D,+n),k=planKg(giao,t,grpOfMark(m));if(k>0){kg+=k;serve.push(m+' giao '+dmy(giao));if(AB(t)){kA+=planKg(giao,t,grpOfMark(m),'A');kB+=planKg(giao,t,grpOfMark(m),'B')}}}
+      let kA=0,kB=0;{const giao=addDays(D,T.days-1),k=planKg(giao,t);if(k>0){kg=k;const w=planKg(giao,t,'win'),o=planKg(giao,t,'khac');if(w)serve.push('Win (lọc '+dmy(addDays(giao,-1))+')');if(o)serve.push('khách khác');serve.push('giao '+dmy(giao));if(AB(t)){kA=planKg(giao,t,null,'A');kB=planKg(giao,t,null,'B')}}}
       if(kg<=0)continue;const y=yieldOf(t);const need=Math.round(kg/y);
       const busy=new Set(occ.filter(o=>o.to>=D).map(o=>o.room));const free=[];for(let r=1;r<=c.rooms;r++)if(!busy.has(r))free.push(r);
       const fit=free.filter(r=>capOf(r)>=need).sort((a,b)=>capOf(a)-capOf(b));const room=fit[0]||null;
@@ -599,7 +610,7 @@ function schedule(nDays){const C=calcCh(),c=chc(),out=[];const occ=[];
       out.push({D,t,kgTP:kg,y,need,room,free:free.length,serve,have,buy:ab?ab.bA+ab.bB:Math.max(0,need-have),ab})}}
   return out}
 function viewPlan(v){const f=S.form,t=f.loai,P=S.plans[f.date],q=f.q,act=actualOuts(f.date),PR=prods(t);
-  const grp=g=>PR.filter(p=>grpOf(p)===g);const G=[['wg','Giao Win/GO'],['hn','Giao Hà Nội']].filter(([g])=>grp(g).length);
+  const grp=g=>PR.filter(p=>grpOf(p)===g);const G=[['win','Winmart – lọc chiều hôm trước, giao sáng'],['khac','Khách khác – lọc + xuất trong ngày']].filter(([g])=>grp(g).length);
   const kgP=p=>num(q[p.id])*(p.kg||1),kgA=p=>num(act[p.id])*(p.kg||1);
   const totP=r3(PR.reduce((s,p)=>s+kgP(p),0)),totA=r3(PR.reduce((s,p)=>s+kgA(p),0));
   const rows=G.map(([g,lab])=>`<div class="row" style="background:var(--sunk)"><div class="grow t" style="color:var(--accent)">${lab}</div></div>`+grp(g).map(p=>`<div class="row"><div class="grow"><div class="t">${esc(p.name)}${grOf(p)?' <span class="chip '+(grOf(p)==='A'?'g':'w')+'">'+grOf(p)+'</span>':''}</div><div class="s">${esc(p.u)}${p.u!=='kg'?' · '+String(p.kg).replace('.',',')+' kg':''}${p.note?' · '+esc(p.note):''}</div></div><input class="xq" data-pq="${esc(p.id)}" value="${esc(q[p.id]??'')}" inputmode="decimal" placeholder="KH"><div class="num" data-pk="${esc(p.id)}" style="width:72px;color:var(--accent);font-weight:700">${kgP(p)?fm(r3(kgP(p)),1):'—'}</div></div>`).join('')).join('');
@@ -609,7 +620,7 @@ function viewPlan(v){const f=S.form,t=f.loai,P=S.plans[f.date],q=f.q,act=actualO
   const hist=[];for(let i=-6;i<=0;i++){const g=addDays(today(),i),kp=planKg(g,t),a=actualOuts(g);const ka=r3(prods(t).reduce((s,p)=>s+num(a[p.id])*(p.kg||1),0));if(kp||ka)hist.push(`<tr><td>${dmy(g)}</td><td>${fm(kp,1)}</td><td>${fm(ka,1)}</td><td style="color:${ka-kp<0?'var(--bad)':'#1f7a45'};font-weight:700">${kp&&ka?(ka-kp>0?'+':'')+fm(ka-kp,1):'—'}</td></tr>`)}
   v.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><h1 class="big" style="margin:0"><span class="kn" style="background:#6b4fa3">0</span> Kế hoạch</h1><button class="btn sm" id="fX">✕ Đóng</button></div>
    <div class="opt" style="margin:10px 0 6px"><button id="dP">‹</button><button class="on" style="flex:3">Giao ${['CN','T2','T3','T4','T5','T6','T7'][new Date(f.date+'T00:00:00Z').getUTCDay()]} ${dmy(f.date)}</button><button id="dN">›</button></div>
-   <div class="auto">Lọc chiều <b>${dmy(addDays(f.date,-1))}</b> cho hàng giao ngày ${dmy(f.date)}. ${P?'Đã lưu kế hoạch lúc '+new Date(P.at).toLocaleString('vi-VN',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}):'Chưa có kế hoạch ngày này.'}</div>
+   <div class="auto">Giao ngày ${dmy(f.date)}: Winmart lọc chiều <b>${dmy(addDays(f.date,-1))}</b>, khách khác lọc + xuất trong ngày <b>${dmy(f.date)}</b>. ${P?'Đã lưu kế hoạch lúc '+new Date(P.at).toLocaleString('vi-VN',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}):'Chưa có kế hoạch ngày này.'}</div>
    <label class="f"><span class="lab">Loại chuối</span>${optB(f,'loai',Object.keys(chc().types).map(x=>[x,esc(tName(x))]))}</label>
    <div class="nchd" style="margin-right:12px;gap:22px"><span style="width:84px">Kế hoạch</span><span style="width:72px">Kg quy đổi</span></div>
    <div class="group">${rows}<div class="row" style="background:var(--sunk)"><div class="grow t">Cộng kg (quy đổi)</div><div class="num" style="width:84px"></div><div class="num" id="pTot" style="width:72px;font-weight:800;color:var(--accent)">${fm(totP,1)}</div></div>${AB(t)?['A','B'].map(g=>`<div class="row"><div class="grow t">trong đó loại ${g}</div><div class="num" style="width:84px"></div><div class="num" id="pT${g}" style="width:72px;font-weight:700">${fm(r3(PR.filter(p=>grOf(p)===g).reduce((s,p)=>s+kgP(p),0)),1)}</div></div>`).join(''):''}</div>
@@ -626,10 +637,10 @@ function viewPlan(v){const f=S.form,t=f.loai,P=S.plans[f.date],q=f.q,act=actualO
     try{await S.db.doc('mlog/KH'+f.date).set(d);S.plans[f.date]=d;toast('✓ Đã lưu kế hoạch giao '+dmy(f.date));render()}catch(e){if(e&&e.code==='queued'){S.plans[f.date]=d;toast('⏳ Mạng yếu: đã giữ trên máy, tự gửi lại');render()}else{b.disabled=false;b.textContent='Lưu kế hoạch';$('#fMsg').innerHTML='<div class="alert r">Chưa lưu được – thử lại.</div>'}}}}
 function openPlan(){const d=addDays(today(),1);S.form={kind:'ckh',date:d,loai:Object.keys(chc().types)[0],q:Object.assign({},(S.plans[d]||{}).q||{})};S.post=null;render();scrollTo(0,0)}
 function todayPlanHTML(){const S2=schedule(1).filter(x=>x.D===today()),tm=addDays(today(),1);const c=chc();
-  const lo=Object.keys(c.types).map(t=>{const wg=planKg(tm,t,'wg'),hn=planKg(tm,t,'hn');return wg||hn?esc(tName(t))+': '+(wg?'Win/GO '+fm(wg,1)+' kg ':'')+(hn?'Hà Nội '+fm(hn,1)+' kg':''):''}).filter(Boolean);
+  const td=today(),lo=Object.keys(c.types).map(t=>{const w=planKg(tm,t,'win'),o=planKg(td,t,'khac');return w||o?esc(tName(t))+': '+(w?'chiều lọc Win '+fm(w,1)+' kg (giao sáng '+dmy(tm)+') ':'')+(o?'· lọc + xuất khách khác '+fm(o,1)+' kg':''):''}).filter(Boolean);
   if(!S2.length&&!lo.length)return `<div class="row tap" id="kh0"><div class="grow"><div class="t">Chưa có kế hoạch</div><div class="s">Bấm ⓪ Kế hoạch để nhập số giao các ngày tới</div></div><span class="chev">›</span></div>`;
-  return S2.map(x=>`<div class="row"><div class="grow"><div class="t">🍌 Vào ${x.room?'<b>Phòng '+x.room+'</b>':'<span class="chip r">hết phòng</span>'}: ${esc(tName(x.t))} <b>${fm(x.need)} kg</b>${x.ab?' (A '+fm(x.ab.nA)+' · B '+fm(x.ab.nB)+')':''}</div><div class="s">phục vụ ${x.serve.map(esc).join(' + ')}${x.buy?' · <b style="color:var(--bad)">thiếu chuối xanh '+fm(x.buy)+' kg</b>':''}</div></div></div>`).join('')+
-    (lo.length?`<div class="row"><div class="grow"><div class="t">✂️ Chiều nay lọc cho giao ${dmy(tm)}</div><div class="s">${lo.join(' · ')}</div></div></div>`:'')}
+  return S2.map(x=>`<div class="row"><div class="grow"><div class="t">🍌 Vào ${x.room?'<b>Phòng '+x.room+'</b>':'<span class="chip r">hết phòng</span>'}: ${esc(tName(x.t))} <b>${fm(x.need)} kg</b>${x.ab?' (A '+fm(x.ab.nA)+' · B '+fm(x.ab.nB)+')':''}</div><div class="s">phục vụ ${x.serve.map(esc).join(' · ')}${x.buy?' · <b style="color:var(--bad)">thiếu chuối xanh '+fm(x.buy)+' kg</b>':''}</div></div></div>`).join('')+
+    (lo.length?`<div class="row"><div class="grow"><div class="t">✂️ Lọc hôm nay</div><div class="s">${lo.join(' · ')}</div></div></div>`:'')}
 
 /* ---- Quản lý: cài đặt xưởng chuối ---- */
 function viewDMCh(v){const c=chc();
@@ -639,7 +650,8 @@ function viewDMCh(v){const c=chc();
     <div class="row"><div class="grow"><div class="t">Đơn giá 1 công (đ)</div></div><input class="dmin" id="cRate" value="${fm(c.dm.rate)}" inputmode="decimal"></div>
     <div class="row"><div class="grow"><div class="t">Chi phí khác (đ / kg đạt)</div><div class="s">điện phòng lạnh, Ethylene, khấu hao… theo định mức</div></div><input class="dmin" id="cKh" value="${fm(c.dm.khac)}" inputmode="decimal"></div></div>
    ${Object.entries(c.types).map(([t,T])=>`<div class="sec">${esc(T.name)}</div><div class="group"><div class="row"><div class="grow t">Số ngày ủ</div><input class="dmin" data-td="${t}" value="${T.days}" inputmode="numeric"></div>
-    <div class="row"><div class="grow"><div class="t">Ngày lọc</div><div class="s">dạng 3:Win/GO, 4:Hà Nội</div></div><input data-tm="${t}" value="${esc(Object.entries(T.marks||{}).map(([n,m])=>n+':'+m).join(', '))}" style="width:150px"></div>
+    <div class="row"><div class="grow t">Kg / thùng chuối xanh</div><input class="dmin" data-tt="${t}" value="${fm(thungOf(t))}" inputmode="decimal"></div>
+    <div class="row"><div class="grow"><div class="t">Ngày lọc</div><div class="s">ngày lọc, dạng 3:Win, 4:Khách khác</div></div><input data-tm="${t}" value="${esc(Object.entries(T.marks||{}).map(([n,m])=>n+':'+m).join(', '))}" style="width:150px"></div>
     <div class="row"><div class="grow"><div class="t">Tỷ lệ đạt dùng cho kế hoạch (%)</div><div class="s">để trống = theo thực tế 14 ngày (${fm(yieldOf(t)*100,1)}%)</div></div><input class="dmin" data-ty="${t}" value="${T.yield?String(T.yield).replace('.',','):''}" inputmode="decimal"></div>
     <div class="row"><div class="grow t">Định mức công / 100 kg đạt</div><input class="dmin" data-tc="${t}" value="${String(T.cong100||0).replace('.',',')}" inputmode="decimal"></div></div>`).join('')}
    <div class="sec">Danh mục sản phẩm sau lọc</div><div class="tiny muted" style="margin:0 4px 6px">ĐVT kg hoặc gói · kg/ĐVT dùng quy đổi ra kg · túi tem (đ/ĐVT) cộng vào giá thành.</div>
@@ -647,8 +659,8 @@ function viewDMCh(v){const c=chc();
    <div class="grid2"><input id="pN" placeholder="Tên sản phẩm mới"><button class="btn" id="pAdd2">＋ Thêm</button></div>
    <label class="f" style="margin-top:12px"><span class="lab">Tài khoản mở thẳng Xưởng chuối (họ tên, cách nhau dấu phẩy)</span><input id="cU" value="${esc((c.users||[]).join(', '))}"></label>
    <button class="btn block pri" id="cSave">Lưu cài đặt</button>`;
-  const collect=()=>{const c2=JSON.parse(JSON.stringify(c));c2.rooms=Math.max(1,Math.round(num($('#cR').value))||4);c2.dm={rate:num($('#cRate').value),khac:num($('#cKh').value)};c2.users=$('#cU').value.split(',').map(s=>s.trim()).filter(Boolean);c2.v122=1;const cp=$('#cCap').value.split(',').map(x=>num(x));c2.caps={};for(let i=1;i<=c2.rooms;i++)c2.caps[i]=cp[i-1]||(i===1?10000:5000);
-    for(const t of Object.keys(c2.types)){c2.types[t].days=Math.max(1,Math.round(num($(`[data-td="${t}"]`).value))||c2.types[t].days);c2.types[t].cong100=num($(`[data-tc="${t}"]`).value);c2.types[t].yield=num($(`[data-ty="${t}"]`).value);const mk={};$(`[data-tm="${t}"]`).value.split(',').forEach(x=>{const m=x.split(':');const n=Math.round(num(m[0]));if(n&&m[1])mk[n]=m.slice(1).join(':').trim()});c2.types[t].marks=mk}
+  const collect=()=>{const c2=JSON.parse(JSON.stringify(c));c2.rooms=Math.max(1,Math.round(num($('#cR').value))||4);c2.dm={rate:num($('#cRate').value),khac:num($('#cKh').value)};c2.users=$('#cU').value.split(',').map(s=>s.trim()).filter(Boolean);c2.v122=1;c2.v125=1;const cp=$('#cCap').value.split(',').map(x=>num(x));c2.caps={};for(let i=1;i<=c2.rooms;i++)c2.caps[i]=cp[i-1]||(i===1?10000:5000);
+    for(const t of Object.keys(c2.types)){c2.types[t].days=Math.max(1,Math.round(num($(`[data-td="${t}"]`).value))||c2.types[t].days);c2.types[t].cong100=num($(`[data-tc="${t}"]`).value);c2.types[t].yield=num($(`[data-ty="${t}"]`).value);c2.types[t].thung=num($(`[data-tt="${t}"]`).value)||thungOf(t);const mk={};$(`[data-tm="${t}"]`).value.split(',').forEach(x=>{const m=x.split(':');const n=Math.round(num(m[0]));if(n&&m[1])mk[n]=m.slice(1).join(':').trim()});c2.types[t].marks=mk}
     $$('[data-pi]').forEach(el=>{const p=c2.prods[+el.dataset.pi],k=el.dataset.pk;if(k==='active')p.active=el.checked;else if(k==='kg')p.kg=num(el.value)||1;else if(k==='bb')p.bb=num(el.value);else p[k]=el.value});return c2};
   const save=async(c2,m)=>{const all=JSON.parse(JSON.stringify(cfg()));all.ch=c2;try{await S.db.doc('mcfg/main').set(all);S.cfg=all;toast(m||'✓ Đã lưu');render()}catch(e){toast('Chưa lưu được')}};
   $('#cSave').onclick=()=>save(collect());
