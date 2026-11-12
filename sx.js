@@ -39,18 +39,18 @@ const isCh=l=>CORDER.includes(l.kind);
 const DEST={hn:'Kho Hà Nội',dong:'Kho đông thuê',mau:'Hàng mẫu'};
 
 /* Định mức ban đầu: tính từ file "GIÁ THÀNH CHUNG NĂM 2026.xlsx" ngày 11/11/2026 (Quản lý sửa ở tab Định mức) */
-const DM0={tl:0,cong100:0,rate:180000,baoBi:0,dienGa:0,kh:0,thung:0,guiKho:0};
-const DEFAULT_CFG={v:3,gioCong:8,
+const DM0={tl:0,cong100:0,rate:180000,baoBi:0,dienGa:0,kh:0,thung:1000,guiKho:0};
+const DEFAULT_CFG={v:4,gioCong:8,
   /* Nguyên liệu (gộp): mọi loại dứa đều là "Dứa" */
   nvls:[{id:'mia',name:'Mía'},{id:'dua',name:'Dứa'},{id:'sau',name:'Sấu'},{id:'ksq',name:'Khoai sọ'},{id:'kmo',name:'Khoai môn'},{id:'docm',name:'Dọc mùng'},{id:'bo',name:'Bơ'},{id:'xoai',name:'Xoài'},{id:'mcau',name:'Mãng cầu'},{id:'cleo',name:'Chanh leo'},{id:'daut',name:'Dâu tây'},{id:'ot',name:'Ớt'},{id:'san',name:'Sắn'},{id:'chuoi',name:'Chuối tây'},{id:'csen',name:'Củ sen'},{id:'ctu',name:'Củ từ'}],
   /* Thành phẩm: mỗi dòng gắn 1 nguyên liệu, định mức + quy cách riêng (theo file Giá thành chung) */
   items:[
-    {id:'mia',name:'Mía',nvl:'mia',bich:false,packs:[[300,'g']],dm:{tl:34.6,cong100:6.21,rate:180000,baoBi:817,dienGa:1000,kh:200,thung:1500,guiKho:0},src:'41 mẻ 01/10–10/11/2026'},
-    {id:'duam',name:'Dứa mát',nvl:'dua',bich:false,packs:[[250,'g']],dm:{tl:44.0,cong100:5.95,rate:180000,baoBi:915,dienGa:1136,kh:200,thung:1708,guiKho:0},src:'43 mẻ 01/10–02/11/2026'},
+    {id:'mia',name:'Mía',nvl:'mia',bich:false,packs:[[300,'g']],dm:{tl:34.6,cong100:6.21,rate:180000,baoBi:817,dienGa:1000,kh:200,thung:1000,guiKho:0},src:'41 mẻ 01/10–10/11/2026'},
+    {id:'duam',name:'Dứa mát',nvl:'dua',bich:false,packs:[[250,'g']],dm:{tl:44.0,cong100:5.95,rate:180000,baoBi:915,dienGa:1136,kh:200,thung:1000,guiKho:0},src:'43 mẻ 01/10–02/11/2026'},
     {id:'duanc',name:'Dứa nguyên chất 1,5kg',nvl:'dua',bich:true,packs:[[1.5,'kg']],dm:Object.assign({},DM0),src:'chưa có định mức – Quản lý nhập'},
-    {id:'sau',name:'Sấu',nvl:'sau',bich:true,packs:[[300,'g'],[500,'g'],[1,'kg']],dm:{tl:0,cong100:0.93,rate:180000,baoBi:0,dienGa:200,kh:500,thung:2000,guiKho:4440},src:'công khoán 1.667 đ/kg TP; chưa đủ số liệu tỷ lệ'},
-    {id:'ksq',name:'Khoai sọ',nvl:'ksq',bich:true,packs:[[300,'g'],[1,'kg']],dm:{tl:57.5,cong100:3.58,rate:180000,baoBi:1482,dienGa:870,kh:200,thung:2000,guiKho:2700},src:'16 mẻ năm 2026'},
-    {id:'kmo',name:'Khoai môn',nvl:'kmo',bich:true,packs:[[250,'g'],[1,'kg']],dm:{tl:72.4,cong100:2.53,rate:160000,baoBi:1482,dienGa:691,kh:500,thung:2000,guiKho:2700},src:'6 mẻ năm 2026'},
+    {id:'sau',name:'Sấu',nvl:'sau',bich:true,packs:[[300,'g'],[500,'g'],[1,'kg']],dm:{tl:0,cong100:0.93,rate:180000,baoBi:0,dienGa:200,kh:500,thung:1000,guiKho:4440},src:'công khoán 1.667 đ/kg TP; chưa đủ số liệu tỷ lệ'},
+    {id:'ksq',name:'Khoai sọ',nvl:'ksq',bich:true,packs:[[300,'g'],[1,'kg']],dm:{tl:57.5,cong100:3.58,rate:180000,baoBi:1482,dienGa:870,kh:200,thung:1000,guiKho:2700},src:'16 mẻ năm 2026'},
+    {id:'kmo',name:'Khoai môn',nvl:'kmo',bich:true,packs:[[250,'g'],[1,'kg']],dm:{tl:72.4,cong100:2.53,rate:160000,baoBi:1482,dienGa:691,kh:500,thung:1000,guiKho:2700},src:'6 mẻ năm 2026'},
     {id:'docm',name:'Dọc mùng',nvl:'docm',bich:true,packs:[[200,'g'],[1,'kg']],dm:Object.assign({},DM0),src:'chưa có định mức – Quản lý nhập'},
     {id:'bo',name:'Bơ',nvl:'bo',bich:true,packs:[[1,'kg']],dm:Object.assign({},DM0),src:'chưa có định mức – Quản lý nhập'},
     {id:'xoai',name:'Xoài',nvl:'xoai',bich:true,packs:[[1,'kg']],dm:Object.assign({},DM0),src:'chưa có định mức – Quản lý nhập'},
@@ -133,6 +133,8 @@ const vtc=()=>cfg().vt||VT0;
 /* v136: đơn giá vật tư (đ / ĐVT) – BQ cuối kỳ sheet "BC Nhà máy", thiếu thì lấy đơn giá tồn đầu "Danh mục VT". Quản lý sửa → mcfg/main.vtGia */
 const VTGIA0={"VT001": 213.0, "VT002": 985.0, "VT003": 985.0, "VT005": 538.0, "VT006": 538.0, "VT007": 280.0, "VT008": 985.0, "VT009": 155.0, "VT010": 225.0, "VT011": 285.0, "VT012": 840.0, "VT013": 620.0, "VT014": 985.0, "VT015": 985.0, "VT034": 556.0, "VT016": 110000.0, "VT017": 110000.0, "VT018": 110000.0, "VT019": 70000.0, "VT020": 70000.0, "VT021": 71000.0, "VT022": 71000.0, "VT023": 70000.0, "VT024": 70000.0, "VT025": 3100.0, "VT026": 1350.0, "VT027": 80000.0, "VT028": 50000.0, "VT029": 123370.0, "VT030": 123370.0, "VT031": 123370.0, "VT032": 157407.03, "VT033": 157407.05, "VT035": 25000.0, "VT038": 40300.0, "VT039": 46295.85, "VT040": 61.0, "VT041": 112.0, "VT042": 510.0, "VT044": 46296.0, "VT045": 152000.0, "VT046": 34260.0, "VT047": 35000.0, "VT048": 13000.0, "VT049": 12350.0, "VT051": 13000.0, "VT037": 13000.0, "VT053": 605.0, "VT054": 605.0};
 const vtGia=ma=>{const g=(cfg().vtGia||{})[ma];return g!=null?num(g):VTGIA0[ma]};
+/* v139: thùng xốp VT037 là chi phí bán hàng ngoài kho – không đưa vào giá thành (vẫn đề xuất chuẩn bị) */
+const VT_NOCOST={VT037:1};
 const vtUnitCost=ma=>{const g=vtGia(ma);if(g==null)return null;const c=vtc().cat[ma]||{};return /^kg$/i.test((c.u||'').trim())&&c.pk?g/c.pk:g};
 const vtName=ma=>{const c=vtc().cat[ma];return c?c.n:ma};
 function vtNeed(it,rows){const V=vtc(),need=new Map(),add=(ma,q)=>need.set(ma,(need.get(ma)||0)+q);let box=0;
@@ -414,7 +416,7 @@ function reportHTML(D){const T=(h,rows,tot,cls)=>`<table${cls?' class="'+cls+'"'
   // V
   const tn=D.tonNvl.map(x=>`<tr>${td('Nguyên liệu')}${td(esc(x.name))}${td(esc(x.lot))}${td('',1)}${td(N(x.kg,1),1)}</tr>`).concat(D.tonKd.map(x=>`<tr>${td('Kho đông thuê')}${td(esc(x.name))}${td(x.since?'gửi từ '+dmyY(x.since):'')}${td(x.bags?N(x.bags)+' bịch':'',1)}${td(N(x.kg,1),1)}</tr>`)).concat(D.tonTp.map(x=>`<tr>${td('Thành phẩm')}${td(esc(x.name))}${td(esc(x.qc))}${td(N(x.q)+' gói',1)}${td(N(x.kg,1),1)}</tr>`));
   // VI giá thành (Quản lý)
-  let gt='';if(D.gt){const g=D.gt.filter(x=>x.kgTP);gt=`<h2>VI. GIÁ THÀNH THỰC TẾ <small>(chỉ Quản lý xem) · Đơn vị tính: đồng</small></h2>`+T(['STT','Sản phẩm','Kg TP','Nguyên liệu','Nhân công','Vật tư bao bì, thùng','Chi phí khác','Tổng chi phí','Giá/kg TP'],
+  let gt='';if(D.gt){const g=D.gt.filter(x=>x.kgTP);gt=`<h2>VI. GIÁ THÀNH THỰC TẾ <small>(chỉ Quản lý xem) · Đơn vị tính: đồng</small></h2>`+T(['STT','Sản phẩm','Kg TP','Nguyên liệu','Nhân công','Vật tư bao bì','Chi phí khác','Tổng chi phí','Giá/kg TP'],
     g.map((x,i)=>`<tr>${td(i+1)}${td(esc(itemOf(x.id).name))}${td(N(x.kgTP,1),1)}${td(N(x.nvl),1)}${td(N(x.lab),1)}${td(N(x.bb),1)}${td(N(x.oth),1)}${td('<b>'+N(x.tot)+'</b>',1)}${td(N(x.perKg),1)}</tr>`),
     g.length?`<tr><td colspan="2">TỔNG CỘNG</td>${td(N(g.reduce((s,x)=>s+x.kgTP,0),1),1)}${['nvl','lab','bb','oth','tot'].map(k=>td(N(g.reduce((s,x)=>s+x[k],0)),1)).join('')}<td></td></tr>`:'')+`<p class="nt">Giá/kg TP gồm đủ chi phí, vật tư tính theo số gói thực tế × định mức VT × đơn giá BQ. Nhân công tính giờ tăng ca × ${fm(otK(),2)}; chi phí khác (điện, gas, khấu hao, vận chuyển, gửi kho) theo định mức. Lô nguyên liệu chưa có giá thì giá thành còn thiếu.</p>`}
   return `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Báo cáo sản xuất ${D.from} – ${D.to}</title>
@@ -446,7 +448,7 @@ function reportXlsx(D){if(!window.XLSX)return toast('Chưa tải được thư v
   sh('Nhân công',['Sản phẩm','Giờ chính thức','Giờ tăng ca','Tổng công','Công/100kg thực tế','Công/100kg định mức'],D.prod.map(x=>[x.name,x.h,x.ho,Math.round(x.cong*100)/100,x.c100==null?'':Math.round(x.c100*100)/100,x.c100Dm||'']).concat([[],['Theo công đoạn','Số phiếu','Số người chính thức','Giờ chính thức','Số người tăng ca','Giờ tăng ca','Tổng công']]).concat([...D.S5.entries()].filter(([k,v])=>v.n).map(([k,v])=>[KIND[k].n,v.n,v.people,v.h,v.pot,v.ho,Math.round((v.h+v.ho)/D.gc*100)/100])));
   sh('Xuất hàng',['Ngày','Nơi nhận','Xe','Sản phẩm','Quy cách','Số gói','Số kg'],D.xuat.map(x=>[dmyY(x.date),x.dest,x.xe,x.name,x.qc,x.q==null?'':x.q,x.kg]));
   sh('Tồn cuối',['Loại','Tên','Lô / quy cách','Số lượng','Số kg'],D.tonNvl.map(x=>['Nguyên liệu',x.name,x.lot,'',x.kg]).concat(D.tonKd.map(x=>['Kho đông thuê',x.name,x.since?'gửi từ '+dmyY(x.since):'',x.bags?x.bags+' bịch':'',x.kg])).concat(D.tonTp.map(x=>['Thành phẩm',x.name,x.qc,x.q+' gói',x.kg])));
-  if(D.gt)sh('Giá thành',['Sản phẩm','Kg TP','Nguyên liệu','Nhân công','Vật tư bao bì thùng','Chi phí khác','Tổng chi phí','Giá/kg TP (đủ chi phí)'],D.gt.filter(x=>x.kgTP).map(x=>[itemOf(x.id).name,r3(x.kgTP),Math.round(x.nvl),Math.round(x.lab),Math.round(x.bb),Math.round(x.oth),Math.round(x.tot),Math.round(x.perKg)]));
+  if(D.gt)sh('Giá thành',['Sản phẩm','Kg TP','Nguyên liệu','Nhân công','Vật tư bao bì','Chi phí khác','Tổng chi phí','Giá/kg TP (đủ chi phí)'],D.gt.filter(x=>x.kgTP).map(x=>[itemOf(x.id).name,r3(x.kgTP),Math.round(x.nvl),Math.round(x.lab),Math.round(x.bb),Math.round(x.oth),Math.round(x.tot),Math.round(x.perKg)]));
   XLSX.writeFile(wb,`Bao cao san xuat ${D.from} den ${D.to}.xlsx`)}
 let LOGO64='';
 async function logo64(){if(LOGO64)return LOGO64;try{const b=await (await fetch('logo2.png')).blob();LOGO64=await new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)})}catch(e){}return LOGO64}
@@ -467,7 +469,7 @@ function viewNC(v){const d=S.ui.ncDate||today();const ch=xw()==='ch';const L=mod
   const sv=$('#ncSave');if(sv)sv.onclick=async()=>{let n=0;for(const l of L){const p=num($(`[data-nid="${l.id}"][data-nk="people"]`).value),h=num($(`[data-nid="${l.id}"][data-nk="hours"]`).value),o=num($(`[data-nid="${l.id}"][data-nk="ot"]`).value),po=num($(`[data-nid="${l.id}"][data-nk="pot"]`).value);if(p!==num(l.people)||h!==HW(l)||o!==HO(l)||po!==num(l.pot)){n++;const nw={people:p,hours:h,pot:po,ot:o,hv:2};await S.db.doc('mlog/'+l.id).update({...nw,edits:(l.edits||[]).concat([{by:S.uid,at:Date.now(),what:'công '+hTxt(l)+' → '+hTxt(nw)}])})}}toast(n?'✓ Đã lưu '+n+' dòng':'Không có thay đổi')}}
 
 /* ---------------- QUẢN LÝ: ĐỊNH MỨC ---------------- */
-const DMF=[['tl','Tỷ lệ thành phẩm (%)','kg TP / kg nguyên liệu'],['cong100','Nhân công (công / 100 kg TP)',''],['rate','Đơn giá 1 công (đ)',''],['baoBi','Túi + tem + hộp… (đ / gói)','chỉ dùng cho quy cách chưa có định mức vật tư'],['dien','Điện (đ / kg TP)',''],['gas','Gas (đ / kg TP)',''],['kh','Khấu hao TSCĐ (đ / kg TP)',''],['thung','Vận chuyển (đ / kg TP)','thùng xốp đã tính trong vật tư'],['guiKho','Gửi kho đông (đ / kg TP)','định mức như file giá thành']];
+const DMF=[['tl','Tỷ lệ thành phẩm (%)','kg TP / kg nguyên liệu'],['cong100','Nhân công (công / 100 kg TP)',''],['rate','Đơn giá 1 công (đ)',''],['baoBi','Túi + tem + hộp… (đ / gói)','chỉ dùng cho quy cách chưa có định mức vật tư'],['dien','Điện (đ / kg TP)',''],['gas','Gas (đ / kg TP)',''],['kh','Khấu hao TSCĐ (đ / kg TP)',''],['thung','Vận chuyển nhà máy → kho (đ / kg TP)','thùng xốp tính vào chi phí bán hàng, không vào giá thành'],['guiKho','Gửi kho đông (đ / kg TP)','định mức như file giá thành']];
 function vtDMHTML(it){const V=vtc(),P=(it.packs||[]).map(p=>gOf(p[0],p[1])).filter(g=>V.sp[it.id+'|'+g]);if(!P.length)return '';
   const opts=Object.entries(V.cat).map(([k,c])=>`<option value="${k}">${k} · ${esc(c.n)}</option>`).join('');
   return `<div class="sec">Định mức vật tư / 1 gói (theo sheet Định mức VT theo SP)</div>`+P.map(g=>{const k=it.id+'|'+g,sp=V.sp[k];return `<div class="group"><div class="row"><div class="grow"><div class="t">Gói ${packLabel(g)} <span class="chip">${esc(sp.c||'')}</span></div><div class="s">Số gói / thùng</div></div><input class="dmin" data-vb="${k}" value="${sp.b||PERBOX[k]||''}" inputmode="numeric"></div>
@@ -506,7 +508,7 @@ function viewDM(v){const c=cfg();const id=S.ui.dmItem&&c.items.some(i=>i.id===S.
   $$('[data-nrm]').forEach(b=>b.onclick=async()=>{if(!await ask('Bỏ nhà cung cấp này khỏi danh sách chọn?'))return;const c2=JSON.parse(JSON.stringify(c));c2.ncc.splice(+b.dataset.nrm,1);saveCfg(c2)});
   $('#nAdd').onclick=()=>{const n=$('#nN').value.trim();if(!n)return toast('Gõ tên nhà cung cấp');const c2=JSON.parse(JSON.stringify(c));c2.ncc.push({name:n,code:$('#nC').value.trim(),lot:autoCode(n)});saveCfg(c2,'✓ Đã thêm nhà cung cấp')};
   $('#vAdd').onclick=()=>{const n=$('#vN').value.trim();if(!n)return toast('Gõ tên nguyên liệu');const c2=JSON.parse(JSON.stringify(c));c2.nvls=c2.nvls||[];const nid='v'+noAcc(n).replace(/[^a-z0-9]/g,'').slice(0,8)+Date.now().toString(36).slice(-3);c2.nvls.push({id:nid,name:n});saveCfg(c2,'✓ Đã thêm nguyên liệu '+n)};
-  $('#iAdd').onclick=()=>{const n=$('#iN').value.trim();if(!n)return toast('Gõ tên mặt hàng');const c2=JSON.parse(JSON.stringify(c));const nid=noAcc(n).replace(/[^a-z0-9]/g,'').slice(0,8)+Date.now().toString(36).slice(-3);c2.items.push({id:nid,name:n,nvl:$('#dmV').value,bich:false,packs:[],dm:{tl:0,cong100:0,rate:180000,baoBi:0,dienGa:0,kh:0,thung:0,guiKho:0},src:'thêm mới'});S.ui.dmItem=nid;saveCfg(c2,'✓ Đã thêm '+n)}}
+  $('#iAdd').onclick=()=>{const n=$('#iN').value.trim();if(!n)return toast('Gõ tên mặt hàng');const c2=JSON.parse(JSON.stringify(c));const nid=noAcc(n).replace(/[^a-z0-9]/g,'').slice(0,8)+Date.now().toString(36).slice(-3);c2.items.push({id:nid,name:n,nvl:$('#dmV').value,bich:false,packs:[],dm:{tl:0,cong100:0,rate:180000,baoBi:0,dienGa:0,kh:0,thung:1000,guiKho:0},src:'thêm mới'});S.ui.dmItem=nid;saveCfg(c2,'✓ Đã thêm '+n)}}
 
 /* ---------------- QUẢN LÝ: GIÁ THÀNH ---------------- */
 function costs(from,to){const C=calc(),gc=cfg().gioCong||8;const L=liveLogs().filter(l=>!isCh(l)&&l.date>=from&&l.date<=to);const R=new Map();
@@ -519,13 +521,13 @@ function costs(from,to){const C=calc(),gc=cfg().gioCong||8;const L=liveLogs().fi
       for(const p of l.packs||[])if(!vtc().sp[it.id+'|'+p.g])x.noVt=(x.noVt||0)+num(p.q)}}
   const totKg=[...R.values()].reduce((s,x)=>s+x.kgTP,0);
   for(const x of R.values()){const dm=itemOf(x.id).dm||{};x.h+=totKg?xh*x.kgTP/totKg:0;x.cong=x.h/gc;x.lab=x.cong*(dm.rate||0);
-    x.vt=[];x.bb=0;x.vtMiss=[];for(const [ma,q] of x.vtq||[]){const u=vtUnitCost(ma);if(u==null){x.vtMiss.push(ma);continue}const t=q*u;x.vt.push({ma,q,u,t});x.bb+=t}
+    x.vt=[];x.bb=0;x.vtMiss=[];for(const [ma,q] of x.vtq||[]){if(VT_NOCOST[ma])continue;const u=vtUnitCost(ma);if(u==null){x.vtMiss.push(ma);continue}const t=q*u;x.vt.push({ma,q,u,t});x.bb+=t}
     if(x.noVt)x.bb+=x.noVt*(dm.baoBi||0);
     x.split=dm.dien!=null||dm.gas!=null;x.ot={dien:x.kgTP*(x.split?num(dm.dien):(dm.dienGa||0)),gas:x.split?x.kgTP*num(dm.gas):0,kh:x.kgTP*(dm.kh||0),thung:x.kgTP*(dm.thung||0),guiKho:x.kgTP*(dm.guiKho||0)};x.oth=x.ot.dien+x.ot.gas+x.ot.kh+x.ot.thung+x.ot.guiKho;
     x.tot=x.nvl+x.lab+x.bb+x.oth;x.perKg=x.kgTP?x.tot/x.kgTP:0;x.perKg0=x.kgTP?(x.tot-x.bb)/x.kgTP:0;x.dmNvl=dm.tl?x.kgTP*100/dm.tl:null;x.dmCong=dm.cong100?x.kgTP*dm.cong100/100:null;x.dm=dm}
   return [...R.values()].filter(x=>x.kgIn||x.kgTP||x.h)}
 function packVt(it,g){const V=vtc(),sp=V.sp[it.id+'|'+g];if(!sp)return null;let t=0;for(const [ma,dm] of sp.m){const u=vtUnitCost(ma);if(u!=null)t+=dm*u}
-  const b=sp.b||PERBOX[it.id+'|'+g];if(b)for(const [ma,dm] of V.thung||[]){const u=vtUnitCost(ma);if(u!=null)t+=dm*u/b}return t}
+  const b=sp.b||PERBOX[it.id+'|'+g];if(b)for(const [ma,dm] of V.thung||[]){if(VT_NOCOST[ma])continue;const u=vtUnitCost(ma);if(u!=null)t+=dm*u/b}return t}
 function viewGT(v){const to=S.ui.gtTo||today(),from=S.ui.gtFrom||today().slice(0,8)+'01';const X=costs(from,to);
   const P=(a,t)=>t?` <span class="muted">${fm(a/t*100,1)}%</span>`:'';
   const card=x=>{const it=itemOf(x.id),dm=x.dm;const open=S.ui.gtOpen===x.id;
@@ -539,7 +541,7 @@ function viewGT(v){const to=S.ui.gtTo||today(),from=S.ui.gtFrom||today().slice(0
      <table class="gt gtc"><tr><th>Khoản chi phí</th><th>Số tiền (đ)</th></tr>
       <tr><td>1. Nguyên liệu${x.nvlMiss?` <span class="chip r">${fm(x.nvlMiss)} kg chưa có giá</span>`:''}${P(x.nvl,x.tot)}</td><td>${fm(x.nvl)}</td></tr>
       <tr><td>2. Nhân công <span class="muted">${fm(x.h)} giờ</span>${P(x.lab,x.tot)}</td><td>${fm(x.lab)}</td></tr>
-      <tr><td><a class="lnk" data-gto="${x.id}">${open?'▾':'▸'} 3. Vật tư bao bì, thùng</a> <span class="muted">${x.box?fm(x.box)+' thùng':''}</span>${P(x.bb,x.tot)}${x.vtMiss.length?` <span class="chip r">${x.vtMiss.length} VT chưa có giá</span>`:''}</td><td>${fm(x.bb)}</td></tr>
+      <tr><td><a class="lnk" data-gto="${x.id}">${open?'▾':'▸'} 3. Vật tư bao bì</a> <span class="muted">${x.box?fm(x.box)+' thùng':''}</span>${P(x.bb,x.tot)}${x.vtMiss.length?` <span class="chip r">${x.vtMiss.length} VT chưa có giá</span>`:''}</td><td>${fm(x.bb)}</td></tr>
       ${open?vtRows+(x.noVt?`<tr class="sub" style="font-size:13.5px;background:var(--card2,#f4f8fb)"><td style="padding-left:22px">Quy cách chưa có định mức VT: ${fm(x.noVt)} gói × ${fm(dm.baoBi||0)} đ</td><td>${fm(x.noVt*(dm.baoBi||0))}</td></tr>`:''):''}
       ${x.split?`<tr><td>4. Điện <span class="muted">${fm(num(dm.dien))} đ/kg</span>${P(x.ot.dien,x.tot)}</td><td>${fm(x.ot.dien)}</td></tr>
       <tr><td>5. Gas <span class="muted">${fm(num(dm.gas))} đ/kg</span>${P(x.ot.gas,x.tot)}</td><td>${fm(x.ot.gas)}</td></tr>`:`<tr><td>4–5. Điện + gas <span class="chip">chưa tách</span> <span class="muted">${fm(dm.dienGa||0)} đ/kg</span>${P(x.ot.dien,x.tot)}</td><td>${fm(x.ot.dien)}</td></tr>`}
@@ -554,7 +556,7 @@ function viewGT(v){const to=S.ui.gtTo||today(),from=S.ui.gtFrom||today().slice(0
   $$('[data-gto]').forEach(a=>a.onclick=()=>{S.ui.gtOpen=S.ui.gtOpen===a.dataset.gto?null:a.dataset.gto;render()});
   const gx=$('#gX');if(gx)gx.onclick=()=>exportXlsx(from,to,X)}
 function exportXlsx(from,to,X){if(!window.XLSX)return toast('Chưa tải được thư viện Excel – thử lại');const wb=XLSX.utils.book_new();
-  const a=[['Mặt hàng','Kg NVL','Kg TP','Tỷ lệ TP %','ĐM tỷ lệ %','Giờ công','Công','ĐM công','CP nguyên liệu','Kg NVL chưa có giá','CP nhân công','Vật tư bao bì thùng','Điện ga KH thùng gửi kho','Tổng CP','Giá/kg TP (đủ chi phí)']];
+  const a=[['Mặt hàng','Kg NVL','Kg TP','Tỷ lệ TP %','ĐM tỷ lệ %','Giờ công','Công','ĐM công','CP nguyên liệu','Kg NVL chưa có giá','CP nhân công','Vật tư bao bì','Điện ga KH thùng gửi kho','Tổng CP','Giá/kg TP (đủ chi phí)']];
   for(const x of X)a.push([itemOf(x.id).name,r3(x.kgIn),r3(x.kgTP),x.kgIn?r3(x.kgTP/x.kgIn*100):'',x.dm.tl||'',r3(x.h),r3(x.cong),x.dmCong!=null?r3(x.dmCong):'',Math.round(x.nvl),r3(x.nvlMiss),Math.round(x.lab),Math.round(x.bb),Math.round(x.oth),Math.round(x.tot),Math.round(x.perKg)]);
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),'Giá thành');
   const b=[['Ngày','Công đoạn','Mặt hàng','Chi tiết','Số người','Tổng giờ làm','Số người tăng ca','Giờ tăng ca','Người nhập','Ghi chú']];
@@ -964,15 +966,17 @@ async function init(){render();let c=window.claude;for(let i=0;i<60&&!(c&&c.use)
   db.doc('mcfg/main').onSnapshot(s=>{S.cfg=s.exists?s.data():null;soon()});
   db.collection('mlog').onSnapshot(q=>{const L=[],P={},Q=[];for(const d of q.docs){const x=Object.assign({id:d.id},d.data());if(x.kind==='cplan')P[x.date]=x;else if(x.kind==='creq')Q.push(x);else L.push(x)}S.logs=L;S.plans=P;S.reqs=Q;loadNames();soon()});
   try{const p=await user.profiles([S.uid]);S.names[S.uid]=p[S.uid]&&p[S.uid].name||''}catch(e){}
-  setTimeout(()=>{S.ready=true;render();if(isAdmin()&&(!S.cfg||!(S.cfg.v>=2))){const c=upgradeCfg(S.cfg);db.doc('mcfg/main').set(c).then(()=>{S.cfg=c;render()}).catch(()=>{})}else if(isAdmin()&&S.cfg&&S.cfg.v===2){const u=upgrade3(S.cfg);db.doc('mcfg/main').update(u).then(()=>{Object.assign(S.cfg,u);render()}).catch(()=>{})}},300);
+  setTimeout(()=>{S.ready=true;render();if(isAdmin()&&(!S.cfg||!(S.cfg.v>=2))){const c=upgradeCfg(S.cfg);db.doc('mcfg/main').set(c).then(()=>{S.cfg=c;render()}).catch(()=>{})}else if(isAdmin()&&S.cfg&&S.cfg.v===3){const u=upgrade4(S.cfg);db.doc('mcfg/main').update(u).then(()=>{Object.assign(S.cfg,u);render()}).catch(()=>{})}else if(isAdmin()&&S.cfg&&S.cfg.v===2){const u=upgrade3(S.cfg);db.doc('mcfg/main').update(u).then(()=>{Object.assign(S.cfg,u);render()}).catch(()=>{})}},300);
   window.addEventListener('viba-sync',()=>{if(!S.form)soon()})}
 /* v116: nâng cấu hình v1 → v2 (nguyên liệu gộp, 15 thành phẩm, NCC theo file, 3 xe); giữ định mức Quản lý đã sửa */
 /* v129: thêm Củ sen, Củ từ, quy cách Ớt 100g/1kg, Sắn 1kg, Dâu tây 1kg – giữ nguyên dữ liệu đã sửa */
+/* v139: vận chuyển nhà máy → kho 1.000 đ/kg cho mọi mặt hàng (người dùng chốt 12/11) */
+function upgrade4(c){const its=JSON.parse(JSON.stringify(c.items||[]));for(const x of its){x.dm=x.dm||{};x.dm.thung=1000}return {v:4,items:its}}
 function upgrade3(c){const nv=JSON.parse(JSON.stringify(c.nvls||[])),its=JSON.parse(JSON.stringify(c.items||[]));
   for(const n of DEFAULT_CFG.nvls)if(!nv.some(x=>x.id===n.id))nv.push(JSON.parse(JSON.stringify(n)));
   for(const d of DEFAULT_CFG.items){const x=its.find(i=>i.id===d.id);if(!x){its.push(JSON.parse(JSON.stringify(d)));continue}
     const have=new Set((x.packs||[]).map(p=>gOf(p[0],p[1])));x.packs=x.packs||[];for(const p of d.packs)if(!have.has(gOf(p[0],p[1])))x.packs.push(p)}
-  return {v:3,nvls:nv,items:its}}
+  for(const x of its){x.dm=x.dm||{};x.dm.thung=1000}return {v:4,nvls:nv,items:its}}
 function upgradeCfg(old){const c=JSON.parse(JSON.stringify(DEFAULT_CFG));if(!old)return c;
   const map={mia:'mia',dua:'duam',ksq:'ksq',kmo:'kmo',sau:'sau'};
   for(const o of old.items||[]){const n=c.items.find(i=>i.id===map[o.id]);if(n&&o.dmAt){n.dm=Object.assign({},n.dm,o.dm);n.dmAt=o.dmAt;n.dmBy=o.dmBy}}
