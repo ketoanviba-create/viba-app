@@ -1121,14 +1121,42 @@ function viewShipTodo(v){const L=R.orders.filter(o=>(o.status==='new'&&!o.shipId
     ref.update({status:'shipping',shipId:R.uid,shipAt:at}).catch(async e=>{try{const g=await ref.get();const x=g.data()||{};if(x.shipId===R.uid)return;if(x.shipId){toast('Đơn '+(cur?cur.no:'')+' đã có người khác nhận trước.');return}}catch(_){}toast('⚠ Chưa nhận được đơn (mạng yếu) – bấm Nhận giao lại')})})}
 
 /* ================= BÁO CÁO SALE / SHIP ================= */
+/* v117: BÁO CÁO SALE – mặc định Hôm nay; thêm Số đơn hàng, Thu trong ngày (theo ngày thu tiền, tách đơn trong kỳ / nợ đơn cũ), Sản lượng sản phẩm (tổng SL); Thu nhập hiện cả trong kỳ và cả tháng */
+function salePayRange(uid,f,t){const S=ST();const std=toNum(S.saleStd)||26;const L=doneIn(f,t);if(!L)return null;let rev=0;
+  for(const o of L){if(saleOf(o)!==uid)continue;const ck=custKind(o);for(const l of o.lines||[]){if(isFee(l))continue;const a=lineAmt(l);if(!a)continue;const v=l.g?vatOf(l.name,ck.co):0;rev+=typeof v==='number'?a/(1+v):a}}
+  const yms=new Set([f.slice(0,7),t.slice(0,7)]);for(let d=f;d<t;d=isoAdd(d,28))yms.add(d.slice(0,7));let cong=0;for(const ym of yms)cong+=attOf(uid,ym).filter(a=>!a.void&&a.date>=f&&a.date<=t).length;
+  const base=Math.round(toNum(S.saleBase)*cong/std),allow=Math.round(toNum(S.saleAllow)*cong/std),comm=Math.round(rev*toNum(S.saleComm)/100);return{cong,rev:Math.round(rev),base,allow,comm,total:base+allow+comm}}
 function viewSaleReport(v,uid){const [f,t]=periodRange();const all=ordersIn(f,t);
   if(!all){v.innerHTML='<h1 class="big">Báo cáo</h1>'+periodBar()+'<div class="empty">Đang tải dữ liệu…</div>';bindPeriod();return}
-  const L=all.filter(o=>saleOf(o)===uid);const s=stats(L);const prod=prodAgg(L);
-  const ym=payYm(),PL=saleOrdersDone(ym),pay=PL?salePay(uid,ym,PL):null;
+  const L=all.filter(o=>saleOf(o)===uid);const s=stats(L);const prod=prodAgg(L);const one=f===t,isT=one&&f===today();const kyTxt=isT?'hôm nay':one?'ngày '+dm(f):'trong kỳ';
+  const ym=payYm(),PL=saleOrdersDone(ym),pay=PL?salePay(uid,ym,PL):null;const pr=salePayRange(uid,f,t);
   const debt=R.orders.filter(o=>saleOf(o)===uid&&owedOf(o)>0);const dSum=debt.reduce((x,o)=>x+owedOf(o),0);const dCust=new Set(debt.map(o=>o.cust||o.custName)).size;
+  /* số đơn */
+  const LV=L.filter(o=>o.status!=='cancel');const nC=L.length-LV.length,nOwn=LV.filter(o=>o.saleId===uid).length,nPs=LV.length-nOwn;const cnt=k=>LV.filter(o=>o.status===k).length;
+  const donBody=()=>`<div class="tw"><table><tbody><tr><td>Sale lên đơn</td><td class="n"><b>${nOwn}</b></td></tr><tr><td>Ship tạo phát sinh (khách của bạn)</td><td class="n"><b>${nPs}</b></td></tr>
+    <tr style="background:#EAF2F9"><td>✅ Đã giao</td><td class="n">${cnt('done')}</td></tr><tr><td>🚚 Đang giao</td><td class="n">${cnt('shipping')}</td></tr><tr><td>⏳ Chờ giao</td><td class="n">${cnt('new')}</td></tr>${nC?`<tr><td style="color:var(--bad)">✕ Đã huỷ (không tính)</td><td class="n" style="color:var(--bad)">${nC}</td></tr>`:''}</tbody></table></div>
+    ${LV.length?`<div class="tw"><table><thead><tr><th>Đơn · khách</th><th class="n">Tiền hàng</th></tr></thead><tbody>${LV.slice().sort((a,b)=>String(b.date+b.no).localeCompare(String(a.date+a.no))).slice(0,100).map(o=>`<tr data-oid="${esc(o.id)}" style="cursor:pointer"><td><b style="color:var(--accent)">${esc(o.no)}</b> · ${esc(o.custName)}<div class="tiny muted">${o.status==='done'?'Đã giao':o.status==='shipping'?'Đang giao':'Chờ giao'}${o.saleId!==uid?' · Phát sinh ('+esc(staffName(o.saleId))+')':''}${one?'':' · '+dm(o.date)}</div></td><td class="n">${fmt0(orderTotal(o))}</td></tr>`).join('')}</tbody></table></div>`:''}`;
+  /* thu tiền theo ngày thu */
+  const amt=o=>Math.min(orderTotal(o),toNum(o.paidAmount)||orderTotal(o));
+  const PA=R.orders.filter(o=>saleOf(o)===uid&&o.status!=='cancel'&&o.paid&&(d=>d>=f&&d<=t)(payDay(o))).sort((a,b)=>(toNum(a.paidAt)||0)-(toNum(b.paidAt)||0));
+  const sumA=X=>X.reduce((x,o)=>x+amt(o),0);const PC=PA.filter(o=>o.payMethod==='cash'),PK=PA.filter(o=>o.payMethod!=='cash');const inK=PA.filter(o=>o.date>=f&&o.date<=t),old=PA.filter(o=>!(o.date>=f&&o.date<=t));
+  const thuLab=isT?'Thu trong ngày':one?'Thu ngày '+dm(f):'Đã thu trong kỳ';
+  const thuBody=()=>`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="card" style="padding:10px 12px"><div class="tiny muted">💵 Tiền mặt</div><b style="font-size:18px;color:${C_G}">${vnd(sumA(PC))}</b><div class="tiny muted">${PC.length} đơn</div></div><div class="card" style="padding:10px 12px"><div class="tiny muted">🏦 Chuyển khoản</div><b style="font-size:18px;color:${C_G}">${vnd(sumA(PK))}</b><div class="tiny muted">${PK.length} đơn</div></div></div>
+    <div class="tw"><table><tbody><tr><td>Thu tiền đơn ${kyTxt}<div class="tiny muted">khách trả ngay khi nhận</div></td><td class="n">${inK.length} đơn</td><td class="n"><b>${fmt0(sumA(inK))}</b></td></tr><tr><td>Thu nợ đơn cũ</td><td class="n">${old.length} đơn</td><td class="n"><b>${fmt0(sumA(old))}</b></td></tr></tbody></table></div>
+    ${PA.length?`<div class="tw"><table><thead><tr><th>Đơn · khách</th><th class="n">Đã thu</th></tr></thead><tbody>${PA.map(o=>`<tr data-oid="${esc(o.id)}" style="cursor:pointer"><td><b style="color:var(--accent)">${esc(o.no)}</b> · ${esc(o.custName)}<div class="tiny muted">${o.paidBy==='ship'?esc(staffName(o.shipId))+' (ship)':'Sale'} thu · ${o.payMethod==='cash'?'TM':'CK'}${o.date>=f&&o.date<=t?'':' · nợ đơn '+dm(o.date)}${one?'':' · thu '+dm(payDay(o))}</div></td><td class="n">${fmt0(amt(o))}</td></tr>`).join('')}<tr style="background:#DCEAF5;font-weight:700"><td>Tổng ${PA.length} đơn</td><td class="n">${fmt0(sumA(PA))}</td></tr></tbody></table></div>`:'<div class="empty">Chưa thu tiền đơn nào.</div>'}
+    <div class="tiny muted">Tính theo ngày thu tiền (sale thu hoặc ship thu khi giao), gồm cả tiền khách trả nợ đơn cũ – để đối chiếu với tiền nộp quỹ.</div>`;
+  /* sản lượng */
+  const PR=[...prod.entries()].filter(([c,r])=>!isFee({code:c})&&(r.qty||r.promo||r.swap)).sort((a,b)=>b[1].qty-a[1].qty);const tQ=PR.reduce((x,[,r])=>x+r.qty,0);
+  const byU=new Map();PR.forEach(([,r])=>{const u=r.unit||'';byU.set(u,(byU.get(u)||0)+r.qty)});const uTxt=[...byU.entries()].filter(e=>e[1]).sort((a,b)=>b[1]-a[1]).map(([u,q])=>fmt(q)+' '+u).join(' · ');
+  const slBody=()=>PR.length?`<div class="tw"><table><thead><tr><th>Sản phẩm</th><th class="n">SL bán</th><th class="n">Tặng</th><th class="n">Hỗ trợ</th></tr></thead><tbody>${PR.map(([c,r])=>`<tr><td>${esc(r.name)}<div class="tiny muted">${esc(c)} · ${esc(r.unit)}</div></td><td class="n"><b>${fmt(r.qty)}</b></td><td class="n">${fmt0(r.promo)}</td><td class="n">${fmt0(r.swap)}</td></tr>`).join('')}<tr style="background:#DCEAF5;font-weight:700"><td>Tổng số lượng bán</td><td class="n">${fmt(tQ)}</td><td class="n">${fmt0(PR.reduce((x,[,r])=>x+r.promo,0))}</td><td class="n">${fmt0(PR.reduce((x,[,r])=>x+r.swap,0))}</td></tr></tbody></table></div><div class="tiny muted">Theo đơn có ngày trong kỳ, không tính đơn huỷ. Theo đơn vị: ${esc(uTxt)}.</div>`:'<div class="empty">Chưa có đơn trong kỳ này.</div>';
+  const top3=PR.slice(0,3).map(([,r])=>r.name.replace(/ đông lạnh| tươi cắt khúc| tươi bổ miếng/g,'')+' '+fmt(r.qty)+' '+r.unit).join(' · ');
+  const payLab=P=>P.p==='month'?'Thu nhập tháng '+ym.slice(5)+'/'+ym.slice(0,4):'Thu nhập '+kyTxt;
   v.innerHTML=`<h1 class="big">Báo cáo</h1><div class="stack">${periodBar()}
-   ${accCard('ai','Tổng thu nhập tháng '+ym.slice(5)+'/'+ym.slice(0,4),pay?vnd(pay.total):'…',pay?pay.cong+' công · bấm để xem chi tiết':'',C_G,()=>salePayBlock(uid))}
+   ${R.per.p==='month'?accCard('ai','Tổng thu nhập tháng '+ym.slice(5)+'/'+ym.slice(0,4),pay?vnd(pay.total):'…',pay?pay.cong+' công · bấm để xem chi tiết':'',C_G,()=>salePayBlock(uid)):accCard('ai',payLab(R.per),pr?vnd(pr.total):'…',(pr?'hoa hồng '+fmt0(pr.comm)+(pr.cong?' · '+pr.cong+' công':'')+' · ':'')+'tháng '+ym.slice(5)+'/'+ym.slice(0,4)+': <b>'+(pay?vnd(pay.total):'…')+'</b>',C_G,()=>salePayBlock(uid))}
+   ${accCard('ao','Số đơn hàng',s.orders+' đơn',`✅ ${cnt('done')} đã giao · 🚚 ${cnt('shipping')} đang giao · ⏳ ${cnt('new')} chờ giao${nPs?' · '+nPs+' phát sinh':''}`,'#4F46E5',donBody)}
    ${accCard('ar','Tổng doanh số',vnd(s.revenue),`${s.orders} đơn · ${fmt(s.qty)} SL · đã trừ hàng trả`,C_B,()=>prodTable(prod))}
+   ${accCard('ac',thuLab,vnd(sumA(PA)),`💵 TM ${fmt0(sumA(PC))} · 🏦 CK ${fmt0(sumA(PK))} · ${PA.length} đơn${old.length?' · nợ cũ '+fmt0(sumA(old)):''}`,C_G,thuBody)}
+   ${accCard('as','Sản lượng sản phẩm',fmt(tQ),PR.length?`tổng SL bán · ${PR.length} sản phẩm · ${esc(top3)}`:'chưa có đơn','#0891B2',slBody)}
    ${accCard('ad','Tổng nợ phải thu',vnd(dSum),`${debt.length} đơn · ${dCust} khách`,C_R,()=>debtBlock(debt))}
    ${accCard('ax','Tỷ lệ đổi trả',retRate(s),`đổi ${fmt(s.swap)} · trả ${fmt(s.ret)}`,C_O,()=>retTable(prod))}
    </div>`;bindPeriod();bindAcc();bindPayMonth();bindOids(R.orders)}
@@ -2142,14 +2170,14 @@ const TABS={
   view:[['orders','Đơn hàng','list'],['vdon','Vận đơn','truck'],['stock','Tồn kho','box']],
   admin:[['dash','Tổng quan','home'],['vdon','Vận đơn','truck'],['stock','Kho','box'],['catalog','Danh mục','book'],['settings','Cài đặt','gear']]};
 function views(){return{
-  sale:{new:viewSaleNew,orders:viewSaleOrders,att:viewAttend,report:v=>viewSaleReport(v,R.uid)},
+  sale:{new:viewSaleNew,orders:viewSaleOrders,att:viewAttend,report:v=>{if(!R._repIn){R._repIn=1;R.per={p:'today',from:'',to:''}}viewSaleReport(v,R.uid)}},
   ship:{todo:viewShipTodo,new:viewSaleNew,done:viewShipDone,report:v=>viewShipReport(v,R.uid)},
   kho:{vnew:viewKhoNew,vlist:viewKhoList,vdon:viewVanDon,stock:viewStock,byorder:viewKhoByOrder},
   view:{orders:v=>{orderListView(v,R.orders,{title:'Đơn hàng',who:'saleId'});viewBanner(v)},vdon:v=>{viewVanDon(v);viewBanner(v)},stock:v=>{viewStock(v);viewBanner(v)}},
   admin:{dash:viewDash,vdon:viewVanDon,orders:viewAllOrders,stock:viewStock,catalog:viewCatalog,settings:viewSettings}}}
 /* v113: tài khoản Chỉ xem (thực tập) – máy chủ chặn mọi thao tác ghi, chỉ đồng bộ đơn hàng, sản phẩm, phiếu kho */
 function viewBanner(v){v.insertAdjacentHTML('afterbegin','<div class="alert" style="margin-bottom:10px">👁 Tài khoản thực tập – <b>chỉ xem</b>, không nhập/sửa được dữ liệu.</div>')}
-function go(tab){R.tab=tab;try{localStorage.setItem('viba.tab',R.mode+':'+tab)}catch(e){}render();window.scrollTo({top:0})}
+function go(tab){if(tab!=='report')R._repIn=0;R.tab=tab;try{localStorage.setItem('viba.tab',R.mode+':'+tab)}catch(e){}render();window.scrollTo({top:0})}
 /* ghép cây mới (nf) vào cây cũ (oldP) mà KHÔNG gỡ ô đang gõ (focus) khỏi trang: iPhone không đóng bàn phím, gõ tiếng Việt không bị mất chữ */
 function graft(oldP,newP,focus){const nf=newP.querySelector('#'+CSS.escape(focus.id));if(!nf)return false;
   const step=(op,np)=>{if(op!==focus&&op!==oldP){for(const at of [...op.attributes])if(!np.hasAttribute(at.name))op.removeAttribute(at.name);for(const at of [...np.attributes])if(op.getAttribute(at.name)!==at.value)op.setAttribute(at.name,at.value)}
@@ -2285,7 +2313,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='116';
+const APP_BUILD='117';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
