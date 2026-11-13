@@ -1077,16 +1077,16 @@ function viewDMCh(v){const c=chc();
   $('#pAdd2').onclick=()=>{const n=$('#pN').value.trim();if(!n)return toast('Gõ tên sản phẩm');const c2=collect();c2.prods.push({id:'p'+Date.now().toString(36),t:Object.keys(c2.types)[0],name:n,u:'kg',kg:1});save(c2,'✓ Đã thêm '+n)}}
 
 /* ---- Quản lý: giá thành xưởng chuối ---- */
-function costsCh(from,to){const C=calcCh(),c=chc(),gc=cfg().gioCong||8;const L=liveLogs().filter(l=>isCh(l)&&l.date>=from&&l.date<=to);const R={};
-  const G=(t,g)=>{const k=t+(g?'|'+g:'');return R[k]||(R[k]={t,g:g||'',kgIn:0,kgOk:0,hong:0,nvl:0,miss:0,h:0,outs:new Map(),bb:0})};let hc=0;
+function costsCh(from,to,C0){const C=C0||calcCh(),c=chc(),gc=cfg().gioCong||8;const L=liveLogs().filter(l=>isCh(l)&&l.date>=from&&l.date<=to);const R={};
+  const G=(t,g)=>{const k=t+(g?'|'+g:'');return R[k]||(R[k]={t,g:g||'',kgIn:0,kgOk:0,hong:0,nvl:0,miss:0,h:0,outs:new Map(),bb:0,bc:new Set()})};const BC=(X,t)=>{const b=C.bat.get(t.b);if(b)X.bc.add(b.code+' (P'+b.room+')')};let hc=0;
   for(const l of L){if(l.kind==='cnx'||l.kind==='cxuat'){hc+=HC(l);continue}
     if(!AB(l.loai)){const x=G(l.loai);x.h+=HC(l);
-      if(l.kind==='cloc'){x.kgIn+=num(l.kgIn);x.kgOk+=num(l.kgOk);x.hong+=num(l.hong);for(const t of l.takes||[]){const b=C.bat.get(t.b),uc=b&&unitCost(b);if(uc==null)x.miss+=num(t.kg);else x.nvl+=num(t.kg)*uc}for(const o of l.outs||[])x.outs.set(o.p,(x.outs.get(o.p)||0)+num(o.q))}continue}
+      if(l.kind==='cloc'){x.kgIn+=num(l.kgIn);x.kgOk+=num(l.kgOk);x.hong+=num(l.hong);for(const t of l.takes||[]){BC(x,t);const b=C.bat.get(t.b),uc=b&&unitCost(b);if(uc==null)x.miss+=num(t.kg);else x.nvl+=num(t.kg)*uc}for(const o of l.outs||[])x.outs.set(o.p,(x.outs.get(o.p)||0)+num(o.q))}continue}
     const XA=G(l.loai,'A'),XB=G(l.loai,'B');
     if(l.kind==='cvu'){const b=C.bat.get(l.id),fa=b&&b.kg?b.kgA/b.kg:1;XA.h+=HC(l)*fa;XB.h+=HC(l)*(1-fa);continue}
     if(l.kind==='cloc'){let fa=fracA(l);const kin=num(l.kgIn);
       for(const t of l.takes||[]){const b=C.bat.get(t.b),kg=num(t.kg),f=fa==null?(b&&b.kg?b.kgA/b.kg:1):fa;
-        for(const [X,g,w] of [[XA,'A',f],[XB,'B',1-f]]){if(!w)continue;const uc=b&&ucGr(b,g);if(uc==null)X.miss+=kg*w;else X.nvl+=kg*w*uc}}
+        for(const [X,g,w] of [[XA,'A',f],[XB,'B',1-f]]){if(!w)continue;BC(X,t);const uc=b&&ucGr(b,g);if(uc==null)X.miss+=kg*w;else X.nvl+=kg*w*uc}}
       const f0=fa==null?1:fa;XA.kgIn+=kin*f0;XB.kgIn+=kin*(1-f0);XA.hong+=num(l.hong)*f0;XB.hong+=num(l.hong)*(1-f0);XA.h+=HC(l)*f0;XB.h+=HC(l)*(1-f0);
       for(const o of l.outs||[]){const p=prodOf(o.p),X=grOf(p)==='B'?XB:XA;X.kgOk+=num(o.kg)||num(o.q)*(p.kg||1);X.outs.set(o.p,(X.outs.get(o.p)||0)+num(o.q))}}}
   const tot=Object.values(R).reduce((s,x)=>s+x.kgOk,0);
@@ -1100,16 +1100,32 @@ function viewGTCh(v){const to=S.ui.gtTo||today(),from=S.ui.gtFrom||today().slice
     <table class="gt"><tr><td>Chuối xanh${x.miss?` <span class="chip r">${fm(x.miss)} kg chưa có giá</span>`:''}</td><td>${fm(x.nvl)}</td></tr><tr><td>Nhân công ${fm(x.h)} giờ</td><td>${fm(x.lab)}</td></tr><tr><td>Chi phí khác (định mức)</td><td>${fm(x.oth)}</td></tr><tr><td>Túi, tem</td><td>${fm(x.bb)}</td></tr><tr><td><b>Tổng</b></td><td><b>${fm(x.tot)}</b></td></tr><tr><td><b>Giá / kg đạt (chưa túi tem)</b></td><td><b>${x.kgOk?fm(x.perKg):'—'}</b></td></tr>
     ${[...x.outs.entries()].map(([p,q])=>{const P=prodOf(p);return `<tr><td>${esc(P.name)} · ${qU(P,q)}</td><td><b>${fm(x.perKg*(P.kg||1)+(P.bb||0))}</b> đ/${esc(P.u)}</td></tr>`}).join('')}</table></div>`;
   const bt=X.bats.map(b=>`<tr><td>${esc(b.code)} P${b.room}<br><span class="tiny muted">${esc(tName(b.loai))} · ${dmy(b.date)}${AB(b.loai)?' · A '+fm(b.kgA)+'/B '+fm(b.kgB):''}</span></td><td>${fm(b.kg)}</td><td>${fm(b.took)}</td><td>${fm(b.ok)}</td><td>${fm(b.hong)}</td><td>${b.took?fm(b.ok/b.took*100,1)+'%':'—'}</td></tr>`).join('');
-  v.innerHTML=`<h1 class="big">Giá thành xưởng chuối</h1><div class="grid2"><label class="f"><span class="lab">Từ ngày</span><input type="date" id="gF" value="${from}"></label><label class="f"><span class="lab">Đến ngày</span><input type="date" id="gT" value="${to}"></label></div>
-   <div class="tiny muted" style="margin:4px 0 10px">Chuối xanh tính theo kg lấy ra lọc × giá lô xanh trong mẻ. Chuối tiêu tách loại A/B: phần lấy ra chia A/B theo kg hàng đạt từng loại, hàng A tính giá xanh A, hàng B tính giá xanh B. Công theo giờ thực tế (tăng ca × ${fm(otK(),2)}); công nhập + xuất chia theo kg đạt. Kết quả lọc chung nhiều mẻ được chia về từng mẻ theo kg lấy ra.</div>
-   ${X.rows.map(card).join('')||'<div class="empty">Không có phiếu lọc trong kỳ.</div>'}
+  /* v151: xem theo ngày giống app Nhà máy – chọn loại chuối, Cả kỳ / Từng ngày, bấm ngày mở chi tiết */
+  const rk=x=>x.t+(x.g?'|'+x.g:''),gm=S.ui.gtcM||'ngay',XR=X.rows.filter(x=>!S.ui.gtcP||rk(x)===S.ui.gtcP);
+  const spTxt=x=>[...x.outs.entries()].map(([p,q])=>{const P=prodOf(p);return `<span>${esc(P.name)} <b>${fm(x.perKg*(P.kg||1)+(P.bb||0))}</b>/${esc(P.u)}</span>`}).join('');
+  const days=[];for(let d=to;d>=from;d=addDays(d,-1))days.push(d);
+  let byDay=null;if(gm==='ngay'&&XR.length){const C0=calcCh();byDay=new Map(days.map(d=>[d,costsCh(d,d,C0).rows]))}
+  const dayTbl=x0=>{const k0=rk(x0),rows=days.map(d=>({d,x:(byDay.get(d)||[]).find(y=>rk(y)===k0)})).filter(r=>r.x&&(r.x.kgIn||r.x.kgOk));
+    return `<div class="card" style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:17px">${esc(tName(x0.t))}${x0.g?' – loại '+x0.g:''}</b><span class="tiny muted" style="text-align:right">${rows.length} ngày có lọc · cả kỳ ${x0.kgOk?fm(x0.perKg)+' đ/kg':'—'}</span></div>
+     <table class="gt gtd"><tr><th>Ngày</th><th>Đạt kg</th><th>TL đạt</th><th>Đ/kg</th><th>Đ/SP</th></tr>
+     ${rows.map(({d,x})=>{const k=k0+'#'+d,op=S.ui.gtcDay===k,hi=x.kgOk&&x0.kgOk&&x.perKg>x0.perKg*1.05;return `<tr data-gcd="${k}" style="cursor:pointer${op?';background:var(--tint,#eaf2f9)':''}"><td><b>${op?'▾':'▸'} ${d.slice(8,10)}/${d.slice(5,7)}</b></td><td>${fm(x.kgOk)}</td><td>${x.kgIn?fm(x.kgOk/x.kgIn*100,1)+'%':'—'}</td><td><b${hi?' style="color:var(--bad)"':''}>${x.kgOk?fm(x.perKg):'—'}</b>${x.miss?'<div class="tiny" style="color:var(--bad)">thiếu giá</div>':''}</td><td class="gpk">${spTxt(x)}</td></tr>${op?`<tr><td colspan="5" style="padding:0"><div class="tiny muted" style="padding:6px 4px 0;white-space:normal">Lấy ra lọc ${fm(x.kgIn)} kg → đạt ${fm(x.kgOk)} kg · hỏng ${fm(x.hong)} kg${x.bc.size?' · mẻ '+esc([...x.bc].join(', ')):''}</div>${card(x)}</td></tr>`:''}`}).join('')||'<tr><td colspan="5" class="muted">Không có phiếu lọc trong kỳ.</td></tr>'}
+     <tr class="tot"><td><b>Cả kỳ</b></td><td><b>${fm(x0.kgOk)}</b></td><td><b>${x0.kgIn?fm(x0.kgOk/x0.kgIn*100,1)+'%':'—'}</b></td><td><b>${x0.kgOk?fm(x0.perKg):'—'}</b></td><td class="gpk"><b>${spTxt(x0)}</b></td></tr></table></div>`};
+  v.innerHTML=`<style>.gtd>tbody>tr>td,.gtd>tbody>tr>th{white-space:nowrap;padding-left:4px;padding-right:4px;font-size:14px}.gtd>tbody>tr>th{font-size:10.5px}.gtd .card{margin:6px 0!important;box-shadow:none;border:1px solid var(--line)}.gtd .card td{white-space:normal}.gtd td.gpk{font-size:12.5px;line-height:1.45;white-space:normal}.gtd .gpk span{display:block;white-space:normal;font-size:12px}.gtd .gpk b{white-space:nowrap}</style>
+   <h1 class="big">Giá thành xưởng chuối</h1><div class="grid2"><label class="f"><span class="lab">Từ ngày</span><input type="date" id="gF" value="${from}"></label><label class="f"><span class="lab">Đến ngày</span><input type="date" id="gT" value="${to}"></label></div>
+   <div class="grid2" style="margin:4px 0 10px"><label class="f"><span class="lab">Loại chuối</span><select id="gcP"><option value="">Tất cả loại</option>${X.rows.map(x=>`<option value="${rk(x)}"${S.ui.gtcP===rk(x)?' selected':''}>${esc(tName(x.t))}${x.g?' – loại '+x.g:''}</option>`).join('')}</select></label>
+   <label class="f"><span class="lab">Xem</span><div class="opt" style="margin:0">${[['ky','Cả kỳ'],['ngay','Từng ngày']].map(([k,l])=>`<button class="${gm===k?'on':''}" data-gcm="${k}">${l}</button>`).join('')}</div></label></div>
+   ${XR.length?(gm==='ky'?XR.map(card).join(''):XR.map(dayTbl).join('')+'<div class="tiny muted" style="margin:-4px 0 10px">Bấm vào một ngày để xem kg lấy ra, mẻ ủ và từng khoản chi phí. Giá/kg tô đỏ: cao hơn cả kỳ trên 5%. Chỉ hiện ngày có phiếu lọc.</div>'):'<div class="empty">Không có phiếu lọc trong kỳ.</div>'}
+   <div class="tiny muted" style="margin:4px 0 10px">Chuối xanh tính theo kg lấy ra lọc × giá lô xanh trong mẻ (giá lô đã gồm chi phí nhập). Chuối tiêu tách loại A/B: phần lấy ra chia A/B theo kg hàng đạt từng loại, hàng A tính giá xanh A, hàng B tính giá xanh B. Công theo giờ thực tế (tăng ca × ${fm(otK(),2)}); công nhập + xuất chia theo kg đạt. Kết quả lọc chung nhiều mẻ được chia về từng mẻ theo kg lấy ra.</div>
    ${bt?`<div class="sec">Theo mẻ ủ</div><div class="card"><table class="gt"><tr><th>Mẻ</th><th>Vào</th><th>Lấy</th><th>Đạt</th><th>Hỏng</th><th>TL đạt</th></tr>${bt}</table></div>`:''}
    ${X.rows.length||bt?'<button class="btn block" id="gX" style="margin-top:10px">⬇ Xuất Excel</button>':''}`;
+  $('#gcP').onchange=e=>{S.ui.gtcP=e.target.value;render()};$$('[data-gcm]').forEach(b=>b.onclick=()=>{S.ui.gtcM=b.dataset.gcm;render()});
+  $$('[data-gcd]').forEach(r=>r.onclick=()=>{S.ui.gtcDay=S.ui.gtcDay===r.dataset.gcd?null:r.dataset.gcd;render()});
   $('#gF').onchange=e=>{S.ui.gtFrom=e.target.value;render()};$('#gT').onchange=e=>{S.ui.gtTo=e.target.value;render()};
   const gx=$('#gX');if(gx)gx.onclick=()=>{if(!window.XLSX)return toast('Chưa tải được thư viện Excel – thử lại');const wb=XLSX.utils.book_new();
     const a=[['Loại chuối','Kg lấy ra lọc','Kg đạt','Kg hỏng','Tỷ lệ đạt %','Giờ công','Công','ĐM công','CP chuối xanh','Kg chưa có giá','CP nhân công','CP khác','Túi tem','Tổng CP','Giá/kg đạt']];
     for(const x of X.rows)a.push([tName(x.t)+(x.g?' loại '+x.g:''),r3(x.kgIn),r3(x.kgOk),r3(x.hong),x.kgIn?r3(x.kgOk/x.kgIn*100):'',r3(x.h),r3(x.cong),x.dmCong!=null?r3(x.dmCong):'',Math.round(x.nvl),r3(x.miss),Math.round(x.lab),Math.round(x.oth),Math.round(x.bb),Math.round(x.tot),Math.round(x.perKg)]);
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),'Giá thành chuối');
+    {const C0=calcCh(),dd=[['Ngày','Loại chuối','Kg lấy ra lọc','Kg đạt','Kg hỏng','Tỷ lệ đạt %','Giờ công','CP chuối xanh','Kg chưa có giá','CP nhân công','CP khác','Túi tem','Tổng CP','Giá/kg đạt','Mẻ']];for(let d=from;d<=to;d=addDays(d,1))for(const x of costsCh(d,d,C0).rows)if(x.kgIn||x.kgOk)dd.push([d,tName(x.t)+(x.g?' loại '+x.g:''),r3(x.kgIn),r3(x.kgOk),r3(x.hong),x.kgIn?r3(x.kgOk/x.kgIn*100):'',r3(x.h),Math.round(x.nvl),r3(x.miss),Math.round(x.lab),Math.round(x.oth),Math.round(x.bb),Math.round(x.tot),Math.round(x.perKg),[...x.bc].join(', ')]);XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(dd),'Theo ngày')}
     const b=[['Mẻ','Kho ủ','Loại','Ngày vào','Kg vào','Đã lấy','Còn','Kg đạt (chia)','Kg hỏng (chia)','TL đạt %','Lô xanh']];
     for(const x of X.bats)b.push([x.code,x.room,tName(x.loai),x.date,r3(x.kg),r3(x.took),r3(x.left),r3(x.ok),r3(x.hong),x.took?r3(x.ok/x.took*100):'',x.src.map(s=>s.lot+' '+s.kg).join('; ')]);
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(b),'Mẻ ủ');
