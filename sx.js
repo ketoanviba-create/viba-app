@@ -68,7 +68,7 @@ const DEFAULT_CFG={v:5,gioCong:8,
 /* v120: cấu hình xưởng chuối (lưu ở mcfg/main.ch). marks: ngày thứ mấy lọc cho đâu */
 const CH0={rooms:6,rl:[2,4,5,6],caps:{2:5000,4:5000,5:5000,6:5000},users:['Nguyễn Thị Như Nhung','Phan Xuân Tùng'],approvers:['Phan Xuân Tùng'],
   types:{tieu:{name:'Chuối tiêu',days:3,ram:3,thung:16,yield:88,marks:{2:'Win',3:'Khách khác'},cong100:0},tay:{name:'Chuối tây',days:1,ram:1,kho:6,thung:15,yield:88,marks:{1:'Khách khác'},cong100:0}},
-  dm:{rate:180000,khac:0,boc:80000,bocNX:1020000,lai:300000,dau:{hd:3800,in:2600,is:3600},vt:{phen:34260,xv:564.6,xd:1196.2,clo:0}},
+  dm:{rate:180000,khac:0,boc:80000,bocNX:1020000,lai:300000,dau:{hd:3800,in:2600,is:3600},vt:{phen:34260,xv:564.6,xd:1196.2,tui:1714.7,clo:0}},
   prods:[
     {id:'tkg',t:'tieu',gr:'B',name:'Chuối tiêu kg',u:'kg',kg:1},
     {id:'tplus',t:'tieu',gr:'A',name:'Chuối tiêu Plus',u:'gói',kg:0.842},
@@ -617,7 +617,9 @@ const grOf=p=>AB(p.t)?(p.gr||(['tkg','tbep'].includes(p.id)?'B':'A')):'';
 const lotGr=l=>AB(l.loai)?(l.grade||'A'):'';
 const thungOf=t=>num((chc().types[t]||{}).thung)||(t==='tay'?15:16);
 /* v125: chuối xanh nhập theo thùng → kg */
-function thKg(f){const k=thungOf(f.loai);if(AB(f.loai)){f.kgA=num(f.kgAm)||num(f.thA)*k;f.kgB=num(f.kgBm)||num(f.thB)*k}else f.kg=num(f.kgm)||num(f.th)*k}
+function thKg(f){const k=thungOf(f.loai);if(AB(f.loai)){f.kgA=num(f.kgAm)||num(f.thA)*k;f.kgB=num(f.kgBm)||num(f.thB)*k}else f.kg=num(f.kgm)||num(f.th)*k;kgPh(f)}
+/* v149: ô kg tự hiện số kg = thùng × quy cách (chữ xanh), cân thực tế thì gõ đè */
+function kgPh(f){if(typeof document==='undefined')return;if(!document.getElementById('kgAutoCss'))document.head.insertAdjacentHTML('beforeend','<style id="kgAutoCss">input.kgauto::placeholder{color:#1f7a45;font-weight:700;opacity:1}input.kgauto{background:#EAF6EF;border-color:#9fd3b4}</style>');const k=thungOf(f.loai);for(const [t,g] of [['thA','kgAm'],['thB','kgBm'],['th','kgm']]){const e=document.querySelector(`[data-f="${g}"]`);if(!e)continue;const th=num(f[t]),auto=th&&!String(f[g]??'').trim();e.placeholder=th?fm(th*k)+' kg':'= thùng × '+fm(k);e.classList.toggle('kgauto',!!auto)}}
 const lotKgTh=x=>x&&x.th>0?x.kg/x.th:0; /* kg/thùng thực tế của lô */
 const dowVN=d=>d?['Chủ nhật','Thứ Hai','Thứ Ba','Thứ Tư','Thứ Năm','Thứ Sáu','Thứ Bảy'][new Date(d+'T00:00:00Z').getUTCDay()]:'';
 const dayN=(d,ref)=>Math.round((new Date((ref||today())+'T00:00:00Z')-new Date(d+'T00:00:00Z'))/864e5);/* v141: ngày vào = N0; rấm 3 ngày (N0–N2); N2 lọc Win, N3 xuất Win; khách khác lọc + xuất N3 → xuất xưởng = ngày vào + 3 */
@@ -824,8 +826,8 @@ const roomList=()=>{const l=(chc().rl||[]).map(Number).filter(x=>x>0);return l.l
 /* v134: rấm 3 ngày trong kho ủ (ngày vào = ngày 0 → ngày 0,1,2); ngày thứ 4 (ngày vào + 3) toàn bộ mẻ chuyển về kho 3 – kho lọc lựa, thành phẩm tồn */
 const KHO_TP=3;
 /* v144: chi phí nhập chuối xanh – bốc 1.020.000 đ/tấn, lái xe 300.000 đ/xe, tiền ăn, dầu xe (km × đ/km theo xe), vật tư đóng gói (giá BQ file NXT vật tư) → cộng vào giá lô (cpTien) */
-const CPX=[['hd','Hyundai','28A-30735'],['is','Isuzu','28H-00259'],['in','Innova','30B-80630']],CPV=[['phen','Phèn kép','kg'],['xv','Xốp vuông 330×470','cái'],['xd','Xốp dài 350×900','cái'],['clo','Clorin','kg']];
-const cpD=()=>{const d=chc().dm||{};return {bocNX:num(d.bocNX)||1020000,lai:d.lai==null?300000:num(d.lai),dau:Object.assign({hd:3800,in:2600,is:3600},d.dau||{}),vt:Object.assign({phen:34260,xv:564.6,xd:1196.2,clo:0},d.vt||{})}};
+const CPX=[['hd','Hyundai','28A-30735'],['is','Isuzu','28H-00259'],['in','Innova','30B-80630']],CPV=[['phen','Phèn kép','kg'],['xv','Xốp vuông 330×470','cái'],['xd','Xốp dài 350×900','cái'],['tui','Túi HCK 90×90','cái'],['clo','Clorin','kg']];
+const cpD=()=>{const d=chc().dm||{};return {bocNX:num(d.bocNX)||1020000,lai:d.lai==null?300000:num(d.lai),dau:Object.assign({hd:3800,in:2600,is:3600},d.dau||{}),vt:Object.assign({phen:34260,xv:564.6,xd:1196.2,tui:1714.7,clo:0},d.vt||{})}};
 function cpInit(f){if(f.cBoc!=null)return;const D=cpD();f.cBoc=String(D.bocNX);f.cLai=String(D.lai)}
 /* v147: nhập chuối xanh chọn nhiều xe (gõ km từng xe); lái xe = số lái xe × đơn giá (mặc định = số xe đã chọn) */
 const cpXeUsed=f=>CPX.filter(([k])=>num(f['km_'+k])>0);
