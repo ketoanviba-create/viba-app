@@ -103,8 +103,8 @@ const inDay=o=>!R.ui.shipDay||(o.dlvDate||o.date)===R.ui.shipDay||(isLate(o)&&R.
 const shipTodoCount=()=>R.orders.filter(o=>(o.status==='new'&&!o.shipId&&!offRoute(o)&&inRt(o)&&inDay(o))||(o.shipId===R.uid&&(o.status==='shipping'||o.status==='new'))).length;
 function sortedProducts(){return [...R.products.values()].sort((a,b)=>(toNum(b.soldQty)-toNum(a.soldQty))||a.code.localeCompare(b.code,'vi'))}/* bán chạy nhất (SL bán 3 tháng gần nhất từ MISA, trừ trả lại) lên đầu */
 function lastPrice(cust,code){let best=null;for(const o of R.orders){if(o.cust!==cust||o.status==='cancel')continue;for(const l of o.lines||[])if(l.code===code&&toNum(l.price)>0&&(!best||o.date>best.d))best={d:o.date,p:l.g?toNum(l.price):grossP(code,l.price)}}return best?best.p:null}
-function defaultPrice(cust,code){const pr=R.prices.get(cust);if(pr&&pr.items&&pr.items[code]!=null)return {p:grossP(code,pr.items[code]),src:'Bảng giá khách'};
-  {const cc=findCust(cust);const gs=[...new Set([...((cc&&cc.groups)||[]),...custPL(cc)])];for(const g of gs){const gp=R.prices.get('G:'+g);if(gp&&gp.items&&gp.items[code]!=null)return {p:grossP(code,gp.items[code]),src:'Giá nhóm '+g.replace(/^PL\s*/i,'')}}}
+function defaultPrice(cust,code){const pr=R.prices.get(cust);if(pr&&pr.items&&pr.items[code]!=null)return {p:toNum(pr.items[code]),src:'Bảng giá khách'}/* v118: bảng giá MISA là giá SAU THUẾ – giữ nguyên, không cộng VAT */;
+  {const cc=findCust(cust);const gs=[...new Set([...((cc&&cc.groups)||[]),...custPL(cc)])];for(const g of gs){const gp=R.prices.get('G:'+g);if(gp&&gp.items&&gp.items[code]!=null)return {p:toNum(gp.items[code]),src:'Giá nhóm '+g.replace(/^PL\s*/i,'')}}}
   const lp=lastPrice(cust,code);if(lp!=null)return {p:lp,src:'Giá bán lần trước'};const p=findProd(code);return {p:p?grossP(code,p.price):0,src:'Giá chung'}}
 
 /* ================= ĐƠN HÀNG: TÍNH TOÁN ================= */
@@ -2313,7 +2313,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='117';
+const APP_BUILD='118';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
