@@ -1903,6 +1903,7 @@ function shEditor(box,ro){if(!box)return;const S=SHC();const WDL=['CN','T2','T3'
 function viewSalesRep(v){if(!R._salIn){R._salIn=1;R.per={p:'ca',from:'',to:''}}const [f,t]=periodRange();
   v.innerHTML=`<h1 class="big">Báo cáo bán hàng</h1><div class="stack">${periodBar(1)}${R.per.p==='ca'?shDash():saleDash(f,t)}</div>`;bindPeriod();
   $$('#view [data-su]').forEach(el=>el.onclick=()=>vibaSaleRep(el.dataset.su))}
+window.__vibaApp=()=>({R,stats,orderTotal,owedOf,payDay,ordersIn});/* v134: cho vh.js tính 8 chỉ số */
 window.vibaSaleRep=uid=>{if(myRole()!=='admin')return;R.repUid=uid;R._repIn=1;R.mode='sale';R.tab='report';render();window.scrollTo(0,0)};
 function viewDash0(v){if(!R.ui.dashInit){R.ui.dashInit=1;R.per.p='today'}const [f,t]=periodRange();const all=ordersIn(f,t);
   if(!all){v.innerHTML='<h1 class="big">Tổng quan</h1>'+periodBar()+'<div class="empty">Đang tải dữ liệu…</div>';bindPeriod();return}
