@@ -11,6 +11,7 @@ function applies(d,day){const dt=new Date(day+'T00:00:00Z'),wd=dt.getUTCDay(),dm
   return d.when==='daily'||d.when==='event'||(d.when==='mon'&&wd===1)||(d.when==='fri'&&wd===5)||(d.when==='monthEnd'&&dm===last)||(d.when==='month5'&&dm>=5&&dm<=8)}
 function posOf(uid){const s=S.staff.get(uid)||{};if(s.taskPos)return s.taskPos;if(s.role==='admin')return OFFICE;if(s.role==='sale')return['Sale'];if(s.role==='ship')return['Ship'];if(s.role==='kho')return['Thủ kho Hà Nội'];if(s.role==='sx')return[s.erpKho?'Thủ kho Hòa Bình':'Tổ trưởng sản xuất'];return[]}
 function people(pos){if(OFFICE.includes(pos))return[null];return[...S.staff.entries()].filter(([u,s])=>s.active!==false&&posOf(u).includes(pos)).map(([u])=>u)}
+const mgr=()=>S.me.owner||!!(S.staff.get(S.me.uid)||{}).taskAdmin;
 const nameOf=u=>u?((S.staff.get(u)||{}).name||u):'Văn phòng';
 const key=(d,u)=>S.day+'_'+d.id+'_'+(u||'vp');
 function rec(d,u){if(u)return S.done.get(key(d,u));for(const[k,v]of S.done)if(k.startsWith(S.day+'_'+d.id+'_'))return v;return null}
@@ -33,13 +34,13 @@ function status(d,u){const R=rec(d,u),day=S.day,E=S.erp;
 const CH={done:['Xong','#1F8A52'],todo:['Chưa xong','#B26A00'],late:['Trễ','#C0392B'],wait:['Chờ kiểm','#1B69A3'],none:['Không phát sinh','#8a96a3']};
 function card(d,u,canAct){const s=status(d,u),c=CH[s.s],R=rec(d,u),man=d.mode==='manual'||d.rule.startsWith('pending'),k=key(d,u);
   let a='';if(canAct){if(d.rule==='ship_day'&&s.s==='todo')a=`<button class="ok" data-ship="${k}">Hoàn thành ngày giao hàng</button>`;else if(man&&(!R||R.st==='returned'))a=`<button class="ok" data-rep="${k}">Báo xong</button>`}
-  if(S.me.owner&&man&&R&&R.st==='done')a+=`<button class="ok" data-chk="${k}">Đạt</button><button data-ret="${k}">Trả lại</button>`;
+  if(mgr()&&man&&R&&R.st==='done')a+=`<button class="ok" data-chk="${k}">Đạt</button><button data-ret="${k}">Trả lại</button>`;
   const undel=R&&R.undel&&R.undel.length&&S.open===k?`<table class="lt">${R.undel.map(x=>`<tr><td>${esc(x.cust)}</td><td>${esc(x.reason)}</td></tr>`).join('')}</table>`:'';
   return `<div class="t" style="border-left:5px solid ${c[1]}"><div class="th" data-o="${k}"><b>${esc(d.title)}</b> <span class="chip" style="background:${c[1]}">${c[0]}</span>
   <div class="mut">${esc(d.freq)} · ${man&&d.mode!=='manual'?'Tạm báo xong tay (tự động sẽ nối sau)':d.mode==='auto'?'Tự động':'Báo xong + kiểm'}${u!==undefined&&u?' · '+esc(nameOf(u)):''}</div>
   <div class="mut">${esc(s.t)}${R&&R.note?' · '+esc(R.note):''}${d.output&&man?' · Nộp: '+esc(d.output):''}</div></div>${undel}<div class="acts">${a}</div></div>`}
 function render(){const me=S.me.uid,my=S.me.owner?OFFICE:posOf(me),defs=S.defs.filter(d=>d.active!==false&&applies(d,S.day));
-  const tabs=[['mine','Việc của tôi']].concat(S.me.owner?[['all','Toàn công ty'],['chk','Chờ kiểm ('+[...S.done.values()].filter(r=>r.day===S.day&&r.st==='done').length+')']]:[]);
+  const tabs=[['mine','Việc của tôi']].concat(mgr()?[['all','Toàn công ty'],['chk','Chờ kiểm ('+[...S.done.values()].filter(r=>r.day===S.day&&r.st==='done').length+')']]:[]);
   let h=`<div class="tb">${tabs.map(([k,t])=>`<button class="${S.tab===k?'on':''}" data-t="${k}">${t}</button>`).join('')}<input type="date" id="dd" value="${S.day}"></div>`;
   if(S.tab==='mine'){const L=defs.filter(d=>my.includes(d.pos));h+=L.length?my.map(p=>{const X=L.filter(d=>d.pos===p);return X.length?`<div class="sec">${esc(p)}</div>`+X.map(d=>card(d,OFFICE.includes(p)?null:me,true)).join(''):''}).join(''):'<p class="mut">Hôm nay chưa có việc cho vị trí của bạn.</p>'}
   else if(S.tab==='all'){const P=[...new Set(S.defs.map(d=>d.pos))];let tot=0,ok=0;const body=P.map(p=>{const X=defs.filter(d=>d.pos===p);if(!X.length)return'';const U=people(p);
