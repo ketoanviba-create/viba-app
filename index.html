@@ -3,9 +3,13 @@
 <title>VIBA FOOD</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="app.css?v=122"><link rel="icon" href="favicon.png"><link rel="apple-touch-icon" href="icon.png"><link rel="manifest" href="manifest-index.json"><meta name="theme-color" content="#1b6aa5">
 </head><body><div class="wrap" style="padding-bottom:40px"><div class="brandbar"><img src="logo2.png" alt="VIBA FOOD"></div>
-<h1 class="big">Chọn ứng dụng</h1><div class="list">
-<a class="oc" href="sale.html" style="text-decoration:none;color:inherit"><span class="cn">Bán hàng</span><span class="muted small">Lên đơn, theo dõi đơn, báo cáo doanh số và thu nhập sale</span></a>
-<a class="oc" href="ship.html" style="text-decoration:none;color:inherit"><span class="cn">Giao hàng</span><span class="muted small">Nhận đơn, giao hàng, thu tiền, chụp ảnh, báo cáo thu nhập ship</span></a>
-<a class="oc" href="kho.html" style="text-decoration:none;color:inherit"><span class="cn">Thủ kho</span><span class="muted small">Phiếu nhập, phiếu xuất, in phiếu, nhập xuất tồn</span></a>
-<a class="oc" href="quanly.html" style="text-decoration:none;color:inherit"><span class="cn">Quản lý</span><span class="muted small">Tổng quan, đối chiếu kho, danh mục, phân quyền, cài đặt</span></a>
-</div><p class="tiny muted" style="margin-top:20px">Mẹo: mở link trên điện thoại rồi chọn "Thêm vào Màn hình chính" để dùng như một ứng dụng.</p></div></body></html>
+<div id="go" style="text-align:center;padding:80px 10px"><div style="font-size:44px">⏳</div><h1 class="big" style="font-size:24px">Đang mở app của bạn…</h1><div class="muted" id="goWho"></div></div></div>
+<script>window.APP_MODE="home";</script><script src="config.js?v=122"></script><script src="gas-shim.js?v=152"></script>
+<script>/* v137: trang chủ tự đưa mỗi người về đúng app của vị trí mình (đã đăng nhập hoặc vừa đăng nhập xong), không hiện danh sách app */
+(async()=>{const P={admin:'quanly.html',sale:'sale.html',ship:'ship.html',kho:'kho.html',sx:'sanxuat.html',view:'xem.html'},N={admin:'Quản lý',sale:'Bán hàng',ship:'Giao hàng',kho:'Thủ kho',sx:'Sản xuất',view:'Chỉ xem'};
+let c=window.claude;for(let i=0;i<200&&!(c&&c.use);i++){await new Promise(r=>setTimeout(r,100));c=window.claude}
+if(!c||!c.use){document.getElementById('goWho').textContent='Không kết nối được máy chủ. Kiểm tra mạng rồi tải lại trang.';return}
+const db=await c.use('db');let me=null;for(let i=0;i<600&&!(me=window.vibaErp&&vibaErp.me());i++)await new Promise(r=>setTimeout(r,100));if(!me)return;
+let role='admin',name='';if(!me.owner){try{const st=(await db.doc('staff/'+me.uid).get()).data()||{};role=st.active===false?'':st.role;name=st.name||''}catch(e){role=''}}
+if(!P[role]){document.getElementById('goWho').innerHTML='Tài khoản chưa được phân quyền. Báo quản lý để được cấp quyền.';return}
+document.getElementById('goWho').textContent=N[role]+(name?' · '+name:'');location.replace(P[role])})();</script></body></html>
