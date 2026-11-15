@@ -45,7 +45,7 @@ const css=`#vh{margin:8px 0 10px}#vh .vs{display:flex;align-items:center;gap:10p
 #vh .ac{display:flex;align-items:center;gap:12px;border:1px solid var(--line,#dbe3ec);border-radius:12px;padding:10px 12px;margin-bottom:6px;text-decoration:none;color:inherit;background:var(--card,#fff)}#vh .ac .i{font-size:20px;width:26px;text-align:center}#vh .ac .x{flex:1}#vh .ac b{display:block;font-size:14.5px}#vh .ac span{font-size:12px;color:var(--muted,#5f6d7d)}#vh .ac .n{font-size:19px;font-weight:800;color:#d63b2f}#vh .ac .n.g{color:#1f8a52}
 #vh .g4{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}#vh .g4 a{border:1.5px solid var(--line,#dbe3ec);background:var(--card,#fff);border-radius:14px;padding:12px 8px;font-weight:700;font-size:14px;color:var(--fg,#0f1b29);text-decoration:none;display:flex;flex-direction:column;align-items:center;gap:4px}#vh .g4 a i{font-style:normal;font-size:26px}
 #vh .sec2{font-size:12px;font-weight:700;color:var(--muted,#5f6d7d);text-transform:uppercase;letter-spacing:.05em;margin:12px 4px 4px}
-details.vhd{margin-top:10px}details.vhd>summary{cursor:pointer;font-weight:700;color:#1b6aa5;padding:12px 4px;list-style:none;text-align:center}`;
+details.vhd{margin-top:10px;grid-column:1/-1}details.vhd>summary{cursor:pointer;font-weight:700;color:#1b6aa5;padding:12px 4px;list-style:none;text-align:center}`;
 function ac(href,i,t,s,n,g){return `<a class="ac" href="${href}"><span class="i">${i}</span><div class="x"><b>${t}</b><span>${s}</span></div><span class="n ${g?'g':''}">${n}</span><span style="color:#97a3b1">›</span></a>`}
 function htmlOwner(){const E=S.erp,sub=E.filter(x=>x.st==='submitted'),over=sub.filter(x=>LIM[x.type]&&x.total>LIM[x.type]).length,acct=E.filter(x=>x.st==='approved'&&!x.acctOk).length;
   const chk=[...S.done.values()].filter(r=>r.day===S.day&&r.st==='done').length;const M=myTasks().filter(x=>x.s.s!=='none'),mOk=M.filter(x=>x.s.s==='done').length;
@@ -68,11 +68,11 @@ function htmlStaff(){const L=myTasks().filter(x=>x.s.s!=='none'),n=L.filter(x=>x
   if(B.length)h+=`<div class="sec2">Phiếu kho ERP</div><div class="g4">${B.map(([k,i,t])=>`<a href="${k==='viec'?'viec.html':'erp.html#'+k}"><i>${i}</i>${t}</a>`).join('')}</div>`;
   return h}
 function slimDash(){if(!S.me||!S.me.owner)return;const v=document.getElementById('view');if(!v)return;const h=v.querySelector('h1.big');if(!h||h.textContent.trim()!=='Tổng quan')return;
-  const st=h.nextElementSibling;if(!st||!st.classList.contains('stack')||st.dataset.vh)return;st.dataset.vh='1';
+  let st=h.nextElementSibling;const pre=[];while(st&&!st.classList.contains('stack')){pre.push(st);st=st.nextElementSibling}if(!st||st.dataset.vh)return;st.dataset.vh='1';
   const keep=new Set(['mr','mt','md','mo']),kids=[...st.children];if(kids.length<3)return;const det=document.createElement('details');det.className='vhd';det.innerHTML='<summary>Xem chi tiết khác ›</summary>';
   const box=document.createElement('div');box.className='stack';det.appendChild(box);
   kids.forEach((el,i)=>{if(i===0)return;const a=el.querySelector&&el.querySelector('[data-acc]');if(a&&keep.has(a.dataset.acc))return;if(el.querySelector&&el.querySelector('.alert')&&!a)return;box.appendChild(el)});
-  if(box.children.length)st.appendChild(det)}
+  pre.forEach(el=>box.appendChild(el));if(box.children.length)st.appendChild(det)}
 let last='';
 function paint(){try{if(!S.ready||!S.me)return;let c=document.getElementById('vh');const v=document.getElementById('view');if(!v)return;
   if(!c){c=document.createElement('div');c.id='vh';v.parentNode.insertBefore(c,v);c.addEventListener('click',e=>{if(e.target.closest('[data-vh="t"]')){S.open=!S.open;last='';paint()}})}
