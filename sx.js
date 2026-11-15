@@ -198,7 +198,7 @@ function tabsDef(){const t=[['home','Làm việc','🏠'],['stock','Tồn kho','
 function render(){const v=$('#view');
   if(!S.ready){v.innerHTML='<div class="empty">Đang tải…</div>';return}
   const r=role();try{document.title=xw()==='ch'?'VIBA Xưởng chuối':'VIBA Nhà máy'}catch(e){}
-  $('#who').innerHTML=`<span class="chip g">${r==='admin'?'Quản lý':r==='sx'?'Sản xuất':'Chưa phân quyền'}</span><span>${esc(nameOf(S.uid))}</span>${window.vibaChangePw?'<button class="btn sm" onclick="vibaChangePw()">Đổi MK</button>':''}<button class="btn sm" onclick="vibaLogout()">Đăng xuất</button>`;
+  $('#who').innerHTML=`<span class="chip g">${r==='admin'?'Quản lý':r==='sx'?'Sản xuất':'Chưa phân quyền'}</span><span>${esc(nameOf(S.uid))}</span><a class="btn sm" href="viec.html">📋 Việc</a><a class="btn sm" href="erp.html">📦 ERP</a>${window.vibaChangePw?'<button class="btn sm" onclick="vibaChangePw()">Đổi MK</button>':''}<button class="btn sm" onclick="vibaLogout()">Đăng xuất</button>`;
   if(!canUse()){$('#tabbar').hidden=true;v.innerHTML=`<h1 class="big">Xin chào</h1><div class="card stack"><div style="font-weight:700">Tài khoản chưa có quyền Sản xuất</div><div class="muted">Nhờ Quản lý gán vai trò <b>Sản xuất</b> trong Cài đặt › Nhân viên.${r&&r!=='sx'?' Bạn đang dùng app bán hàng – <a href="index.html">mở app bán hàng</a>.':''}</div></div>`;return}
   const T=tabsDef();if(!T.some(t=>t[0]===S.tab))S.tab='home';
   $('#tabs').innerHTML=T.map(([k,l,i])=>`<button data-tab="${k}" class="${S.tab===k?'on':''}"><span style="font-size:20px;line-height:1">${i}</span><span>${l}</span></button>`).join('');$('#tabbar').hidden=false;
