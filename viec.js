@@ -41,6 +41,7 @@ function card(d,u,canAct){const s=status(d,u),c=CH[s.s],R=rec(d,u),man=d.mode===
   <div class="mut">${esc(s.t)}${R&&R.note?' · '+esc(R.note):''}${d.output&&man?' · Nộp: '+esc(d.output):''}</div></div>${undel}<div class="acts">${a}</div></div>`}
 function render(){const me=S.me.uid,my=(S.staff.get(me)||{}).taskPos||(S.me.owner?OFFICE:posOf(me)),defs=S.defs.filter(d=>d.active!==false&&applies(d,S.day));
   const tabs=[['mine','Việc của tôi']].concat(mgr()?[['all','Toàn công ty'],['chk','Chờ kiểm ('+[...S.done.values()].filter(r=>r.day===S.day&&r.st==='done').length+')']]:[]);
+  if(!tabs.some(t=>t[0]===S.tab))S.tab='mine';
   let h=`<div class="tb">${tabs.map(([k,t])=>`<button class="${S.tab===k?'on':''}" data-t="${k}">${t}</button>`).join('')}<input type="date" id="dd" value="${S.day}"></div>`;
   if(S.tab==='mine'){const L=defs.filter(d=>my.includes(d.pos));h+=L.length?my.map(p=>{const X=L.filter(d=>d.pos===p);return X.length?`<div class="sec">${esc(p)}</div>`+X.map(d=>card(d,OFFICE.includes(p)?null:me,true)).join(''):''}).join(''):'<p class="mut">Hôm nay chưa có việc cho vị trí của bạn.</p>'}
   else if(S.tab==='all'){const P=[...new Set(S.defs.map(d=>d.pos))];let tot=0,ok=0;const body=P.map(p=>{const X=defs.filter(d=>d.pos===p);if(!X.length)return'';const U=people(p);
