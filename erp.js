@@ -83,5 +83,5 @@ async function init(){let c=window.claude;for(let i=0;i<60&&!(c&&c.use);i++){awa
   if(!S.me.owner){try{const st=(await db.doc('staff/'+S.me.uid).get()).data()||{};S.whs=st.erpWh||(st.role==='kho'?['HN']:['NM','XC','TT'])}catch(e){}}newForm('PMUA');
   db.collection('products').onSnapshot(s=>{S.P=new Map(s.docs.map(d=>[String(d.data().code||d.id).toLowerCase(),d.data()]));if(S.tab==='stock')render()});
   db.collection('erpdocs').onSnapshot(s=>{S.D=new Map(s.docs.map(d=>[d.id,d.data()]));if(S.tab!=='new')render();else{const t=$('.tb');if(t)t.outerHTML=tabs();document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;S.f='all';render()})}});
-  db.collection('stockmoves').onSnapshot(s=>{S.M=s.docs.map(d=>d.data());if(S.tab==='stock')render()});render()}
+  db.collection('stockmoves').onSnapshot(s=>{S.M=s.docs.map(d=>d.data());if(S.tab==='stock')render()});const H=location.hash.slice(1);if(TY[H]){newForm(H);S.tab='new'}else if(['list','wait','acct','stock','lock'].includes(H))S.tab=H;render()}
 init()})();

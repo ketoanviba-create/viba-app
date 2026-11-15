@@ -39,7 +39,7 @@ function card(d,u,canAct){const s=status(d,u),c=CH[s.s],R=rec(d,u),man=d.mode===
   return `<div class="t" style="border-left:5px solid ${c[1]}"><div class="th" data-o="${k}"><b>${esc(d.title)}</b> <span class="chip" style="background:${c[1]}">${c[0]}</span>
   <div class="mut">${esc(d.freq)} · ${man&&d.mode!=='manual'?'Tạm báo xong tay (tự động sẽ nối sau)':d.mode==='auto'?'Tự động':'Báo xong + kiểm'}${u!==undefined&&u?' · '+esc(nameOf(u)):''}</div>
   <div class="mut">${esc(s.t)}${R&&R.note?' · '+esc(R.note):''}${d.output&&man?' · Nộp: '+esc(d.output):''}</div></div>${undel}<div class="acts">${a}</div></div>`}
-function render(){const me=S.me.uid,my=S.me.owner?OFFICE:posOf(me),defs=S.defs.filter(d=>d.active!==false&&applies(d,S.day));
+function render(){const me=S.me.uid,my=(S.staff.get(me)||{}).taskPos||(S.me.owner?OFFICE:posOf(me)),defs=S.defs.filter(d=>d.active!==false&&applies(d,S.day));
   const tabs=[['mine','Việc của tôi']].concat(mgr()?[['all','Toàn công ty'],['chk','Chờ kiểm ('+[...S.done.values()].filter(r=>r.day===S.day&&r.st==='done').length+')']]:[]);
   let h=`<div class="tb">${tabs.map(([k,t])=>`<button class="${S.tab===k?'on':''}" data-t="${k}">${t}</button>`).join('')}<input type="date" id="dd" value="${S.day}"></div>`;
   if(S.tab==='mine'){const L=defs.filter(d=>my.includes(d.pos));h+=L.length?my.map(p=>{const X=L.filter(d=>d.pos===p);return X.length?`<div class="sec">${esc(p)}</div>`+X.map(d=>card(d,OFFICE.includes(p)?null:me,true)).join(''):''}).join(''):'<p class="mut">Hôm nay chưa có việc cho vị trí của bạn.</p>'}
@@ -64,7 +64,7 @@ function shipClose(k){const p=parse(k),L=S.orders.filter(o=>o.shipId===p.uid&&(o
     await put(k,{st:'checked',closed:true,undel});toast('✓ Đã hoàn thành ngày giao hàng')}}
 async function init(){let c=window.claude;for(let i=0;i<60&&!(c&&c.use);i++){await new Promise(r=>setTimeout(r,100));c=window.claude}
   if(!(c&&c.use))return $('#view').innerHTML='<div class="alert r">Không kết nối được máy chủ.</div>';
-  const db=S.db=await c.use('db');S.me=window.vibaErp&&vibaErp.me();if(!S.me)return $('#view').innerHTML='<div class="alert r">Chưa đăng nhập.</div>';
+  const db=S.db=await c.use('db');{const H=location.hash.slice(1);if(H==='all'||H==='chk')S.tab=H}S.me=window.vibaErp&&vibaErp.me();if(!S.me)return $('#view').innerHTML='<div class="alert r">Chưa đăng nhập.</div>';
   const R=()=>{try{render()}catch(e){console.error(e)}};
   db.collection('taskdefs').onSnapshot(s=>{S.defs=s.docs.map(d=>d.data()).sort((a,b)=>a.order-b.order);R()});
   db.collection('taskdone').onSnapshot(s=>{S.done=new Map(s.docs.map(d=>[d.id,d.data()]));R()});
