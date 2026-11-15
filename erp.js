@@ -8,11 +8,11 @@ const TY={PMUA:'Phiếu mua nguyên liệu theo lô',DXVT:'Đề xuất mua vậ
 const STK={PMUA:'in',PXSX:'out',NKTP:'in',CKNB:'move'},PRICE={PMUA:1,DXVT:1,PCHI:1,NKTP:0,PXSX:0,CKNB:0};
 const WH={NM:'Nhà máy Hòa Bình',XC:'Xưởng chuối Hòa Bình',TT:'Trang trại Hòa Bình',HN:'Kho Hà Nội'};
 const ST={draft:['Nháp','#6b7280'],submitted:['Chờ duyệt','#b26a00'],approved:['Đã duyệt','#1f8a52'],synced:['Đã sang MISA','#1B69A3'],locked:['Khóa kỳ','#374151'],cancelled:['Đã hủy','#c0392b']};
-const S={tab:'new',D:new Map(),M:[],P:new Map(),f:'all',form:null,open:null,me:null};
+const S={whs:Object.keys(WH),tab:'new',D:new Map(),M:[],P:new Map(),f:'all',form:null,open:null,me:null};
 function toast(t){const e=$('#toast');e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,3200)}
 const rid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,10);
 async function api(op,a,ok){try{const r=await vibaErp.call(op,a);if(ok)toast(ok);return r}catch(e){toast('⚠ '+(e.message||'lỗi mạng').replace(/^invalid_argument:\s*/,''));throw e}}
-function newForm(t){S.form={type:t||S.form?.type||'PMUA',date:today(),wh:'NM',wh2:'HN',party:'',note:'',lines:[{item:'',qty:'',price:''}]}}
+function newForm(t){S.form={type:t||S.form?.type||'PMUA',date:today(),wh:S.whs[0],wh2:S.whs[0]==='HN'?'NM':'HN',party:'',note:'',lines:[{item:'',qty:'',price:''}]}}
 function tabs(){const n=[...S.D.values()].filter(d=>d.st==='submitted').length,a=[...S.D.values()].filter(d=>d.st==='approved'&&!d.acctOk).length;
   const T=[['new','＋ Lập phiếu'],['list','Chứng từ'],['wait','Chờ duyệt'+(n?' ('+n+')':'')],['acct','Kế toán kiểm'+(a?' ('+a+')':'')],['stock','Tồn kho theo lô']].concat(S.me.owner?[['lock','Khóa kỳ']]:[]);
   return `<div class="tb">${T.map(([k,t])=>`<button class="${S.tab===k?'on':''}" data-t="${k}">${t}</button>`).join('')}</div>`}
@@ -22,7 +22,7 @@ function render(){if(!S.me)return;let h=tabs();
 function formHTML(){const f=S.form,st=STK[f.type],pr=PRICE[f.type];const tot=f.lines.reduce((s,l)=>s+Math.round(num(l.qty)*num(l.price)),0);
   return `<div class="card"><label>Loại chứng từ<select id="fT">${Object.keys(TY).map(k=>`<option value="${k}" ${f.type===k?'selected':''}>${TY[k]}</option>`).join('')}</select></label>
   <div class="g2"><label>Ngày<input type="date" id="fD" value="${f.date}"></label>
-  ${st?`<label>${st==='move'?'Kho xuất':'Kho'}<select id="fW">${Object.keys(WH).map(k=>`<option value="${k}" ${f.wh===k?'selected':''}>${WH[k]}</option>`).join('')}</select></label>`:'<span></span>'}</div>
+  ${st?`<label>${st==='move'?'Kho xuất':'Kho'}<select id="fW">${S.whs.map(k=>`<option value="${k}" ${f.wh===k?'selected':''}>${WH[k]}</option>`).join('')}</select></label>`:'<span></span>'}</div>
   ${st==='move'?`<label>Kho nhận<select id="fW2">${Object.keys(WH).map(k=>`<option value="${k}" ${f.wh2===k?'selected':''}>${WH[k]}</option>`).join('')}</select></label>`:''}
   ${f.type==='PMUA'||f.type==='PCHI'||f.type==='DXVT'?`<label>${f.type==='PCHI'?'Người nhận tiền':'Nhà cung cấp'} (mã hoặc tên)<input id="fP" value="${esc(f.party)}" placeholder="VD: NCC01 – Anh Tuấn chuối"></label>`:''}
   <label>Diễn giải<input id="fN" value="${esc(f.note)}"></label>
@@ -79,7 +79,8 @@ async function act(a,id,btn){const d=S.D.get(id);if(!d)return;btn.disabled=true;
     try{vibaSync.full()}catch(_){}}catch(e){btn.disabled=false}}
 async function init(){let c=window.claude;for(let i=0;i<60&&!(c&&c.use);i++){await new Promise(r=>setTimeout(r,100));c=window.claude}
   if(!(c&&c.use))return $('#view').innerHTML='<div class="alert r">Không kết nối được máy chủ dữ liệu.</div>';
-  const db=await c.use('db');S.me=window.vibaErp&&vibaErp.me();if(!S.me)return $('#view').innerHTML='<div class="alert r">Chưa đăng nhập.</div>';newForm('PMUA');
+  const db=await c.use('db');S.me=window.vibaErp&&vibaErp.me();if(!S.me)return $('#view').innerHTML='<div class="alert r">Chưa đăng nhập.</div>';
+  if(!S.me.owner){try{const st=(await db.doc('staff/'+S.me.uid).get()).data()||{};S.whs=st.erpWh||(st.role==='kho'?['HN']:['NM','XC','TT'])}catch(e){}}newForm('PMUA');
   db.collection('products').onSnapshot(s=>{S.P=new Map(s.docs.map(d=>[String(d.data().code||d.id).toLowerCase(),d.data()]));if(S.tab==='stock')render()});
   db.collection('erpdocs').onSnapshot(s=>{S.D=new Map(s.docs.map(d=>[d.id,d.data()]));if(S.tab!=='new')render();else{const t=$('.tb');if(t)t.outerHTML=tabs();document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;S.f='all';render()})}});
   db.collection('stockmoves').onSnapshot(s=>{S.M=s.docs.map(d=>d.data());if(S.tab==='stock')render()});render()}
