@@ -1,0 +1,21 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1B69A3"><title>VIBA – Danh mục gốc (ERP)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="app.css?v=151"><link rel="icon" href="favicon.png">
+<style>
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.bar input{flex:1;min-width:180px}
+.pill{border:1.5px solid var(--line);border-radius:999px;padding:6px 12px;background:var(--card);font:600 13px inherit;font-family:inherit;cursor:pointer}.pill.on{border-color:#1B69A3;background:#E8F1F8;color:#1B69A3}
+.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0}.kpi div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px}.kpi b{display:block;font-size:20px}.kpi small{color:var(--muted);font-size:12px}
+table.dm{width:100%;border-collapse:collapse;font-size:13.5px;background:var(--card)}table.dm th{position:sticky;top:0;background:#1B69A3;color:#fff;padding:7px 6px;text-align:left;font-weight:600}
+table.dm td{border-top:1px solid var(--line);padding:5px 6px;vertical-align:middle}table.dm input{width:100%;min-width:80px;padding:5px 6px;font-size:13.5px}
+.st{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}.ok{background:#E3F4EA;color:#1f8a52}.miss{background:#FDECEC;color:#c0392b}.part{background:#FFF4DE;color:#b26a00}
+.dup{color:#c0392b;font-weight:700}.wrapx{overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:12px}
+.btn2{border:0;border-radius:10px;padding:8px 14px;font:700 14px inherit;font-family:inherit;background:#1B69A3;color:#fff;cursor:pointer}.btn2.g{background:var(--sunk);color:var(--fg)}
+</style></head><body>
+<div class="wrap" id="wrap" style="max-width:1200px">
+  <div class="brandbar"><img src="logo2.png" alt="VIBA FOOD"><span class="tag">Danh mục gốc · ERP</span></div>
+  <main id="view"><div class="chip">Đang kết nối…</div></main>
+</div>
+<div id="toast" hidden></div>
+<script>window.APP_MODE="dm";</script><script src="config.js?v=151"></script><script src="gas-shim.js?v=152"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script><script src="dm.js?v=1"></script></body></html>

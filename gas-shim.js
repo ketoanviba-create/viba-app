@@ -166,7 +166,7 @@ const ready=(async()=>{if(!window.VIBA_API&&!(window.google&&google.script)){doc
   else{try{me=await call('me')}catch(e){delTok();token=null;await loginUI();me=await call('me')}ls.set('viba.me',JSON.stringify({fp:fp(token),uid:me.uid,email:me.email,owner:me.owner}))}
   const p=null;startSync();await firstLoad;const pr=store.get('profiles/'+me.uid);me.name=pr&&pr.name})();
 window.vibaLogout=async()=>{const k=CK(),pre=K3(),km=KM();delTok();ls.del('viba.me');if(k)await IDB.del(k);if(km)await IDB.del(km);try{const d=await IDB.open();if(d&&pre)d.transaction('kv','readwrite').objectStore('kv').delete(IDBKeyRange.bound(pre,pre+'\uffff'))}catch(e){}setTimeout(()=>location.reload(),300)};
-window.vibaAdmin={resetPassword:uid=>call('resetPassword',{uid})};window.vibaAI={slipRead:a=>call('slipRead',a),slipUsage:()=>call('slipUsage',{})};
+window.vibaErp={call:(op,a)=>call('erp',{op,a}),me:()=>me};window.vibaAdmin={resetPassword:uid=>call('resetPassword',{uid})};window.vibaAI={slipRead:a=>call('slipRead',a),slipUsage:()=>call('slipUsage',{})};
 window.vibaChangePw=()=>{if(document.getElementById('loginBox'))return;const box=document.createElement('div');box.id='loginBox';
   box.innerHTML=`<div class="lg-card"><img class="lg-logo" src="logo2.png" alt="VIBA FOOD"><h1 class="big" style="margin:4px 0 10px">Đổi mật khẩu</h1>
    <div class="stack"><label class="f">Mật khẩu hiện tại<input id="cpOld" type="password" autocomplete="current-password"></label>
