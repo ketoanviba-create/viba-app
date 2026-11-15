@@ -22,8 +22,8 @@ function status(d,u){const R=rec(d,u),day=S.day,E=S.erp;
   if(d.rule==='erp_over'){const n=cnt(x=>x.st==='submitted'&&LIM[x.type]&&x.total>LIM[x.type]);return n?{s:'todo',t:'Còn '+n+' phiếu vượt hạn mức'}:{s:'done',t:'Không còn phiếu chờ'}}
   if(d.rule==='erp_pending'){const n=cnt(x=>x.st==='submitted');return n?{s:'todo',t:'Còn '+n+' phiếu chờ duyệt'}:{s:'done',t:'Mục Chờ duyệt = 0'}}
   if(d.rule==='erp_acct'){const n=cnt(x=>x.st==='approved'&&!x.acctOk);return n?{s:'todo',t:'Còn '+n+' phiếu chưa kiểm'}:{s:'done',t:'Đã kiểm hết'}}
-  if(d.rule.startsWith('erp:')||d.rule==='erp_in_HN'){const T=d.rule==='erp_in_HN'?['CKNB']:d.rule.slice(4).split(',');
-    const L=E.filter(x=>x.date===day&&T.includes(x.type)&&x.st!=='cancelled'&&(d.rule==='erp_in_HN'?x.wh2==='HN':HB[x.wh]));
+  if(d.rule.startsWith('erp:')||d.rule==='erp_in_HN'){const RW=d.rule.slice(4).split('@'),W1=RW[1]||'',T=d.rule==='erp_in_HN'?['CKNB']:RW[0].split(',');
+    const L=E.filter(x=>x.date===day&&T.includes(x.type)&&x.st!=='cancelled'&&(d.rule==='erp_in_HN'?x.wh2==='HN':W1?x.wh===W1:HB[x.wh]));
     if(!L.length)return{s:'none',t:'Không phát sinh'};const p=L.filter(x=>x.st==='draft'||x.st==='submitted').length;return p?{s:'todo',t:p+'/'+L.length+' phiếu chưa duyệt'}:{s:'done',t:L.length+' phiếu đã duyệt'}}
   if(d.rule==='orders_created'){const n=S.orders.filter(o=>o.date===day&&o.status!=='cancel').length;return n?{s:'done',t:n+' đơn lên trong ngày'}:{s:hour()>=22?'late':'todo',t:'Chưa có đơn'}}
   if(d.rule==='sale_shift')return hour()>=17?{s:'done',t:'App đã tự chốt ca 17:00'}:{s:'todo',t:'App tự chốt lúc 17:00'};
