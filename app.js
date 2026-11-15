@@ -2264,7 +2264,7 @@ function render(){const role=myRole();const who=$('#who');
   /* v115: tài khoản Sản xuất dùng trang riêng sanxuat.html */if(role==='sx'){location.replace('sanxuat.html');return}
   if(role!=='admin')R.mode=role;else if(!R.mode)R.mode='admin';
   const tabs=TABS[R.mode];if(!tabs.some(t=>t[0]===R.tab)&&!(R.mode==='admin'&&R.tab==='orders'))R.tab=tabs[0][0];
-  who.innerHTML=`<span class="chip g">${ROLE_NAME[role]}</span><span>${esc(staffName(R.uid))}</span>${window.vibaChangePw?'<button class="btn sm" onclick="vibaChangePw()">Đổi MK</button>':''}<button class="btn sm" onclick="vibaLogout()">Đăng xuất</button>`;
+  who.innerHTML=`<span class="chip g">${ROLE_NAME[role]}</span><span>${esc(staffName(R.uid))}</span><a class="btn sm" href="viec.html">📋 Việc</a>${role==='admin'||role==='kho'?'<a class="btn sm" href="erp.html">📦 ERP</a>':''}${window.vibaChangePw?'<button class="btn sm" onclick="vibaChangePw()">Đổi MK</button>':''}<button class="btn sm" onclick="vibaLogout()">Đăng xuất</button>`;
   $('#modeSw').innerHTML=role==='admin'?`<select id="modeSel" aria-label="Chế độ xem" style="min-height:36px;padding:6px 10px;font-size:14px;width:auto">${Object.entries(ROLE_NAME).map(([k,l])=>`<option value="${k}" ${R.mode===k?'selected':''}>${k==='admin'?'Xem: Quản lý':'Xem như '+l}</option>`).join('')}<option value="__sx">🏭 Mở Sản xuất</option></select>`:'';
   const ms=$('#modeSel');if(ms)ms.onchange=()=>{if(ms.value==='__sx'){location.href='sanxuat.html';return}R.repUid=null;R.mode=ms.value;R.tab=TABS[R.mode][0][0];try{localStorage.setItem('viba.tab',R.mode+':'+R.tab)}catch(e){}render()};
   const pend=[...R.requests.keys()].filter(id=>!R.staff.has(id)).length;
