@@ -607,7 +607,7 @@ function costs(from,to){const C=calc(),gc=cfg().gioCong||8;const L=liveLogs().fi
     x.vt=[];x.bb=0;x.vtMiss=[];for(const [ma,q] of x.vtq||[]){if(VT_NOCOST[ma])continue;const u=vtUnitCost(ma);if(u==null){x.vtMiss.push(ma);continue}const t=q*u;x.vt.push({ma,q,u,t});x.bb+=t}
     if(x.noVt)x.bb+=x.noVt*(dm.baoBi||0);
     x.kgNow=r3(x.kgTP-x.kgFromTP);x.kgOut=r3(x.kgNow+x.kgBTP);const kp=x.kgOut;
-    x.split=dm.dien!=null||dm.gas!=null;x.ot={dien:kp*(x.split?num(dm.dien):(dm.dienGa||0)),gas:x.split?kp*num(dm.gas):0,kh:kp*(dm.kh||0),thung:x.kgTP*(dm.thung||0),guiKho:x.kgTP*(dm.guiKho||0)};x.oth=x.ot.dien+x.ot.gas+x.ot.kh+x.ot.thung+x.ot.guiKho;
+    x.split=dm.dien!=null||dm.gas!=null;x.ot={dien:kp*(x.split?num(dm.dien):(dm.dienGa||0)),gas:x.split?kp*num(dm.gas):0,kh:kp*(dm.kh||0),thung:x.kgNow*(dm.thung||0),guiKho:x.kgNow*(dm.guiKho||0)};x.oth=x.ot.dien+x.ot.gas+x.ot.kh+x.ot.thung+x.ot.guiKho;
     const work=kp+x.kgFrom,labKg=work?x.lab/work:0;x.btpUnit=kp?(x.nvl+x.ot.dien+x.ot.gas+x.ot.kh+labKg*kp)/kp:null;x.lotMiss=0;x.lotCost=0;
     for(const e of x.ext){const u=e.date?btpDayUnit(e.date,x.id):null;if(u==null)x.lotMiss+=e.kg;else x.lotCost+=e.kg*u}if(x.intKg)x.lotCost+=x.intKg*(x.btpUnit||0);x.btpOut=x.kgBTP*(x.btpUnit||0);
     x.tot=x.nvl+x.lab+x.bb+x.oth+x.lotCost-x.btpOut;x.perKg=x.kgTP?x.tot/x.kgTP:0;x.perKg0=x.kgTP?(x.tot-x.bb)/x.kgTP:0;x.dmNvl=dm.tl?x.kgTP*100/dm.tl:null;x.dmCong=dm.cong100?x.kgTP*dm.cong100/100:null;x.dm=dm}
@@ -635,8 +635,8 @@ function viewGT(v){const to=S.ui.gtTo||today(),from=S.ui.gtFrom||today().slice(0
       ${x.split?`<tr><td>4. Điện <span class="muted">${fm(num(dm.dien))} đ/kg</span>${P(x.ot.dien,x.tot)}</td><td>${fm(x.ot.dien)}</td></tr>
       <tr><td>5. Gas <span class="muted">${fm(num(dm.gas))} đ/kg</span>${P(x.ot.gas,x.tot)}</td><td>${fm(x.ot.gas)}</td></tr>`:`<tr><td>4–5. Điện + gas <span class="chip">chưa tách</span> <span class="muted">${fm(dm.dienGa||0)} đ/kg</span>${P(x.ot.dien,x.tot)}</td><td>${fm(x.ot.dien)}</td></tr>`}
       <tr><td>6. Khấu hao TSCĐ <span class="muted">${fm(dm.kh||0)} đ/kg</span>${P(x.ot.kh,x.tot)}</td><td>${fm(x.ot.kh)}</td></tr>
-      <tr><td>7. Vận chuyển <span class="muted">${fm(dm.thung||0)} đ/kg</span>${P(x.ot.thung,x.tot)}</td><td>${fm(x.ot.thung)}</td></tr>
-      <tr><td>8. Gửi kho đông <span class="muted">${fm(dm.guiKho||0)} đ/kg</span>${P(x.ot.guiKho,x.tot)}</td><td>${fm(x.ot.guiKho)}</td></tr>
+      <tr><td>7. Vận chuyển <span class="muted">${fm(dm.thung||0)} đ/kg</span>${x.kgFromTP?' <span class="tiny muted">(không tính cho '+fm(x.kgFromTP)+' kg đóng từ kho BTP)</span>':''}${P(x.ot.thung,x.tot)}</td><td>${fm(x.ot.thung)}</td></tr>
+      <tr><td>8. Gửi kho đông <span class="muted">${fm(dm.guiKho||0)} đ/kg</span>${x.kgFromTP?' <span class="tiny muted">(không tính cho '+fm(x.kgFromTP)+' kg đóng từ kho BTP)</span>':''}${P(x.ot.guiKho,x.tot)}</td><td>${fm(x.ot.guiKho)}</td></tr>
       ${x.lotCost||x.lotMiss?`<tr><td>9. BTP lấy từ kho (giá lô) <span class="muted">${fm(x.kgFrom)} kg</span>${x.lotMiss?` <span class="chip r">${fm(x.lotMiss)} kg chưa có giá lô</span>`:''}</td><td>${fm(x.lotCost)}</td></tr>`:''}
       ${x.btpOut?`<tr><td>10. Trừ BTP vào kho, chưa đóng gói <span class="muted">${fm(x.kgBTP)} kg × ${fm(x.btpUnit)} đ</span></td><td>−${fm(x.btpOut)}</td></tr>`:''}
       <tr class="tot"><td><b>TỔNG CHI PHÍ${x.btpOut||x.lotCost?' THÀNH PHẨM':''}</b></td><td><b>${fm(x.tot)}</b></td></tr>${x.kgBTP?`<tr class="tot"><td><b>Giá BTP vào kho / kg</b> <span class="muted">(lô ngày này)</span></td><td><b>${x.btpUnit!=null?fm(x.btpUnit):'—'}</b></td></tr>`:''}<tr class="tot"><td><b>Giá thành / kg TP (đủ chi phí)</b></td><td><b>${x.kgTP?fm(x.perKg):'—'}</b></td></tr>${pk}</table></div>`};
