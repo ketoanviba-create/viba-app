@@ -12,7 +12,7 @@ function applies(d,day){const dt=new Date(day+'T00:00:00Z'),wd=dt.getUTCDay(),dm
 function posOf(uid){const s=S.staff.get(uid)||{};if(s.taskPos)return s.taskPos;if(s.role==='admin')return OFFICE;if(s.role==='sale')return['Sale'];if(s.role==='ship')return['Ship'];if(s.role==='kho')return['Thủ kho Hà Nội'];if(s.role==='sx')return[s.erpKho?'Thủ kho Hòa Bình':'Tổ trưởng sản xuất'];return[]}
 function people(pos){if(OFFICE.includes(pos))return[null];return[...S.staff.entries()].filter(([u,s])=>s.active!==false&&posOf(u).includes(pos)).map(([u])=>u)}
 const mgr=()=>S.me.owner||!!(S.staff.get(S.me.uid)||{}).taskAdmin;
-const KTP=['Kế toán trưởng','Kế toán siêu thị & ngân hàng','Kế toán công nợ','Kế toán bán lẻ & thủ quỹ','Kế toán mua vào & kho'],myRl=()=>(S.staff.get(S.me.uid)||{}).role||'',isKT=()=>!S.me.owner&&/^ketoan/.test(myRl()),isKTT=()=>!S.me.owner&&myRl()==='ketoantt';
+const KTP=['Kế toán trưởng','Kế toán siêu thị & ngân hàng','Kế toán công nợ','Kế toán bán lẻ & thủ quỹ','Kế toán mua vào & kho'],myRl=()=>(S.staff.get(S.me.uid)||{}).role||'',isKT=()=>!!S.pv||(!S.me.owner&&/^ketoan/.test(myRl())),isKTT=()=>S.pv==='ktt'||(!S.me.owner&&myRl()==='ketoantt');
 const nameOf=u=>u?((S.staff.get(u)||{}).name||u):'Văn phòng';
 const key=(d,u)=>S.day+'_'+d.id+'_'+(u||'vp');
 function rec(d,u){if(u)return S.done.get(key(d,u));for(const[k,v]of S.done)if(k.startsWith(S.day+'_'+d.id+'_'))return v;return null}
@@ -159,6 +159,7 @@ function paint(){try{if(!S.ready||!S.me)return;let c=document.getElementById('vh
     else if(el=g('[data-ktt]')){S.ktTab=el.dataset.ktt}else if(el=g('[data-kp]')){S.kp=el.dataset.kp}else if(el=g('[data-kd]')){S.kd=S.kd===el.dataset.kd?null:el.dataset.kd}else if(g('[data-vdet]')){S.det=!S.det}
     else if(g('[data-vold]')){S.old=true;const b=document.querySelector('#tabs button');b&&b.click();setTimeout(()=>window.scrollTo(0,0),50)}
     else if(g('[data-vback]')){S.old=false}else return;last='';S.kat=0;paint()})}
+  S.pv=null;if(S.me.owner&&isQL()){const tt=[...document.querySelectorAll('#tabs button')].map(b=>b.textContent.trim()).join('|');if(/^Công việc\|(Báo cáo\|)?(Vận đơn\|)?Kho$/.test(tt)&&!/Cài đặt/.test(tt))S.pv=/Báo cáo/.test(tt)?'ktt':'kt'}
   const kt=isQL()&&isKT(),adm=kt||/Cài đặt/.test((document.getElementById('tabs')||{}).textContent||''),ql=isQL()&&(S.me.owner||kt)&&adm,at=activeTab(),md=(ql?at.i+'|'+at.t+'|'+!!S.old:'s'+firstTab());if(md!==S.mode){S.mode=md;last='';S.kat=0}
   if(ql){const fb=document.querySelector('#tabs button span:last-child')||document.querySelector('#tabs button');if(fb&&fb.textContent.trim()==='Tổng quan')fb.textContent='Công việc'}
   if(ql&&at.i===0){if(S.old){c.hidden=false;const h0=`<div class="ac" data-vback="1" style="cursor:pointer;border-color:#1b6aa5"><b style="flex:1">‹ Về Công việc</b><span class="m">Đang xem Tổng quan bán hàng</span></div>`;if(h0!==last){c.innerHTML=h0;last=h0}v.style.display=''}
@@ -175,5 +176,5 @@ async function init(){let c=window.claude;for(let i=0;i<100&&!(c&&c.use&&window.
   db.collection('staff').onSnapshot(s=>{S.staff=new Map(s.docs.map(d=>[d.id,d.data()]));R()});
   try{db.collection('erpdocs').onSnapshot(s=>{S.erp=s.docs.map(d=>d.data());R()})}catch(e){}
   try{db.collection('orders').onSnapshot(s=>{S.orders=s.docs.map(d=>Object.assign({id:d.id},d.data()));R()})}catch(e){}
-  setInterval(()=>{S.day=today();paint()},1000)}
+  setInterval(()=>{S.day=today();const a=activeTab(),sg=a.i+'|'+a.t+'|'+firstTab()+'|'+((document.getElementById('tabs')||{}).textContent||'');if(sg!==S.sg||Date.now()-(S.lp||0)>30000){S.sg=sg;S.lp=Date.now();paint()}},700)}
 init()})();
