@@ -11,7 +11,8 @@ function applies(d,day){const dt=new Date(day+'T00:00:00Z'),wd=dt.getUTCDay(),dm
   return d.when==='daily'||d.when==='event'||(d.when==='mon'&&wd===1)||(d.when==='fri'&&wd===5)||(d.when==='monthEnd'&&dm===last)||(d.when==='month5'&&dm>=5&&dm<=8)}
 function posOf(uid){const s=S.staff.get(uid)||{};if(s.taskPos)return s.taskPos;if(s.role==='admin')return OFFICE;if(s.role==='sale')return['Sale'];if(s.role==='ship')return['Ship'];if(s.role==='kho')return['Thủ kho Hà Nội'];if(s.role==='sx')return[s.erpKho?'Thủ kho Hòa Bình':'Tổ trưởng sản xuất'];return[]}
 function people(pos){if(OFFICE.includes(pos))return[null];return[...S.staff.entries()].filter(([u,s])=>s.active!==false&&posOf(u).includes(pos)).map(([u])=>u)}
-const mgr=()=>S.me.owner||!!(S.staff.get(S.me.uid)||{}).taskAdmin;
+const KTP=['Kế toán trưởng','Kế toán siêu thị & ngân hàng','Kế toán công nợ','Kế toán bán lẻ & thủ quỹ','Kế toán mua vào & kho'],isKTT=()=>!S.me.owner&&(S.staff.get(S.me.uid)||{}).role==='ketoantt',inScope=p=>!isKTT()||KTP.includes(p),posD=r=>(S.defs.find(x=>x.id===r.def)||{}).pos;
+const mgr=()=>S.me.owner||!!(S.staff.get(S.me.uid)||{}).taskAdmin||isKTT();
 const nameOf=u=>u?((S.staff.get(u)||{}).name||u):'Văn phòng';
 const key=(d,u)=>S.day+'_'+d.id+'_'+(u||'vp');
 function rec(d,u){if(u)return S.done.get(key(d,u));for(const[k,v]of S.done)if(k.startsWith(S.day+'_'+d.id+'_'))return v;return null}
@@ -40,14 +41,14 @@ function card(d,u,canAct){const s=status(d,u),c=CH[s.s],R=rec(d,u),man=d.mode===
   <div class="mut">${esc(d.freq)} · ${man&&d.mode!=='manual'?'Tạm báo xong tay (tự động sẽ nối sau)':d.mode==='auto'?'Tự động':'Báo xong + kiểm'}${u!==undefined&&u?' · '+esc(nameOf(u)):''}</div>
   <div class="mut">${esc(s.t)}${R&&R.note?' · '+esc(R.note):''}${d.output&&man?' · Nộp: '+esc(d.output):''}</div></div>${undel}<div class="acts">${a}</div></div>`}
 function render(){const me=S.me.uid,my=(S.staff.get(me)||{}).taskPos||(S.me.owner?OFFICE:posOf(me)),defs=S.defs.filter(d=>d.active!==false&&applies(d,S.day));
-  const tabs=[['mine','Việc của tôi']].concat(mgr()?[['all','Toàn công ty'],['chk','Chờ kiểm ('+[...S.done.values()].filter(r=>r.day===S.day&&r.st==='done').length+')']]:[]);
+  const tabs=[['mine','Việc của tôi']].concat(mgr()?[['all',isKTT()?'Nhóm kế toán':'Toàn công ty'],['chk','Chờ kiểm ('+[...S.done.values()].filter(r=>r.day===S.day&&r.st==='done'&&inScope(posD(r))).length+')']]:[]);
   if(!tabs.some(t=>t[0]===S.tab))S.tab='mine';
   let h=`<div class="tb">${tabs.map(([k,t])=>`<button class="${S.tab===k?'on':''}" data-t="${k}">${t}</button>`).join('')}<input type="date" id="dd" value="${S.day}"></div>`;
   if(S.tab==='mine'){const L=defs.filter(d=>my.includes(d.pos));h+=L.length?my.map(p=>{const X=L.filter(d=>d.pos===p);return X.length?`<div class="sec">${esc(p)}</div>`+X.map(d=>card(d,OFFICE.includes(p)?null:me,true)).join(''):''}).join(''):'<p class="mut">Hôm nay chưa có việc cho vị trí của bạn.</p>'}
-  else if(S.tab==='all'){const P=[...new Set(S.defs.map(d=>d.pos))];let tot=0,ok=0;const body=P.map(p=>{const X=defs.filter(d=>d.pos===p);if(!X.length)return'';const U=people(p);
+  else if(S.tab==='all'){const P=[...new Set(S.defs.map(d=>d.pos))].filter(inScope);let tot=0,ok=0;const body=P.map(p=>{const X=defs.filter(d=>d.pos===p);if(!X.length)return'';const U=people(p);
       return `<div class="sec">${esc(p)}</div>`+X.map(d=>U.map(u=>{const s=status(d,u).s;if(s!=='none'){tot++;if(s==='done')ok++}return card(d,u,OFFICE.includes(p))}).join('')).join('')}).join('');
     h+=`<div class="kp"><div><b>${ok}/${tot}</b>Việc xong hôm nay</div><div><b>${tot?Math.round(ok/tot*100):0}%</b>Tỷ lệ hoàn thành</div></div>`+body}
-  else{const L=[...S.done.entries()].filter(([k,r])=>r.day===S.day&&r.st==='done');h+=L.length?L.map(([k,r])=>{const d=S.defs.find(x=>x.id===r.def);return d?card(d,r.uid==='vp'?null:r.uid,false):''}).join(''):'<p class="mut">Không có việc chờ kiểm.</p>'}
+  else{const L=[...S.done.entries()].filter(([k,r])=>r.day===S.day&&r.st==='done'&&inScope(posD(r)));h+=L.length?L.map(([k,r])=>{const d=S.defs.find(x=>x.id===r.def);return d?card(d,r.uid==='vp'?null:r.uid,false):''}).join(''):'<p class="mut">Không có việc chờ kiểm.</p>'}
   $('#view').innerHTML=h;
   document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;render()});$('#dd').onchange=e=>{S.day=e.target.value||today();render()};
   document.querySelectorAll('[data-o]').forEach(b=>b.onclick=()=>{S.open=S.open===b.dataset.o?null:b.dataset.o;render()});

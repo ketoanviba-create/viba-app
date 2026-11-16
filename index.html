@@ -6,7 +6,7 @@
 <div id="go" style="text-align:center;padding:80px 10px"><div style="font-size:44px">⏳</div><h1 class="big" style="font-size:24px">Đang mở app của bạn…</h1><div class="muted" id="goWho"></div></div></div>
 <script>window.APP_MODE="home";</script><script src="config.js?v=122"></script><script src="gas-shim.js?v=152"></script>
 <script>/* v137: trang chủ tự đưa mỗi người về đúng app của vị trí mình (đã đăng nhập hoặc vừa đăng nhập xong), không hiện danh sách app */
-(async()=>{const P={admin:'quanly.html',sale:'sale.html',ship:'ship.html',kho:'kho.html',sx:'sanxuat.html',view:'xem.html'},N={admin:'Quản lý',sale:'Bán hàng',ship:'Giao hàng',kho:'Thủ kho',sx:'Sản xuất',view:'Chỉ xem'};
+(async()=>{const P={admin:'quanly.html',sale:'sale.html',ship:'ship.html',kho:'kho.html',sx:'sanxuat.html',view:'xem.html',ketoan:'quanly.html',ketoantt:'quanly.html'},N={admin:'Quản lý',sale:'Bán hàng',ship:'Giao hàng',kho:'Thủ kho',sx:'Sản xuất',view:'Chỉ xem',ketoan:'Kế toán',ketoantt:'Kế toán trưởng'};
 let c=window.claude;for(let i=0;i<200&&!(c&&c.use);i++){await new Promise(r=>setTimeout(r,100));c=window.claude}
 if(!c||!c.use){document.getElementById('goWho').textContent='Không kết nối được máy chủ. Kiểm tra mạng rồi tải lại trang.';return}
 const db=await c.use('db');let me=null;for(let i=0;i<600&&!(me=window.vibaErp&&vibaErp.me());i++)await new Promise(r=>setTimeout(r,100));if(!me)return;

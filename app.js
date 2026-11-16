@@ -65,7 +65,7 @@ const R={db:null,user:null,dl:null,uid:null,isOwner:false,checked:false,
 window.__R=R;
 const ST=()=>Object.assign({company:'VIBA FOOD',address:'',taxCode:'',dept:'',whName:'Kho chính',whCode:'KHO',whPlace:'',keeper:'',chiefAcc:'',director:'',
   circular:'(Kèm theo Thông tư số 99/2025/TT-BTC ngày 27/10/2025 của Bộ trưởng Bộ Tài chính)',lockDate:'',salePct:2,shipFee:20000,shipFeeOut:30000,shipFeeFar:50000,shipFarCodes:'07.LB, 16.GL',saleBase:6000000,saleAllow:2500000,saleStd:26,saleComm:2.4,coLoc:'',shipCC:300000,shipCCOff:100000,shipKg:1350,shipPct:3.6,shipSwapStd:5.5,shipSwapPrice:18000,shipSupNeg:1,shipBepCodes:'KH0105145683, KH0107522785, KH0104567410, KHĐQ0111269334, KH0111269334, KH0102061812, KH0106490072-001, KH0108462391-001, Tư thục hạt giống, KH345, KH358, KH0110797613, KH0109048659, KH0107499688, TTL0107361087',vAlias:''},R.settings);
-const ROLE_NAME={admin:'Quản lý',sale:'Bán hàng',ship:'Giao hàng',kho:'Thủ kho',view:'Chỉ xem'};
+const ROLE_NAME={admin:'Quản lý',sale:'Bán hàng',ship:'Giao hàng',kho:'Thủ kho',view:'Chỉ xem',ketoan:'Kế toán',ketoantt:'Kế toán trưởng'};
 function myRole(){if(R.isOwner)return'admin';const s=R.staff.get(R.uid);return s&&s.active!==false?s.role:null}
 function staffName(id){if(!id)return'—';const s=R.staff.get(id);return (s&&s.name)||R.names[id]||(id===R.uid?'Bạn':'Nhân viên')}
 function locked(date){const L=ST().lockDate;return !!(L&&date&&date<=L)}
@@ -2095,7 +2095,7 @@ function templateXls(T){if(T==='products')xlsxFile('Mau_san_pham.xlsx',[{name:'S
 
 /* ================= v31: NHÂN VIÊN DÙNG APP (đăng nhập bằng SĐT) =================
    config/staffPre = {list:[{name,phone,role:'sale'|'ship'|'kho',email,active}]}. Máy chủ chỉ cho tạo tài khoản <sđt>@sdt.viba nếu SĐT có trong danh sách và tự gán staff/{uid}. */
-const PRE_ROLE={ship:'Giao hàng',sale:'Bán hàng',kho:'Thủ kho',admin:'Quản lý',view:'Chỉ xem (thực tập)',sx:'Sản xuất (nhà máy)'};
+const PRE_ROLE={ship:'Giao hàng',sale:'Bán hàng',kho:'Thủ kho',admin:'Quản lý',view:'Chỉ xem (thực tập)',sx:'Sản xuất (nhà máy)',ketoan:'Kế toán',ketoantt:'Kế toán trưởng'};
 const normPhone=v=>{let d=String(v||'').replace(/\D/g,'');if(d.startsWith('84')&&d.length===11)d='0'+d.slice(2);return d};
 const fmtPhone=p=>String(p||'').replace(/^(\d{4})(\d{3})(\d+)$/,'$1 $2 $3');
 const loginLabel=e=>{const m=String(e||'').match(/^(\d+)@sdt\.viba$/);return m?'Số điện thoại: <b>'+esc(fmtPhone(m[1]))+'</b>':'Email: <b>'+esc(e)+'</b>'};
@@ -2238,14 +2238,14 @@ const TABS={
   sale:[['new','Lên đơn','cart'],['orders','Đơn của tôi','list'],['att','Chấm công','cam'],['report','Báo cáo','chart']],
   ship:[['todo','Cần giao','truck'],['new','Phát sinh','cart'],['done','Đã giao','check'],['report','Báo cáo','chart']],
   kho:[['vnew','Lập phiếu','doc'],['vlist','Phiếu','list'],['vdon','Vận đơn','truck'],['stock','Tồn kho','box']],
-  view:[['orders','Đơn hàng','list'],['vdon','Vận đơn','truck'],['stock','Tồn kho','box']],
+  view:[['orders','Đơn hàng','list'],['vdon','Vận đơn','truck'],['stock','Tồn kho','box']], ketoan:[['dash','Công việc','check'],['vdon','Vận đơn','truck'],['stock','Kho','box']], ketoantt:[['dash','Công việc','check'],['sales','Báo cáo','chart'],['stock','Kho','box']],
   admin:[['dash','Tổng quan','home'],['sales','Báo cáo','chart'],['vdon','Vận đơn','truck'],['stock','Kho','box'],['catalog','Danh mục','book'],['settings','Cài đặt','gear']]};
 function views(){return{
   sale:{new:viewSaleNew,orders:viewSaleOrders,att:viewAttend,report:v=>{if(!R._repIn){R._repIn=1;R.per={p:'ca',from:'',to:''}}const ru=R.repUid&&myRole()==='admin'?R.repUid:null;viewSaleReport(v,ru||R.uid);if(ru){v.insertAdjacentHTML('afterbegin',`<div class="alert b" style="font-size:14px;margin-bottom:10px">👁 Đang xem báo cáo của <b>${esc(staffName(ru))}</b> (Quản lý chỉ xem) · <a href="#" id="repBack" style="font-weight:700">‹ Về Báo cáo bán hàng</a></div>`);const b=$('#repBack');if(b)b.onclick=e=>{e.preventDefault();R.repUid=null;R.mode='admin';go('sales')}}}},
   ship:{todo:viewShipTodo,new:viewSaleNew,done:viewShipDone,report:v=>viewShipReport(v,R.uid)},
   kho:{vnew:viewKhoNew,vlist:viewKhoList,vdon:viewVanDon,stock:viewStock,byorder:viewKhoByOrder},
   view:{orders:v=>{orderListView(v,R.orders,{title:'Đơn hàng',who:'saleId'});viewBanner(v)},vdon:v=>{viewVanDon(v);viewBanner(v)},stock:v=>{viewStock(v);viewBanner(v)}},
-  admin:{dash:viewDash,sales:viewSalesRep,vdon:viewVanDon,orders:viewAllOrders,stock:viewStock,catalog:viewCatalog,settings:viewSettings}}}
+  admin:{dash:viewDash,sales:viewSalesRep,vdon:viewVanDon,orders:viewAllOrders,stock:viewStock,catalog:viewCatalog,settings:viewSettings}, ketoan:{dash:v=>{v.innerHTML='<div class="muted" style="padding:24px;text-align:center">Đang tải công việc…</div>'},vdon:viewVanDon,stock:viewStock}, ketoantt:{dash:v=>{v.innerHTML='<div class="muted" style="padding:24px;text-align:center">Đang tải công việc…</div>'},sales:viewSalesRep,stock:viewStock}}}
 /* v113: tài khoản Chỉ xem (thực tập) – máy chủ chặn mọi thao tác ghi, chỉ đồng bộ đơn hàng, sản phẩm, phiếu kho */
 function viewBanner(v){v.insertAdjacentHTML('afterbegin','<div class="alert" style="margin-bottom:10px">👁 Tài khoản thực tập – <b>chỉ xem</b>, không nhập/sửa được dữ liệu.</div>')}
 function go(tab){if(tab!=='report'){R._repIn=0;R.repUid=null}if(tab!=='sales'&&tab!=='report')R._salIn=0;R.tab=tab;try{localStorage.setItem('viba.tab',R.mode+':'+tab)}catch(e){}render();window.scrollTo({top:0})}
@@ -2265,7 +2265,7 @@ function render(){const role=myRole();const who=$('#who');
   /* v115: tài khoản Sản xuất dùng trang riêng sanxuat.html */if(role==='sx'){location.replace('sanxuat.html');return}
   if(role!=='admin')R.mode=role;else if(!R.mode)R.mode='admin';
   const tabs=TABS[R.mode];if(!tabs.some(t=>t[0]===R.tab)&&!(R.mode==='admin'&&R.tab==='orders'))R.tab=tabs[0][0];
-  who.innerHTML=`<span class="chip g">${ROLE_NAME[role]}</span><span>${esc(staffName(R.uid))}</span><a class="btn sm" href="viec.html">📋 Việc</a>${role==='admin'||role==='kho'?'<a class="btn sm" href="erp.html">📦 ERP</a>':''}${window.vibaChangePw?'<button class="btn sm" onclick="vibaChangePw()">Đổi MK</button>':''}<button class="btn sm" onclick="vibaLogout()">Đăng xuất</button>`;
+  who.innerHTML=`<span class="chip g">${ROLE_NAME[role]}</span><span>${esc(staffName(R.uid))}</span><a class="btn sm" href="viec.html">📋 Việc</a>${role==='admin'||role==='kho'||role==='ketoan'||role==='ketoantt'?'<a class="btn sm" href="erp.html">📦 ERP</a>':''}${window.vibaChangePw?'<button class="btn sm" onclick="vibaChangePw()">Đổi MK</button>':''}<button class="btn sm" onclick="vibaLogout()">Đăng xuất</button>`;
   $('#modeSw').innerHTML=role==='admin'?`<select id="modeSel" aria-label="Chế độ xem" style="min-height:36px;padding:6px 10px;font-size:14px;width:auto">${Object.entries(ROLE_NAME).map(([k,l])=>`<option value="${k}" ${R.mode===k?'selected':''}>${k==='admin'?'Xem: Quản lý':'Xem như '+l}</option>`).join('')}<option value="__sx">🏭 Mở Sản xuất</option></select>`:'';$('#modeSw').insertAdjacentHTML('beforeend','<span style="display:inline-flex;gap:6px;margin-left:6px"><a class="btn sm pri" href="viec.html">📋 Công việc</a>'+(role==='admin'||role==='kho'?'<a class="btn sm" href="erp.html">📦 ERP</a>':'')+'</span>');
   const ms=$('#modeSel');if(ms)ms.onchange=()=>{if(ms.value==='__sx'){location.href='sanxuat.html';return}R.repUid=null;R.mode=ms.value;R.tab=TABS[R.mode][0][0];try{localStorage.setItem('viba.tab',R.mode+':'+R.tab)}catch(e){}render()};
   const pend=[...R.requests.keys()].filter(id=>!R.staff.has(id)).length;
@@ -2384,7 +2384,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='126';
+const APP_BUILD='127';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
