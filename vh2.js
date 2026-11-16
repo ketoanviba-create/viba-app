@@ -16,7 +16,7 @@ const KTP=['Kế toán trưởng','Kế toán siêu thị & ngân hàng','Kế t
 const nameOf=u=>u?((S.staff.get(u)||{}).name||u):'Văn phòng';
 const key=(d,u)=>S.day+'_'+d.id+'_'+(u||'vp');
 function rec(d,u){if(u)return S.done.get(key(d,u));for(const[k,v]of S.done)if(k.startsWith(S.day+'_'+d.id+'_'))return v;return null}
-function status(d,u){const R=rec(d,u),day=S.day,E=S.erp;
+function status(d,u){if(d.id==='sh2'&&u)return cashSt(d,u);const R=rec(d,u),day=S.day,E=S.erp;
   const man=()=>!R?{s:'todo',t:'Chưa báo xong'}:R.st==='checked'?{s:'done',t:'Đạt · '+nameOf(R.checkBy)}:R.st==='returned'?{s:'todo',t:'Trả lại: '+(R.why||'')}:{s:'wait',t:'Chờ kiểm'};
   if(d.mode==='manual'||d.rule==='pending'||d.rule==='pending_misa')return man();
   const cnt=f=>E.filter(f).length;
@@ -32,6 +32,32 @@ function status(d,u){const R=rec(d,u),day=S.day,E=S.erp;
     if(R&&R.closed)return{s:'done',t:'Đã bấm hoàn thành'+(R.undel&&R.undel.length?' · '+R.undel.length+' đơn chưa giao có lý do':'')};
     if(!L.length)return{s:'none',t:'Không có đơn'};const n=L.filter(o=>o.status!=='done').length;return n?{s:'todo',t:'Còn '+n+'/'+L.length+' đơn chưa giao'}:{s:'done',t:'Đã giao hết '+L.length+' đơn'}}
   return man()}
+/*v3 nop tien*/
+const fm=v=>Math.round(+v||0).toLocaleString('vi-VN')+' đ';
+function cashOf(u){let A=null;try{A=window.__vibaApp&&window.__vibaApp()}catch(e){}if(!A||!A.R)return{v:0,n:0};const L=A.R.orders.filter(o=>o.shipId===u&&o.status!=='cancel'&&o.paid&&o.payMethod==='cash'&&A.payDay(o)===S.day);return{v:L.reduce((x,o)=>{const t=A.orderTotal(o);return x+Math.min(t,(+o.paidAmount)||t)},0),n:L.length}}
+function cashSt(d,u){const R=rec(d,u),c=cashOf(u),ex=c.v-((R&&R.cash)||0);
+  if(!R)return c.v?{s:'todo',t:'Tiền mặt '+fm(c.v)+' chưa nộp'}:{s:'none',t:'Chưa thu tiền mặt'};
+  if(R.st==='done')return{s:'wait',t:'Đã nộp '+fm(R.cash)+' · chờ kế toán nhận'+(ex>0?' · thu thêm '+fm(ex)+' chưa nộp':'')};
+  const rv=R.recv!=null?R.recv:R.cash,sh=(R.cash||0)-rv;if(ex>0)return{s:'todo',t:'Thu thêm '+fm(ex)+' chưa nộp'};
+  return{s:'done',t:'Kế toán đã nhận '+fm(rv)+(sh>0?' · thiếu '+fm(sh):'')+(R.checkBy?' · '+nameOf(R.checkBy):'')}}
+function cashCard(d){const u=S.me.uid,st=status(d,u),R=rec(d,u),c=cashOf(u),ex=c.v-((R&&R.cash)||0),can=(!R&&c.v>0)||(R&&ex>0);
+  return '<div class="vt" style="--c:'+COL[st.s]+';display:block"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b>Nộp tiền thu trong ngày</b><span class="ch" style="background:'+COL[st.s]+'">'+(st.s==='wait'?'Chờ kế toán nhận':st.s==='done'?'Kế toán đã nhận':LAB[st.s])+'</span></div><div class="m" style="margin:4px 0">💵 Tiền mặt hôm nay: <b style="font-size:15px;color:var(--fg,#0f1b29)">'+fm(c.v)+'</b> · '+c.n+' đơn</div><div class="m">'+esc(st.t)+'</div>'+(can?'<button class="btn block pri" data-cash="1" style="margin-top:8px">✓ Đã nộp tiền'+(R?' thêm '+fm(ex):'')+'</button>':'')+'</div>'}
+async function payCash(){const u=S.me.uid,d=S.defs.find(x=>x.id==='sh2');if(!d)return;const R=rec(d,u),c=cashOf(u),amt=c.v-((R&&R.cash)||0);if(amt<=0)return;
+  if(!confirm('Xác nhận đã nộp '+fm(amt)+' tiền mặt cho kế toán?'))return;const k=key(d,u),prev=R?(R.st==='checked'?(R.recv!=null?R.recv:R.cash):(R.recvPrev||0)):0;
+  const r={day:S.day,def:'sh2',uid:u,st:'done',cash:c.v,n:c.n,recvPrev:prev,note:'Nộp '+fm(c.v)+' · '+c.n+' đơn',at:Date.now(),by:u};await S.db.doc('taskdone/'+k).set(r);S.done.set(k,r)}
+const canRecv=()=>isKTT()||myPos().some(p=>p==='Kế toán bán lẻ & thủ quỹ'||p==='Kế toán siêu thị & ngân hàng');
+function cashBlock(){if(!canRecv())return'';const all=[...S.done.entries()].filter(([k,r])=>r.def==='sh2'&&r.day===S.day),P=all.filter(([k,r])=>r.st==='done'),D=all.filter(([k,r])=>r.st==='checked');
+  let h='<div class="blk" style="margin-bottom:10px"><div class="hd"><b>💵 Tiền ship chờ nhận</b><span class="m">Hôm nay</span></div>';
+  h+=P.map(([k,r])=>{const due=(r.cash||0)-(r.recvPrev||0);return '<div style="border-top:1px solid #e6ecf2;padding:9px 0"><div style="display:flex;justify-content:space-between;align-items:baseline"><div><b>'+esc(nameOf(r.uid))+'</b><div class="m">'+(r.n||0)+' đơn · nộp '+new Date((+r.at||0)+7*36e5).toISOString().slice(11,16)+'</div></div><b style="font-size:17px">'+fm(due)+'</b></div><div style="display:flex;gap:8px;margin-top:7px"><button class="btn sm pri" data-crec="'+esc(k)+'" style="flex:2">✓ Đã nhận tiền</button><button class="btn sm" data-cshort="'+esc(k)+'" style="flex:1">Chưa đủ</button></div></div>'}).join('')||'<div class="m" style="padding:6px 0">Chưa có ship nộp tiền.</div>';
+  if(D.length)h+='<div class="sec2">Đã nhận hôm nay</div>'+D.map(([k,r])=>{const rv=r.recv!=null?r.recv:r.cash,sh=(r.cash||0)-rv;return '<div style="display:flex;justify-content:space-between;font-size:13.5px;padding:4px 0"><span>'+esc(nameOf(r.uid))+'</span><b style="color:'+(sh>0?COL.late:COL.done)+'">'+fm(rv)+(sh>0?' · thiếu '+fm(sh):'')+'</b></div>'}).join('');
+  return h+'</div>'}
+async function recvCash(k,short){const r=S.done.get(k);if(!r)return;const due=(r.cash||0)-(r.recvPrev||0);let got=due;
+  if(short){const t=prompt('Số tiền thực nhận (đ) – phải nhận '+fm(due)+':','');if(t===null)return;got=+String(t).replace(/\D/g,'');if(!(got>=0)||got>=due)return alert('Nhập số tiền nhỏ hơn '+fm(due))}
+  const n=Object.assign({},r,{st:'checked',recv:(r.recvPrev||0)+got,short:due-got,checkBy:S.me.uid,checkAt:Date.now()});await S.db.doc('taskdone/'+k).set(n);S.done.set(k,n)}
+function cashTable(){const sh=[...S.staff.entries()].filter(([u,s])=>s.role==='ship'&&s.active!==false),d=S.defs.find(x=>x.id==='sh2');if(!d)return'';let T=0,rows='';
+  sh.forEach(([u])=>{const c=cashOf(u),R=rec(d,u);if(!c.v&&!R)return;T+=c.v;const st=cashSt(d,u),lb=st.s==='done'?(/thiếu/.test(st.t)?['Thiếu',COL.late]:['Đã nhận',COL.done]):st.s==='wait'?['Chờ nhận',COL.wait]:['Chưa nộp',COL.todo];
+    rows+='<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid #e6ecf2;font-size:13.5px"><span style="flex:1">'+esc(nameOf(u))+'</span><b>'+fm(c.v)+'</b><span class="ch" style="background:'+lb[1]+'">'+lb[0]+'</span></div>'});
+  return rows?'<div class="blk" style="margin-top:8px;border-width:1px"><b>💵 Tiền mặt ship nộp hôm nay</b>'+rows+'<div style="display:flex;justify-content:space-between;padding-top:7px;border-top:2px solid #e6ecf2"><b>Tổng</b><b>'+fm(T)+'</b></div></div>':''}
 const CH={done:['Xong','#1F8A52'],todo:['Chưa xong','#B26A00'],late:['Trễ','#C0392B'],wait:['Chờ kiểm','#1B69A3'],none:['Không phát sinh','#8a96a3']};
 
 const COL={done:'#1f8a52',todo:'#c77700',late:'#d63b2f',wait:'#1b6aa5',none:'#8a96a3'},LAB={done:'Xong',todo:'Chưa xong',late:'Trễ',wait:'Chờ kiểm',none:'Không phát sinh'};
@@ -62,7 +88,7 @@ function htmlStaff(){const L=myTasks().filter(x=>x.s.s!=='none'),n=L.filter(x=>x
   if(!L.length)h=`<div class="vs ok">✓ Hôm nay chưa có việc cho vị trí của bạn</div>`;
   else if(!rest.length)h=`<div class="vs ok" data-vh="t">✓ Xong việc hôm nay (${n}/${L.length})<span style="margin-left:auto">${S.open?'⌃':'›'}</span></div>`;
   else h=`<div class="vs" data-vh="t"><span style="font-size:20px">📋</span><div style="flex:1"><b>Việc hôm nay ${n}/${L.length}</b><div class="m">còn: ${esc(rest.map(x=>x.d.title).join(' · '))}</div></div><span style="color:#1b6aa5;font-weight:800">${S.open?'⌃':'›'}</span></div>`;
-  if(S.open&&L.length)h+=`<div class="vl">${L.map(x=>`<a class="vt" style="--c:${COL[x.s.s]}" href="viec.html"><div class="x"><b>${esc(x.d.title)}</b><span class="m">${esc(x.s.t)}</span></div><span class="ch" style="background:${COL[x.s.s]}">${x.s.s==='done'?'Xong':x.s.s==='wait'?'Chờ kiểm':x.d.rule==='ship_day'?'Hoàn thành ›':(x.d.mode==='manual'||String(x.d.rule).startsWith('pending'))?'Báo xong ›':LAB[x.s.s]}</span></a>`).join('')}</div>`;
+  if(S.open&&L.length)h+=`<div class="vl">${L.map(x=>x.d.id==='sh2'?cashCard(x.d):`<a class="vt" style="--c:${COL[x.s.s]}" href="viec.html"><div class="x"><b>${esc(x.d.title)}</b><span class="m">${esc(x.s.t)}</span></div><span class="ch" style="background:${COL[x.s.s]}">${x.s.s==='done'?'Xong':x.s.s==='wait'?'Chờ kiểm':x.d.rule==='ship_day'?'Hoàn thành ›':(x.d.mode==='manual'||String(x.d.rule).startsWith('pending'))?'Báo xong ›':LAB[x.s.s]}</span></a>`).join('')}</div>`;
   if(st.role==='kho'){const C=S.erp.filter(x=>x.type==='CKNB'&&x.wh2==='HN'&&x.date===S.day&&x.st!=='cancelled');if(C.length)h+=`<a class="ac" href="erp.html#list" style="margin-top:6px"><span class="i">🚚</span><div class="x"><b>Hàng Hòa Bình chuyển về</b><span>${C.map(x=>esc(x.no||'')).join(' · ')}</span></div><span class="n">${C.length}</span><span style="color:#97a3b1">›</span></a>`}
   const B=[];if(P.includes('Thủ kho Hòa Bình')||P.includes('Kế toán mua vào & kho'))B.push(['PMUA','🛒','Mua nguyên liệu'],['DXVT','🧰','Mua vật tư'],['CKNB','🚚','Điều xe, chuyển về HN']);
   if(P.some(p=>/^Tổ trưởng/.test(p)))B.push(['PXSX','🏭','Xuất NL vào sản xuất'],['NKTP','📦','Nhập thành phẩm']);
@@ -111,14 +137,14 @@ function kpiView(){const A=window.__vibaApp&&(()=>{try{return window.__vibaApp()
   if(S.kd==='rev'){const days=[...Array(14)].map((_,i)=>DAY(13-i)),vals=days.map(d=>A.stats(inR(d,d)).revenue),mx=Math.max(1,...vals);
     h+=`<div class="blk" style="margin-top:8px;border-width:1px"><b>Doanh thu 14 ngày</b><div style="display:flex;align-items:flex-end;gap:4px;height:110px;margin-top:8px">${vals.map(v=>`<div title="${fmtM(v)}" style="flex:1;background:${B_};height:${Math.max(2,v/mx*100)}%;border-radius:3px 3px 0 0"></div>`).join('')}</div><div class="m" style="display:flex;justify-content:space-between"><span>${days[0].slice(8)}/${days[0].slice(5,7)}</span><span>${days[13].slice(8)}/${days[13].slice(5,7)}</span></div></div>`}
   if(S.kd==='otif'){const late=G.filter(o=>!(o.status==='done'&&dd(o)&&dd(o)<=(o.dlvDate||o.date))).slice(0,10);h+=`<div class="blk" style="margin-top:8px;border-width:1px"><b>Đơn chưa giao đúng hẹn</b>${late.map(o=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid #e6ecf2;font-size:13px"><span>${esc(o.no||'')} · ${esc((o.custName||'').slice(0,34))}</span><span>${o.status==='done'?'giao '+dd(o).slice(8)+'/'+dd(o).slice(5,7):'chưa giao'}</span></div>`).join('')||'<div class="m">Không có.</div>'}</div>`}
-  h+=`<div style="display:flex;gap:8px;margin-top:10px"><button class="btn" data-vdet="1" style="flex:1">${S.det?'Ẩn báo cáo chi tiết ⌃':'Báo cáo chi tiết ›'}</button>${isKT()?'':'<button class="btn" data-vold="1" style="flex:1">Tổng quan bán hàng ›</button>'}</div>`;
+  h+=cashTable();h+=`<div style="display:flex;gap:8px;margin-top:10px"><button class="btn" data-vdet="1" style="flex:1">${S.det?'Ẩn báo cáo chi tiết ⌃':'Báo cáo chi tiết ›'}</button>${isKT()?'':'<button class="btn" data-vold="1" style="flex:1">Tổng quan bán hàng ›</button>'}</div>`;
   return h}
 function ktView(){const tg=document.querySelector('.brandbar .tag');if(tg)tg.textContent=isKTT()?'Kế toán trưởng':'Kế toán';
- if(!isKTT()){const o=S.open;S.open=true;const h='<h1 class="big">Công việc</h1>'+htmlStaff();S.open=o;return h}
+ if(!isKTT()){const o=S.open;S.open=true;const h='<h1 class="big">Công việc</h1>'+cashBlock()+htmlStaff();S.open=o;return h}
  const E=S.erp,inL=x=>!(LIM[x.type]&&x.total>LIM[x.type]),sub=E.filter(x=>x.st==='submitted'&&inL(x)).length,acct=E.filter(x=>x.st==='approved'&&!x.acctOk).length;
  const TP=KTP.slice(1),inT=r=>{const d=S.defs.find(x=>x.id===r.def);return d&&KTP.includes(d.pos)},chkL=[...S.done.entries()].filter(([k,r])=>r.day===S.day&&r.st==='done'&&inT(r)),tab=S.ktTab||'mine';
  const row=(d,u)=>{const x=status(d,u);return '<a class="vt" style="--c:'+COL[x.s]+'" href="viec.html"><div class="x"><b>'+esc(d.title)+'</b><span class="m">'+(u?esc(nameOf(u))+' · ':'')+esc(x.t)+'</span></div><span class="ch" style="background:'+COL[x.s]+'">'+LAB[x.s]+'</span></a>'};
- let h='<h1 class="big">Công việc</h1><div class="blk">'+ac('erp.html#wait','📦','Phiếu ERP chờ duyệt (trong hạn mức)','Vượt hạn mức do Quản lý duyệt',sub,!sub)+ac('erp.html#acct','🔍','Phiếu chờ kế toán kiểm','Kiểm xong mới được sang MISA',acct,!acct)+ac('viec.html#chk','✅','Việc kế toán chờ chị kiểm','Bấm Đạt / Trả lại',chkL.length,!chkL.length)+'</div>';
+ let h='<h1 class="big">Công việc</h1>'+cashBlock()+'<div class="blk">'+ac('erp.html#wait','📦','Phiếu ERP chờ duyệt (trong hạn mức)','Vượt hạn mức do Quản lý duyệt',sub,!sub)+ac('erp.html#acct','🔍','Phiếu chờ kế toán kiểm','Kiểm xong mới được sang MISA',acct,!acct)+ac('viec.html#chk','✅','Việc kế toán chờ chị kiểm','Bấm Đạt / Trả lại',chkL.length,!chkL.length)+'</div>';
  h+='<div class="seg" style="margin-top:10px">'+[['mine','Việc của tôi'],['team','Nhóm kế toán'],['chk','Chờ kiểm'+(chkL.length?' ('+chkL.length+')':'')]].map(([k,l])=>'<button data-ktt="'+k+'" class="'+(tab===k?'on':'')+'">'+l+'</button>').join('')+'</div>';
  if(tab==='mine'){const M=myTasks();h+='<div class="vl" style="margin-top:8px">'+(M.map(x=>row(x.d,OFFICE.includes(x.d.pos)?null:S.me.uid)).join('')||'<div class="m">Chưa có việc.</div>')+'</div>'}
  if(tab==='team'){h+='<div class="sec2">Theo người · bấm để xem</div>';TP.forEach(p=>{const D=S.defs.filter(d=>d.active!==false&&applies(d,S.day)&&d.pos===p);people(p).forEach(u=>{let tot=0,ok=0;D.forEach(d=>{const st=status(d,u).s;if(st!=='none'){tot++;if(st==='done')ok++}});const w=tot?Math.round(ok/tot*100):100,c=w===100?COL.done:w<40?COL.late:COL.todo,k=p+'|'+u,op=S.cvOpen===k;
@@ -128,7 +154,7 @@ function ktView(){const tg=document.querySelector('.brandbar .tag');if(tg)tg.tex
  return h}
 function paint(){try{if(!S.ready||!S.me)return;let c=document.getElementById('vh');const v=document.getElementById('view');if(!v)return;
   if(!c){c=document.createElement('div');c.id='vh';v.parentNode.insertBefore(c,v);c.addEventListener('click',e=>{const g=x=>e.target.closest(x);let el;
-    if(g('[data-vh="t"]')){S.open=!S.open}else if(el=g('[data-cvt]')){S.cvTab=el.dataset.cvt}else if(el=g('[data-cvp]')){S.cvOpen=S.cvOpen===el.dataset.cvp?null:el.dataset.cvp}
+    if(g('[data-cash]')){payCash().then(()=>{last='';paint()}).catch(x=>alert('Lỗi: '+x.message));return}else if(el=g('[data-crec]')){recvCash(el.dataset.crec,false).then(()=>{last='';paint()}).catch(x=>alert('Lỗi: '+x.message));return}else if(el=g('[data-cshort]')){recvCash(el.dataset.cshort,true).then(()=>{last='';paint()}).catch(x=>alert('Lỗi: '+x.message));return}else if(g('[data-vh="t"]')){S.open=!S.open}else if(el=g('[data-cvt]')){S.cvTab=el.dataset.cvt}else if(el=g('[data-cvp]')){S.cvOpen=S.cvOpen===el.dataset.cvp?null:el.dataset.cvp}
     else if(el=g('[data-ktt]')){S.ktTab=el.dataset.ktt}else if(el=g('[data-kp]')){S.kp=el.dataset.kp}else if(el=g('[data-kd]')){S.kd=S.kd===el.dataset.kd?null:el.dataset.kd}else if(g('[data-vdet]')){S.det=!S.det}
     else if(g('[data-vold]')){S.old=true;const b=document.querySelector('#tabs button');b&&b.click();setTimeout(()=>window.scrollTo(0,0),50)}
     else if(g('[data-vback]')){S.old=false}else return;last='';S.kat=0;paint()})}
@@ -142,7 +168,7 @@ function paint(){try{if(!S.ready||!S.me)return;let c=document.getElementById('vh
 async function init(){let c=window.claude;for(let i=0;i<100&&!(c&&c.use&&window.vibaErp&&vibaErp.me());i++){await new Promise(r=>setTimeout(r,150));c=window.claude}
   if(!(c&&c.use&&window.vibaErp))return;S.me=vibaErp.me();if(!S.me)return;
   const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
-  const db=await c.use('db');const R=()=>{S.ready=1;last='';S.kat=0;paint()};
+  const db=await c.use('db');S.db=db;const R=()=>{S.ready=1;last='';S.kat=0;paint()};
   db.collection('taskdefs').onSnapshot(s=>{S.defs=s.docs.map(d=>d.data()).sort((a,b)=>a.order-b.order);R()});
   db.collection('taskdone').onSnapshot(s=>{S.done=new Map(s.docs.map(d=>[d.id,d.data()]));R()});
   db.collection('staff').onSnapshot(s=>{S.staff=new Map(s.docs.map(d=>[d.id,d.data()]));R()});

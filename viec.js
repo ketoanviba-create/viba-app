@@ -56,7 +56,7 @@ function render(){const me=S.me.uid,my=(S.staff.get(me)||{}).taskPos||(S.me.owne
   document.querySelectorAll('[data-ret]').forEach(b=>b.onclick=()=>check(b.dataset.ret,false));document.querySelectorAll('[data-ship]').forEach(b=>b.onclick=()=>shipClose(b.dataset.ship))}
 const parse=k=>{const[day,def,uid]=k.split('_');return{day,def,uid}};
 async function put(k,data){const p=parse(k);await S.db.doc('taskdone/'+k).set(Object.assign({day:p.day,def:p.def,uid:p.uid},data,{at:Date.now(),by:S.me.uid}));S.done.set(k,Object.assign({day:p.day,def:p.def,uid:p.uid},data));render()}
-async function report(k){const n=prompt('Kết quả (ghi chú, link file, số chứng từ…):');if(n===null)return;if(!n.trim())return toast('Cần ghi kết quả');await put(k,{st:'done',note:n.trim()});toast('✓ Đã báo xong – chờ kiểm')}
+async function report(k){if(parse(k).def==='sh2')return toast('Nộp tiền ở màn hình chính app Giao hàng: bấm "Đã nộp tiền"');const n=prompt('Kết quả (ghi chú, link file, số chứng từ…):');if(n===null)return;if(!n.trim())return toast('Cần ghi kết quả');await put(k,{st:'done',note:n.trim()});toast('✓ Đã báo xong – chờ kiểm')}
 async function check(k,ok){const r=S.done.get(k)||{};let why='';if(!ok){why=prompt('Lý do trả lại:');if(!why)return}await put(k,Object.assign({},r,{st:ok?'checked':'returned',why,checkBy:S.me.uid}));toast(ok?'✓ Đạt':'Đã trả lại')}
 function shipClose(k){const p=parse(k),L=S.orders.filter(o=>o.shipId===p.uid&&(o.dlvDate||o.date)===p.day&&o.status!=='cancel'&&o.status!=='done');
   $('#view').innerHTML=`<div class="card"><h3>Hoàn thành ngày giao ${p.day.split('-').reverse().join('/')}</h3><p class="mut">${L.length} đơn chưa giao. Chọn lý do cho từng đơn:</p>
