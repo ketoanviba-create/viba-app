@@ -33,20 +33,21 @@ function status(d,u){if(d.id==='sh2'&&u)return cashSt(d,u);const R=rec(d,u),day=
     if(!L.length)return{s:'none',t:'Không có đơn'};const n=L.filter(o=>o.status!=='done').length;return n?{s:'todo',t:'Còn '+n+'/'+L.length+' đơn chưa giao'}:{s:'done',t:'Đã giao hết '+L.length+' đơn'}}
   return man()}
 /*v3 nop tien*/
+const recC=(d,u)=>{const R=rec(d,u);return R&&R.cash!=null?R:null};
 const fm=v=>Math.round(+v||0).toLocaleString('vi-VN')+' đ';
 function cashOf(u){let A=null;try{A=window.__vibaApp&&window.__vibaApp()}catch(e){}if(!A||!A.R)return{v:0,n:0};const L=A.R.orders.filter(o=>o.shipId===u&&o.status!=='cancel'&&o.paid&&o.payMethod==='cash'&&A.payDay(o)===S.day);return{v:L.reduce((x,o)=>{const t=A.orderTotal(o);return x+Math.min(t,(+o.paidAmount)||t)},0),n:L.length}}
-function cashSt(d,u){const R=rec(d,u),c=cashOf(u),ex=c.v-((R&&R.cash)||0);
+function cashSt(d,u){const R=recC(d,u),c=cashOf(u),ex=c.v-((R&&R.cash)||0);
   if(!R)return c.v?{s:'todo',t:'Tiền mặt '+fm(c.v)+' chưa nộp'}:{s:'none',t:'Chưa thu tiền mặt'};
   if(R.st==='done')return{s:'wait',t:'Đã nộp '+fm(R.cash)+' · chờ kế toán nhận'+(ex>0?' · thu thêm '+fm(ex)+' chưa nộp':'')};
   const rv=R.recv!=null?R.recv:R.cash,sh=(R.cash||0)-rv;if(ex>0)return{s:'todo',t:'Thu thêm '+fm(ex)+' chưa nộp'};
   return{s:'done',t:'Kế toán đã nhận '+fm(rv)+(sh>0?' · thiếu '+fm(sh):'')+(R.checkBy?' · '+nameOf(R.checkBy):'')}}
-function cashCard(d){const u=S.me.uid,st=status(d,u),R=rec(d,u),c=cashOf(u),ex=c.v-((R&&R.cash)||0),can=(!R&&c.v>0)||(R&&ex>0);
+function cashCard(d){const u=S.me.uid,st=status(d,u),R=recC(d,u),c=cashOf(u),ex=c.v-((R&&R.cash)||0),can=(!R&&c.v>0)||(R&&ex>0);
   return '<div class="vt" style="--c:'+COL[st.s]+';display:block"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b>Nộp tiền thu trong ngày</b><span class="ch" style="background:'+COL[st.s]+'">'+(st.s==='wait'?'Chờ kế toán nhận':st.s==='done'?'Kế toán đã nhận':LAB[st.s])+'</span></div><div class="m" style="margin:4px 0">💵 Tiền mặt hôm nay: <b style="font-size:15px;color:var(--fg,#0f1b29)">'+fm(c.v)+'</b> · '+c.n+' đơn</div><div class="m">'+esc(st.t)+'</div>'+(can?'<button class="btn block pri" data-cash="1" style="margin-top:8px">✓ Đã nộp tiền'+(R?' thêm '+fm(ex):'')+'</button>':'')+'</div>'}
-async function payCash(){const u=S.me.uid,d=S.defs.find(x=>x.id==='sh2');if(!d)return;const R=rec(d,u),c=cashOf(u),amt=c.v-((R&&R.cash)||0);if(amt<=0)return;
+async function payCash(){const u=S.me.uid,d=S.defs.find(x=>x.id==='sh2');if(!d)return;const R=recC(d,u),c=cashOf(u),amt=c.v-((R&&R.cash)||0);if(amt<=0)return;
   if(!confirm('Xác nhận đã nộp '+fm(amt)+' tiền mặt cho kế toán?'))return;const k=key(d,u),prev=R?(R.st==='checked'?(R.recv!=null?R.recv:R.cash):(R.recvPrev||0)):0;
   const r={day:S.day,def:'sh2',uid:u,st:'done',cash:c.v,n:c.n,recvPrev:prev,note:'Nộp '+fm(c.v)+' · '+c.n+' đơn',at:Date.now(),by:u};await S.db.doc('taskdone/'+k).set(r);S.done.set(k,r)}
 const canRecv=()=>isKTT()||myPos().some(p=>p==='Kế toán bán lẻ & thủ quỹ'||p==='Kế toán siêu thị & ngân hàng');
-function cashBlock(){if(!canRecv())return'';const all=[...S.done.entries()].filter(([k,r])=>r.def==='sh2'&&r.day===S.day),P=all.filter(([k,r])=>r.st==='done'),D=all.filter(([k,r])=>r.st==='checked');
+function cashBlock(){if(!canRecv())return'';const all=[...S.done.entries()].filter(([k,r])=>r.def==='sh2'&&r.day===S.day&&r.cash!=null),P=all.filter(([k,r])=>r.st==='done'),D=all.filter(([k,r])=>r.st==='checked');
   let h='<div class="blk" style="margin-bottom:10px"><div class="hd"><b>💵 Tiền ship chờ nhận</b><span class="m">Hôm nay</span></div>';
   h+=P.map(([k,r])=>{const due=(r.cash||0)-(r.recvPrev||0);return '<div style="border-top:1px solid #e6ecf2;padding:9px 0"><div style="display:flex;justify-content:space-between;align-items:baseline"><div><b>'+esc(nameOf(r.uid))+'</b><div class="m">'+(r.n||0)+' đơn · nộp '+new Date((+r.at||0)+7*36e5).toISOString().slice(11,16)+'</div></div><b style="font-size:17px">'+fm(due)+'</b></div><div style="display:flex;gap:8px;margin-top:7px"><button class="btn sm pri" data-crec="'+esc(k)+'" style="flex:2">✓ Đã nhận tiền</button><button class="btn sm" data-cshort="'+esc(k)+'" style="flex:1">Chưa đủ</button></div></div>'}).join('')||'<div class="m" style="padding:6px 0">Chưa có ship nộp tiền.</div>';
   if(D.length)h+='<div class="sec2">Đã nhận hôm nay</div>'+D.map(([k,r])=>{const rv=r.recv!=null?r.recv:r.cash,sh=(r.cash||0)-rv;return '<div style="display:flex;justify-content:space-between;font-size:13.5px;padding:4px 0"><span>'+esc(nameOf(r.uid))+'</span><b style="color:'+(sh>0?COL.late:COL.done)+'">'+fm(rv)+(sh>0?' · thiếu '+fm(sh):'')+'</b></div>'}).join('');
@@ -55,7 +56,7 @@ async function recvCash(k,short){const r=S.done.get(k);if(!r)return;const due=(r
   if(short){const t=prompt('Số tiền thực nhận (đ) – phải nhận '+fm(due)+':','');if(t===null)return;got=+String(t).replace(/\D/g,'');if(!(got>=0)||got>=due)return alert('Nhập số tiền nhỏ hơn '+fm(due))}
   const n=Object.assign({},r,{st:'checked',recv:(r.recvPrev||0)+got,short:due-got,checkBy:S.me.uid,checkAt:Date.now()});await S.db.doc('taskdone/'+k).set(n);S.done.set(k,n)}
 function cashTable(){const sh=[...S.staff.entries()].filter(([u,s])=>s.role==='ship'&&s.active!==false),d=S.defs.find(x=>x.id==='sh2');if(!d)return'';let T=0,rows='';
-  sh.forEach(([u])=>{const c=cashOf(u),R=rec(d,u);if(!c.v&&!R)return;T+=c.v;const st=cashSt(d,u),lb=st.s==='done'?(/thiếu/.test(st.t)?['Thiếu',COL.late]:['Đã nhận',COL.done]):st.s==='wait'?['Chờ nhận',COL.wait]:['Chưa nộp',COL.todo];
+  sh.forEach(([u])=>{const c=cashOf(u),R=recC(d,u);if(!c.v&&!R)return;T+=c.v;const st=cashSt(d,u),lb=st.s==='done'?(/thiếu/.test(st.t)?['Thiếu',COL.late]:['Đã nhận',COL.done]):st.s==='wait'?['Chờ nhận',COL.wait]:['Chưa nộp',COL.todo];
     rows+='<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid #e6ecf2;font-size:13.5px"><span style="flex:1">'+esc(nameOf(u))+'</span><b>'+fm(c.v)+'</b><span class="ch" style="background:'+lb[1]+'">'+lb[0]+'</span></div>'});
   return rows?'<div class="blk" style="margin-top:8px;border-width:1px"><b>💵 Tiền mặt ship nộp hôm nay</b>'+rows+'<div style="display:flex;justify-content:space-between;padding-top:7px;border-top:2px solid #e6ecf2"><b>Tổng</b><b>'+fm(T)+'</b></div></div>':''}
 const CH={done:['Xong','#1F8A52'],todo:['Chưa xong','#B26A00'],late:['Trễ','#C0392B'],wait:['Chờ kiểm','#1B69A3'],none:['Không phát sinh','#8a96a3']};
