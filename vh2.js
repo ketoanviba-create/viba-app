@@ -159,13 +159,13 @@ function paint(){try{if(!S.ready||!S.me)return;let c=document.getElementById('vh
     else if(el=g('[data-ktt]')){S.ktTab=el.dataset.ktt}else if(el=g('[data-kp]')){S.kp=el.dataset.kp}else if(el=g('[data-kd]')){S.kd=S.kd===el.dataset.kd?null:el.dataset.kd}else if(g('[data-vdet]')){S.det=!S.det}
     else if(g('[data-vold]')){S.old=true;const b=document.querySelector('#tabs button');b&&b.click();setTimeout(()=>window.scrollTo(0,0),50)}
     else if(g('[data-vback]')){S.old=false}else return;last='';S.kat=0;paint()})}
-  const kt=isQL()&&isKT(),ql=isQL()&&(S.me.owner||kt),at=activeTab(),md=(ql?at.i+'|'+at.t+'|'+!!S.old:'s'+firstTab());if(md!==S.mode){S.mode=md;last='';S.kat=0}
+  const kt=isQL()&&isKT(),adm=kt||/Cài đặt/.test((document.getElementById('tabs')||{}).textContent||''),ql=isQL()&&(S.me.owner||kt)&&adm,at=activeTab(),md=(ql?at.i+'|'+at.t+'|'+!!S.old:'s'+firstTab());if(md!==S.mode){S.mode=md;last='';S.kat=0}
   if(ql){const fb=document.querySelector('#tabs button span:last-child')||document.querySelector('#tabs button');if(fb&&fb.textContent.trim()==='Tổng quan')fb.textContent='Công việc'}
   if(ql&&at.i===0){if(S.old){c.hidden=false;const h0=`<div class="ac" data-vback="1" style="cursor:pointer;border-color:#1b6aa5"><b style="flex:1">‹ Về Công việc</b><span class="m">Đang xem Tổng quan bán hàng</span></div>`;if(h0!==last){c.innerHTML=h0;last=h0}v.style.display=''}
     else{c.hidden=false;v.style.display='none';const h=kt?ktView():cvView();if(h!==last){c.innerHTML=h;last=h}}return}
   if(ql&&at.t==='Báo cáo'){S.old=false;c.hidden=false;v.style.display=S.det?'':'none';if(last&&Date.now()-(S.kat||0)<4000)return;S.kat=Date.now();const h=kpiView();if(h!==last){c.innerHTML=h;last=h}return}
   if(ql){S.old=false;c.hidden=true;v.style.display='';return}
-  const show=firstTab();c.hidden=!show;if(show){const h=S.me.owner?htmlOwner():htmlStaff();if(h!==last){c.innerHTML=h;last=h}}}catch(e){console.error('vh',e)}}
+  if(S.me.owner){c.hidden=true;v.style.display='';return}const show=firstTab();c.hidden=!show;if(show){const h=S.me.owner?htmlOwner():htmlStaff();if(h!==last){c.innerHTML=h;last=h}}}catch(e){console.error('vh',e)}}
 async function init(){let c=window.claude;for(let i=0;i<100&&!(c&&c.use&&window.vibaErp&&vibaErp.me());i++){await new Promise(r=>setTimeout(r,150));c=window.claude}
   if(!(c&&c.use&&window.vibaErp))return;S.me=vibaErp.me();if(!S.me)return;
   const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
