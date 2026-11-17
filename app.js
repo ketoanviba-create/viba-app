@@ -67,7 +67,7 @@ const ST=()=>Object.assign({company:'VIBA FOOD',address:'',taxCode:'',dept:'',wh
   circular:'(Kèm theo Thông tư số 99/2025/TT-BTC ngày 27/10/2025 của Bộ trưởng Bộ Tài chính)',lockDate:'',salePct:2,shipFee:20000,shipFeeOut:30000,shipFeeFar:50000,shipFarCodes:'07.LB, 16.GL',saleBase:6000000,saleAllow:2500000,saleStd:26,saleComm:2.4,coLoc:'',shipCC:300000,shipCCOff:100000,shipKg:1350,shipPct:3.6,shipSwapStd:5.5,shipSwapPrice:18000,shipSupNeg:1,shipBepCodes:'KH0105145683, KH0107522785, KH0104567410, KHĐQ0111269334, KH0111269334, KH0102061812, KH0106490072-001, KH0108462391-001, Tư thục hạt giống, KH345, KH358, KH0110797613, KH0109048659, KH0107499688, TTL0107361087',vAlias:''},R.settings);
 const ROLE_NAME={admin:'Quản lý',sale:'Bán hàng',ship:'Giao hàng',kho:'Thủ kho',view:'Chỉ xem',ketoan:'Kế toán',ketoantt:'Kế toán trưởng'};
 function myRole(){if(R.isOwner)return'admin';const s=R.staff.get(R.uid);return s&&s.active!==false?s.role:null}
-function staffName(id){if(!id)return'—';const s=R.staff.get(id);return (s&&s.name)||R.names[id]||(id===R.uid?'Bạn':'Nhân viên')}
+function staffName(id){if(!id)return'—';if(id==='co')return'Sale công ty';const s=R.staff.get(id);return (s&&s.name)||R.names[id]||(id===R.uid?'Bạn':'Nhân viên')}
 function locked(date){const L=ST().lockDate;return !!(L&&date&&date<=L)}
 
 /* ================= SẢN PHẨM / GIÁ / KHÁCH ================= */
@@ -752,31 +752,33 @@ function csPt(P,addr){const a=csNorm(addr);if(!a)return null;const f=P.find(x=>x
 const csOf=(code,addr)=>{if(!code)return null;const c=String(code).trim();if(R.csPts&&R.csPts.has(c)){const k=csPt(R.csPts.get(c),addr);return k?k.split(','):null}return R.custSale?R.custSale.get(c)||null:null};
 /* 1 sale có thể có nhiều tài khoản cùng tên → danh sách uid */
 const sameAs=u=>(R.csGroup&&R.csGroup.get(u))||[u];
-const ownerSaleOf=o=>o.ownerSale?sameAs(o.ownerSale):(o.arising?csOf(o.cust,o.address):null);
+const ownerSaleOf=o=>{if(o.ownerSale)return sameAs(o.ownerSale);if(o.arising)return csOf(o.cust,o.address);const w=saleOf(o);return w&&w!==o.saleId&&w!==CO_SALE?sameAs(w):null};
 /* ship tạo đơn phát sinh: chọn tài khoản sale đang dùng nhiều nhất (nhiều đơn nhất) */
 const pickOwner=L=>{if(!L||!L.length||L.includes(R.uid))return null;if(L.length===1)return L[0];const n=u=>R.orders.reduce((a,o)=>a+(o.saleId===u?1:0),0);return L.slice().sort((a,b)=>n(b)-n(a))[0]};
 /* doanh số: đơn phát sinh có ghi sale phụ trách (từ v74) tính cho sale đó, còn lại theo người lên đơn */
-const saleOf=o=>o.ownerSale||o.saleId;
-const psList=()=>R.orders.filter(o=>o.saleId!==R.uid&&(o.arising||o.ownerSale)&&(ownerSaleOf(o)||[]).includes(R.uid));
+/* v129: đơn do Quản lý / Kế toán / Hải Yến (tài khoản quản lý) / AI / ship lên từ 01/11/2026 → tính cho sale phụ trách khách (theo danh mục khách – địa chỉ giao); khách chưa gán sale → 'co' = Sale công ty */
+const CO_SALE='co',SO_FROM='2026-11-01';const _soC=new WeakMap();
+const saleOf=o=>{if(!o)return null;if(o.ownerSale)return o.ownerSale;const u=o.saleId;const s=R.staff.get(u);if(s&&s.role==='sale')return u;if(String(o.date||'')<SO_FROM)return u;if(_soC.has(o))return _soC.get(o);const L=((typeof csOf==='function'&&csOf(o.cust,o.address))||[]).filter(x=>{const y=R.staff.get(x);return y&&y.active!==false});const r=L.includes(u)?u:(L[0]||CO_SALE);if(R.custSale&&R.custSale.size&&R.staff.size)_soC.set(o,r);return r};
+const psList=()=>R.orders.filter(o=>o.saleId!==R.uid&&(o.arising||o.ownerSale||saleOf(o)!==o.saleId)&&(ownerSaleOf(o)||[]).includes(R.uid));
 const psDay=o=>o.doneAt?isoOf(new Date(toNum(o.doneAt))):o.date;
 function psSeenGet(){let v=null;try{v=localStorage.getItem('viba.psSeen.'+R.uid)}catch(e){}if(v==null){const d=new Date();d.setHours(0,0,0,0);v=String(d.getTime());try{localStorage.setItem('viba.psSeen.'+R.uid,v)}catch(e){}}return +v||0}
 function psUnseen(){if(R.mode!=='sale')return 0;const L=psList();const seen=psSeenGet();
   if(R.tab==='orders'&&R.ui.ordTab==='ps'){const mx=Math.max(seen,...L.map(o=>toNum(o.createdAt)||0));if(mx>seen)try{localStorage.setItem('viba.psSeen.'+R.uid,String(mx))}catch(e){}return 0}
   return L.filter(o=>(toNum(o.createdAt)||0)>seen&&o.status!=='cancel').length}
 function viewSaleOrders(v){const tab=R.ui.ordTab==='ps'?'ps':'mine';const un=psUnseen();
-  const top=`<div class="seg" id="oTab" style="margin-bottom:2px">${[['mine','Đơn tôi lên'],['ps','Phát sinh khách của tôi']].map(([k,l])=>`<button data-otab="${k}" class="${tab===k?'on':''}">${l}${k==='ps'&&un?' <span style="display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#d64545;color:#fff;font-size:11px;font-weight:800;vertical-align:1px">'+un+'</span>':''}</button>`).join('')}</div>`;
+  const top=`<div class="seg" id="oTab" style="margin-bottom:2px">${[['mine','Đơn tôi lên'],['ps','Khách của tôi – người khác lên']].map(([k,l])=>`<button data-otab="${k}" class="${tab===k?'on':''}">${l}${k==='ps'&&un?' <span style="display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#d64545;color:#fff;font-size:11px;font-weight:800;vertical-align:1px">'+un+'</span>':''}</button>`).join('')}</div>`;
   if(tab==='mine')orderListView(v,R.orders.filter(o=>o.saleId===R.uid),{title:'Đơn của tôi',emptyHint:'Đơn bạn lên sẽ hiện ở đây.',top});
   else{const per=R.ui.psPer||'today',td=today();const f=per==='month'?td.slice(0,8)+'01':per==='week'?isoAdd(td,-((new Date(td+'T00:00:00').getDay()+6)%7)):td;
     const L=psList().filter(o=>{const d=psDay(o);return d>=f&&d<=td});const live=L.filter(o=>o.status!=='cancel');
     const extra=`<div class="seg">${[['today','Hôm nay'],['week','Tuần'],['month','Tháng']].map(([k,l])=>`<button data-psper="${k}" class="${per===k?'on':''}">${l}</button>`).join('')}</div>
-     <div class="tiny muted">Đơn ship tạo phát sinh khi đi giao cho khách bạn phụ trách. Chỉ xem, không sửa. <b style="color:var(--fg)">${live.length} đơn · ${vnd(live.reduce((x,o)=>x+orderTotal(o),0))}</b></div>`;
-    orderListView(v,L,{title:'Đơn của tôi',top,extra,ps:true,emptyHint:'<div class="tiny muted">Chưa có đơn phát sinh nào của khách bạn phụ trách trong kỳ này.</div>'})}
+     <div class="tiny muted">Đơn của khách bạn phụ trách do ship (phát sinh), Quản lý, Kế toán, Hải Yến hoặc AI lên hộ. Tính vào doanh số của bạn. Chỉ xem, không sửa. <b style="color:var(--fg)">${live.length} đơn · ${vnd(live.reduce((x,o)=>x+orderTotal(o),0))}</b></div>`;
+    orderListView(v,L,{title:'Đơn của tôi',top,extra,ps:true,emptyHint:'<div class="tiny muted">Chưa có đơn nào của khách bạn phụ trách do người khác lên trong kỳ này.</div>'})}
   $$('[data-otab]').forEach(b=>b.onclick=()=>{R.ui.ordTab=b.dataset.otab;R.ui.ordStatus='';render()});
   $$('[data-psper]').forEach(b=>b.onclick=()=>{R.ui.psPer=b.dataset.psper;render()})}
 function orderCard(o,opt){opt=opt||{};const items=(o.lines||[]).map(l=>esc(l.name)+' ×'+fmt(l.qty)+(l.extra?' (thêm khi giao)':'')).join(', ');
   return `<div class="oc" data-oid="${esc(o.id)}"><div class="h1"><span class="cn ell">${esc(o.custName)}</span><span class="money">${vnd(orderTotal(o))}</span></div>
    <div class="addr">${ICON.pin}<span>${esc(o.address||'Chưa có địa chỉ')}</span></div>
-   <div class="tiny muted ell">${items}</div>${cxHtml(o)}${opt.ps?'<div class="tiny" style="color:#1b6aa5;font-weight:600">🚚 Ship tạo: '+esc(staffName(o.shipId||o.saleId))+'</div>':''}
+   <div class="tiny muted ell">${items}</div>${cxHtml(o)}${opt.ps?(o.arising?'<div class="tiny" style="color:#1b6aa5;font-weight:600">🚚 Ship tạo: '+esc(staffName(o.shipId||o.saleId))+'</div>':'<div class="tiny" style="color:#7c6cf0;font-weight:700">✍️ '+esc(staffName(o.saleId))+' lên hộ</div>'):''}
    <div class="hrow">${stChip(o)}${payChip(o)}${o.dlvDate&&o.status!=='done'&&o.status!=='cancel'?'<span class="chip" style="background:#e7f0fa;color:#1b6aa5">🚚 Giao '+dm(o.dlvDate)+'</span>':''}${o.arising?'<span class="chip b">Phát sinh</span>':''}${((o.supPhotos||[]).length+(o.badPhotos||[]).length+(o.traPhotos||[]).length)?'<span class="chip" style="background:#fff5ea;color:#b35400">📸 ĐT/HT '+fmt(sumL(o,'swap')+sumL(o,'bad')+sumL(o,'ret'))+'</span>':''}${syncChip(o)}${smChip(o)}${boChip(o)}${lateChip(o)}${o.outside?'<span class="chip b">Ship ngoài</span>':''}<span class="tiny muted right">${esc(o.no)} · ${dm(o.date)}${opt.who?' · '+esc(staffName(o[opt.who])):''}</span></div>${opt.actions||''}</div>`}
 /* v68: thứ tự đơn trên app sale, ship: mới nhất → cũ nhất (ngày lên đơn, giờ tạo, số đơn) */
 function newFirst(a,b){return String(b.date||'').localeCompare(String(a.date||''))||(toNum(b.createdAt)||0)-(toNum(a.createdAt)||0)||String(b.no||'').localeCompare(String(a.no||''),undefined,{numeric:true})}
@@ -1848,7 +1850,7 @@ function saleDash(f,t){const all=ordersIn(f,t);if(!all)return'<div class="empty"
   const num=n=>Math.round(n).toLocaleString('vi-VN');const mx=Math.max(1,...[...M.values()].map(r=>r.rev));const pc=v=>T.rev>0?Math.round(v/T.rev*100)+'%':'';
   const st=(l,v,c,sm)=>`<div class="sd-st"><span>${l}</span><b${c?' class="'+c+'"':''}>${v}</b>${sm?'<small>'+sm+'</small>':''}</div>`;
   const sts=r=>`<div class="sd-sts">${st('Đơn',r.n)}${st('Đã thu',r.pay?num(r.pay):'–',r.pay?'g':'',r.old?'nợ cũ '+num(r.old):'')}${st('SL bán',fmt(r3(r.qty)))}</div>`;
-  const row=r=>`<div class="sd-row${r.u?'':' sd-un'}"${r.u?` data-su="${esc(r.u)}"`:''}><div class="sd-top"><div class="sd-nm">${r.u?esc(staffName(r.u)):'Chưa gán sale'}</div><div class="sd-rv">${num(r.rev)}<i>${pc(r.rev)}</i></div>${r.u?'<span class="sd-chev">›</span>':''}</div><div class="sd-bar"><span style="width:${Math.max(0,Math.round(r.rev/mx*100))}%"></span></div><div class="sd-meta">${r.u?r.own+' sale lên · '+r.ps+' phát sinh':'đơn phát sinh, khách chưa có sale'} · ${r.done}/${r.n} đã giao</div>${sts(r)}</div>`;
+  const row=r=>`<div class="sd-row${r.u?'':' sd-un'}"${r.u?` data-su="${esc(r.u)}"`:''}><div class="sd-top"><div class="sd-nm">${r.u?esc(staffName(r.u)):'Sale công ty'}</div><div class="sd-rv">${num(r.rev)}<i>${pc(r.rev)}</i></div>${r.u?'<span class="sd-chev">›</span>':''}</div><div class="sd-bar"><span style="width:${Math.max(0,Math.round(r.rev/mx*100))}%"></span></div><div class="sd-meta">${r.u?r.own+' sale lên · '+r.ps+' phát sinh':'khách chưa gán sale'} · ${r.done}/${r.n} đã giao</div>${sts(r)}</div>`;
   const list=rows.concat(un?[un]:[]);
   return SD_CSS+`<div class="sd"><div class="sd-hd"><div class="sd-lb">Doanh số theo sale · ${f===t?(f===today()?'Hôm nay':dm(f)):dm(f)+' – '+dm(t)}</div><div class="sd-big">${vnd(T.rev)}</div><div class="sd-sub">${rows.length} sale · ${T.n} đơn · Thu ${num(T.pay)} · SL ${fmt(r3(T.qty))}</div></div>
   <div class="sd-cols"><span>Sale</span><span>Doanh số · tỷ trọng</span></div>${list.map(row).join('')}
@@ -1886,7 +1888,7 @@ function shSaleCards(uid){const D=shCur(),now=shNow(),isNow=D===now;const M=shAg
 function shDash(){const D=shCur(),isNow=D===shNow();const M=shAgg(D);const rows=[...M.values()].filter(r=>r.u).sort((x,y)=>y.rev-x.rev||y.n-x.n),un=M.get('');const list=rows.concat(un?[un]:[]);
   if(!list.length)return SH_CSS+`<div class="sh"><div class="sh-lb">🕔 Ca ${shLbl(D)} · ${shHm(shPrevDay(D))} → ${shHm(D)}</div><div class="empty">Chưa có đơn nào trong ca.</div></div>`;
   const T=list.reduce((s,r)=>({n:s.n+r.n,rev:s.rev+r.rev,e:s.e+r.e,er:s.er+r.er}),{n:0,rev:0,e:0,er:0});const mx=Math.max(1,...list.map(r=>r.rev));const K=SHC().kpi;const left=isNow?shLeft(D):'';
-  const row=r=>{const k=r.u?shKpi(r.u,D):0;return `<div class="sh-row${r.u?'':' sh-un'}"${r.u?` data-su="${esc(r.u)}"`:''}><div class="sh-rt"><div class="sh-rn">${r.u?esc(staffName(r.u)):'Chưa gán sale'}</div><div class="sh-rv">${shNum(r.rev)}<i>${T.rev>0?Math.round(r.rev/T.rev*100)+'%':''}</i></div>${r.u?'<span style="color:var(--muted)">›</span>':''}</div><div class="sh-b2"><span class="d" style="width:${(r.rev/mx*100).toFixed(1)}%"></span></div><div class="sh-rm">${r.n} đơn${k?' · <b style="color:'+(r.rev>=k?'var(--good)':'var(--fg)')+'">KPI '+Math.round(r.rev/k*100)+'%</b>':''}</div></div>`};
+  const row=r=>{const k=r.u?shKpi(r.u,D):0;return `<div class="sh-row${r.u?'':' sh-un'}"${r.u?` data-su="${esc(r.u)}"`:''}><div class="sh-rt"><div class="sh-rn">${r.u?esc(staffName(r.u)):'Sale công ty'}</div><div class="sh-rv">${shNum(r.rev)}<i>${T.rev>0?Math.round(r.rev/T.rev*100)+'%':''}</i></div>${r.u?'<span style="color:var(--muted)">›</span>':''}</div><div class="sh-b2"><span class="d" style="width:${(r.rev/mx*100).toFixed(1)}%"></span></div><div class="sh-rm">${r.n} đơn${k?' · <b style="color:'+(r.rev>=k?'var(--good)':'var(--fg)')+'">KPI '+Math.round(r.rev/k*100)+'%</b>':''}</div></div>`};
   return SH_CSS+`<div class="sh"><div class="sh-lb">🕔 Ca ${shLbl(D)} · ${shHm(shPrevDay(D))} → ${shHm(D)}</div><div class="sh-big" style="margin-top:4px">${vnd(T.rev)}</div><div class="sh-sub">${rows.length} sale · ${T.n} đơn · ${isNow?(left?'còn '+left+' chốt ca':'đang mở'):'đã chốt'}</div>
 ${list.map(row).join('')}
    <div class="sh-note">Doanh số ca = đơn lên trong ca, đã trừ đơn huỷ. Bấm tên sale để xem báo cáo của sale. Giờ chốt, ngày nghỉ, KPI tháng: Cài đặt › Ca bán hàng.</div></div>`}
@@ -2384,7 +2386,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='128';
+const APP_BUILD='129';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
