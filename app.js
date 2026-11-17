@@ -196,12 +196,12 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#viewer').hi
 let _locIdx=null,_locSrc=null;
 function locIndex(){if(_locSrc===R.customers&&_locIdx)return _locIdx;const out=[];
   for(const c of R.customers.values()){if(c.stopped)continue;const ls=[c.address,...String(c.alt||'').split('|')].map(x=>String(x||'').trim()).filter((x,i,a)=>x&&a.indexOf(x)===i);
-    if(!ls.length)ls.push('');for(const l of ls)out.push({c,loc:l,n:noAcc(l||c.name)})}
+    if(!ls.length)ls.push('');for(const l of ls)out.push({c,loc:l,n:vitN(noAcc(l||c.name))})}
   out.sort((x,y)=>(x.loc||x.c.name).localeCompare(y.loc||y.c.name,'vi'));_locSrc=R.customers;_locIdx=out;return out}
 /* v44: app giao hàng – chọn khách đơn phát sinh mặc định chỉ hiện khách thuộc tuyến đang chọn ở mục Cần giao */
 function rtOfLoc(loc){if(R._rlcSrc!==R.routes){R._rlc=new Map();R._rlcSrc=R.routes}let v=R._rlc.get(loc);if(v===undefined){v=routeOf({address:loc})||'none';R._rlc.set(loc,v)}return v}
 function shipLocFilter(){const s=shipRtSel();if(s.mode==='all')return null;return loc=>s.ids.includes(rtOfLoc(loc||''))}
-function pickCustomer(onPick){let q='';let shown=[];let allRt=false;const draw=b=>{const nq=noAcc(q);
+function pickCustomer(onPick){let q='';let shown=[];let allRt=false;const draw=b=>{const nq=vitN(noAcc(q));
   const rf=R.mode==='ship'&&!allRt?shipLocFilter():null;
   {const base=locIndex().filter(x=>!rf||rf(x.loc));shown=base.filter(x=>wMatch2(x.n,nq)).slice(0,80);if(nq&&shown.length<5){const seen=new Set(shown);const near=base.map(x=>[x,seen.has(x)?0:wScore(x.n,nq)]).filter(a=>a[1]).sort((a,b)=>b[1]-a[1]).slice(0,30).map(a=>a[0]);shown=shown.concat(near)}}
   const rb=b.querySelector('#pcRt');if(rb){const s=shipRtSel();const nm=s.mode==='all'?'Tất cả tuyến':s.ids.map(rtLabel).join(' + ');rb.innerHTML=s.mode==='all'?`<div class="tiny muted">🛣️ Đang hiện khách tất cả tuyến (theo mục Cần giao)</div>`:`<div class="row" style="gap:8px;align-items:center"><div class="grow tiny" style="color:var(--accent)">🛣️ ${allRt?'Đang hiện khách tất cả tuyến':'Khách tuyến: <b>'+esc(nm)+'</b>'}<br><span class="muted">Chọn thêm tuyến ở mục Cần giao</span></div><button class="btn" id="pcAll" style="padding:6px 10px;font-size:13px">${allRt?'Chỉ khách tuyến':'Xem tất cả'}</button></div>`;const ab=rb.querySelector('#pcAll');if(ab)ab.onclick=()=>{allRt=!allRt;draw(b)}}
@@ -357,7 +357,9 @@ function locBN(n){let s=' '+n+' ';
    .replace(/([^a-z0-9])brg\s*mart(?=[^a-z0-9])/g,'$1brg ').replace(/haprofood/g,'hapro food').replace(/([^a-z0-9])ptmart(?=[^a-z0-9])/g,'$1pt mart ')
    .replace(/([^a-z0-9])(?:win|vin)\s*mart\+?(?=[^a-z0-9])/g,'$1vm ').replace(/([^a-z0-9])big\s*c(?=[^a-z0-9])/g,'$1bigc ').replace(/max\s*valu/g,'mvl');
   return s.replace(/\s+/g,' ').trim()}
-function vTokens(text){let s=' '+vLow(text)+' ';s=vBrandNorm(s);
+/* v133: Vital mart – các cách gõ Vital/Vitamart/Vitamarc/Vitalmart/Vi tal mart/Vita marc… = 1 tên 'vitalmart'; ship hay gõ MARC = MART (Tmarc, Easymarc…) */
+const vitN=s=>String(s||'').replace(/marc(?=[^a-z0-9]|$)/g,'mart').replace(/(^|[^a-z0-9])vi\s?tal?\s?mar(?:t|c|k|ct|kt)?(?=[^a-z0-9]|$)/g,'$1vitalmart').replace(/(^|[^a-z0-9])vital(?=[^a-z0-9]|$)/g,'$1vitalmart');
+function vTokens(text){let s=' '+vLow(text)+' ';s=s.replace(/marc(?=[\s|]|$)/g,'mart').replace(/(^|\s)v[iìí]\s?t[aàáạ]l?\s?m[aàáạ](?:rt|rc|rk|c|k|t)?(?=\s|$)/g,'$1vitalmart').replace(/(^|\s)vital(?=\s|$)/g,'$1vitalmart');s=vBrandNorm(s);
   s=s.replace(/[,;!?\n]+/g,' | ').replace(/\.(?!\d)/g,' | ');
   s=s.replace(/(\d+)\s*(gam|gram|gờ ram|gr|g)(?=[\s|])/g,'$1g').replace(/(\d+)\s*(mi li lít|mililít|ml)(?=[\s|])/g,'$1ml');
   s=s.replace(/\b(ki lô gam|ki lô|kilôgam|kilogram|kilô|kí lô|ký lô)\b/g,'kg');
@@ -466,11 +468,11 @@ function vMsgPrep(t){_vMsgLine='';const L=String(t||'').replace(/\r/g,'').split(
 const V_LSTOP=new Set(['giao','cho','tai','den','toi','khach','hang','dia','diem','so','duong','pho','phuong','quan','tp','ha','noi','hn','viet','nam','sdt','dt','lh']);
 let _lliSrc=null,_lli=null;
 function vLocLineIdx(){const idx=locIndex();if(_lliSrc===idx&&_lli)return _lli;const df=new Map();const ent=[];const nk=new Map(),nn=new Set();
-  const tk=t=>{const a=noAcc(String(t||'').replace(/^\s*\(\s*\d{1,2}\s*\.[^)]*\)\s*/,'')).split(/[^a-z0-9]+/).filter(Boolean);const s=new Set(a);for(let i=0;i+1<a.length;i++)s.add(a[i]+a[i+1]);return s};
+  const tk=t=>{const a=vitN(noAcc(String(t||'').replace(/^\s*\(\s*\d{1,2}\s*\.[^)]*\)\s*/,''))).split(/[^a-z0-9]+/).filter(Boolean);const s=new Set(a);for(let i=0;i+1<a.length;i++)s.add(a[i]+a[i+1]);return s};
   for(const x of idx){if(!x.loc)continue;const L=tk(x.loc);let N=tk(x.c.name);if([...N].every(w=>L.has(w)))N=new Set();/* khách lẻ: tên = địa chỉ → không cộng điểm tên */const u=new Set([...L,...N]);for(const w of u)df.set(w,(df.get(w)||0)+1);const ck=x.c.code||x.c.name;for(const w of u){if(!nk.has(w))nk.set(w,new Set());nk.get(w).add(ck)}for(const w of N)nn.add(w);ent.push({x,L,N})}
   /* v60: từ ĐẶC TRƯNG của tên khách (chỉ 1-2 khách có, vd "easymart", "tmart") */const nd=new Set();for(const [w,S] of nk)if(nn.has(w)&&S.size<=2&&w.length>=3&&!/^\d+$/.test(w))nd.add(w);
   _lliSrc=idx;_lli={df,ent,n:ent.length,nd};return _lli}
-function vLocLineMatch(line){const raw=String(line||'').replace(/^\s*\(\s*\d{1,2}\s*\.[^)]*\)\s*/,'');const a=noAcc(raw).split(/[^a-z0-9]+/).filter(w=>w&&!V_LSTOP.has(w));if(!a.length)return null;
+function vLocLineMatch(line){const raw=String(line||'').replace(/^\s*\(\s*\d{1,2}\s*\.[^)]*\)\s*/,'');const a=vitN(noAcc(raw)).split(/[^a-z0-9]+/).filter(w=>w&&!V_LSTOP.has(w));if(!a.length)return null;
   const I=vLocLineIdx();const idf=w=>Math.log((I.n+1)/((I.df.get(w)||0)+1));const q=[...new Set(a)];for(let i=0;i+1<a.length;i++){const b=a[i]+a[i+1];if(I.df.has(b)&&!q.includes(b))q.push(b)}
   const qw=q.map(w=>[w,idf(w)]);const qmax=a.filter((w,i,s)=>s.indexOf(w)===i).reduce((t,w)=>t+idf(w),0)||1;
   const pre=(set,w)=>{if(w.length<4||/^\d+$/.test(w))return false;for(const y of set)if((y.length>=4&&y.startsWith(w))||(y.length>=5&&w.startsWith(y)))return true;return false};
@@ -2398,7 +2400,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='132';
+const APP_BUILD='133';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
