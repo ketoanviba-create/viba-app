@@ -138,6 +138,8 @@ const VT_NOCOST={VT037:1};
 const vtUnitCost=ma=>{const g=vtGia(ma);if(g==null)return null;const c=vtc().cat[ma]||{};return /^kg$/i.test((c.u||'').trim())&&c.pk?g/c.pk:g};
 const vtName=ma=>{const c=vtc().cat[ma];return c?c.n:ma};
 /* v155: Quản lý tự thêm mã vật tư mới vào danh mục (mcfg/main.vt.cat, own:1) */
+/* v156: mọi lần ghi mcfg/main đóng dấu _w; trong 90 giây sau khi ghi, bỏ qua bản đồng bộ cũ hơn (tránh đè mất thay đổi vừa lưu) */
+function cfgPut(c){const w=Date.now();c._w=w;S.cfgW=w;S.cfgWt=w;return S.db.doc('mcfg/main').set(c)}
 function vtNextCode(){let m=0;for(const k of Object.keys(vtc().cat||{})){const x=/^VT(\d+)$/.exec(k);if(x)m=Math.max(m,+x[1])}return 'VT'+String(m+1).padStart(3,'0')}
 function vtAddHTML(){const V=vtc(),e=S.ui.vtEd||'',E=e?(V.cat[e]||{}):{},own=Object.entries(V.cat||{}).filter(([k,x])=>x.own).sort((a,b)=>(b[1].at||0)-(a[1].at||0));
   const U=['Cái','Kg','Cuộn','Hộp','Thùng','Tờ','Bộ','Mét'],G=['Nhãn mác','Bao bì','Vật tư','Hoá chất'],u=E.u||'Cái',g=E.g||'Nhãn mác';
@@ -153,7 +155,7 @@ function bindVtAdd(c,saveCfg){const s=$('#vaSave');if(!s)return;
   $('#vaU').onchange=e=>{const u=e.target.value;$('#vaUl').textContent=u;$('#vaPkW').hidden=!/^kg$/i.test(u)};
   const x=$('#vaX');if(x)x.onclick=()=>{S.ui.vtEd='';render()};
   $$('[data-vaed]').forEach(b=>b.onclick=()=>{S.ui.vtEd=b.dataset.vaed;render();const e=$('#vaN');if(e)e.scrollIntoView({block:'center'})});
-  s.onclick=()=>{const ed=S.ui.vtEd||'',n=$('#vaN').value.trim().replace(/\s+/g,' '),u=$('#vaU').value,g=$('#vaG').value,pt=$('#vaP').value.trim(),kg=/^kg$/i.test(u),pk=kg?num(($('#vaK')||{}).value):0;
+  s.onclick=()=>{if(S.vaBusy)return toast('Đang lưu vật tư trước – đợi một chút');const ed=S.ui.vtEd||'',n=$('#vaN').value.trim().replace(/\s+/g,' '),u=$('#vaU').value,g=$('#vaG').value,pt=$('#vaP').value.trim(),kg=/^kg$/i.test(u),pk=kg?num(($('#vaK')||{}).value):0;
     if(!n)return toast('Gõ tên vật tư');const V=vtc();let code=ed;
     if(!ed){code=String((($('#vaC')||{}).value)||'').trim().toUpperCase().replace(/\s+/g,'')||vtNextCode();if(V.cat[code])return toast('Mã '+code+' đã có: '+V.cat[code].n)}
     const key=t=>noAcc(t).replace(/\s+/g,' ').trim(),dup=Object.entries(V.cat).find(([k,y])=>k!==code&&key(y.n)===key(n));if(dup)return toast('Trùng tên với '+dup[0]+' · '+dup[1].n);
@@ -161,7 +163,7 @@ function bindVtAdd(c,saveCfg){const s=$('#vaSave');if(!s)return;
     const c2=JSON.parse(JSON.stringify(c));c2.vt=JSON.parse(JSON.stringify(V));const old=c2.vt.cat[code]||{};
     const it=Object.assign({},old,{n,u,g,own:1,by:old.by||S.uid,at:old.at||Date.now()});if(kg)it.pk=pk;else delete it.pk;c2.vt.cat[code]=it;
     c2.vtGia=Object.assign({},c.vtGia||{});if(pt!=='')c2.vtGia[code]=num(pt);
-    S.ui.vtEd='';saveCfg(c2,(ed?'✓ Đã sửa ':'✓ Đã thêm ')+code+' · '+n)}}
+    S.ui.vtEd='';S.vaBusy=1;s.disabled=true;s.textContent='Đang lưu…';Promise.resolve(saveCfg(c2,(ed?'✓ Đã sửa ':'✓ Đã thêm ')+code+' · '+n)).finally(()=>{S.vaBusy=0})}}
 function vtNeed(it,rows){const V=vtc(),need=new Map(),add=(ma,q)=>need.set(ma,(need.get(ma)||0)+q);let box=0;
   for(const r of rows){if(!r.g)continue;const k=it.id+'|'+r.g,sp=V.sp[k];if(!sp)continue;for(const [ma,dm] of sp.m)add(ma,r.q*dm);const b=sp.b||PERBOX[k];if(b)box+=Math.ceil(r.q/b)}
   if(box)for(const [ma,dm] of V.thung||[])add(ma,box*dm);return {need,box}}
@@ -371,7 +373,7 @@ async function save(){const f=S.form,C=calc(),it=itemOf(f.item),msg=t=>$('#fMsg'
   if(f.kind==='nvl'){if(!f.nvl)return msg('Chọn nguyên liệu.');d.nvl=f.nvl}
   else if(f.kind!=='xuat'){if(!f.item)return msg('Chọn mặt hàng.');d.item=f.item;if(f.kind==='sx')d.nvl=f.nvl}
   if(f.kind==='nvl'){const n=nccPick(f);if(!n.name)return msg('Chọn nhà cung cấp.');const kg=num(f.kg);if(kg<=0)return msg('Gõ số kg nhận.');const price=num(f.price),ship=num(f.ship);if(price<=0&&!await ask('Chưa gõ giá nhập. Vẫn lưu (kế toán điền sau)?'))return;Object.assign(d,{ncc:n.name,nccCode:n.code,kg,price,ship,lot:lotCode(n.lot,f.date)});
-    if(n.fresh){const c=JSON.parse(JSON.stringify(cfg()));c.ncc.push({name:n.name,code:'',lot:n.lot,fresh:true,by:S.uid});try{await S.db.doc('mcfg/main').set(c)}catch(e){}}}
+    if(n.fresh){const c=JSON.parse(JSON.stringify(cfg()));c.ncc.push({name:n.name,code:'',lot:n.lot,fresh:true,by:S.uid});try{await cfgPut(c)}catch(e){}}}
   else if(f.kind==='sx'){const a=num(f.kgIn);if(a<=0)return msg('Gõ số kg nguyên liệu đưa vào.');if(!f.hasB&&!f.pack)return msg('Chọn kết quả ca: vào kho BTP nhà máy hoặc đóng gói luôn (hoặc cả 2).');
     const B=f.hasB?brRows(f):[];if(f.hasB){for(const r of f.br||[]){if((num(r.w)>0)!==(num(r.n)>0)&&(r.w!==''||r.n!==''))return msg('Dòng bịch phải có cả cỡ bịch và số bịch.')}if(!B.length)return msg('Gõ cỡ bịch và số bịch vào kho BTP (hoặc bỏ tích).')}
     const kgOut=r3(B.reduce((s,r)=>s+r.w*r.n,0));if(kgOut>a*1.05&&!await ask(`Vào kho BTP ${fm(kgOut)} kg nhiều hơn nguyên liệu ${fm(a)} kg. Vẫn lưu?`))return;
@@ -382,14 +384,14 @@ async function save(){const f=S.form,C=calc(),it=itemOf(f.item),msg=t=>$('#fMsg'
     for(const r of FR)if(r.n>r.have+1e-6&&!await ask(`Lô ${r.lot}: lấy ${fm(r.n)} ${r.w?'bịch':'kg'} nhưng chỉ còn ${fm(r.have)}. Vẫn lưu?`))return;
     const fk=r3(FR.reduce((a,r)=>a+(r.w?r.w*r.n:r.n),0));if(!f.now&&kgTP>fk*1.05&&!await ask(`Thành phẩm ${fm(kgTP)} kg lớn hơn số lấy từ kho BTP ${fm(fk)} kg. Vẫn lưu?`))return;
     Object.assign(d,{packs,kgTP,now:!!f.now,from:FR.map(r=>({lot:r.lot,w:r.w,n:r.n})),kgFrom:fk,kgUse:f.now?Math.max(fk,kgTP):fk});
-    const known=new Set((it.packs||[]).map(p=>gOf(p[0],p[1])));const fresh=packs.filter(p=>!known.has(p.g));if(fresh.length){const c=JSON.parse(JSON.stringify(cfg()));const ci=c.items.find(i=>i.id===f.item);if(ci){ci.packs=(ci.packs||[]).concat(fresh.map(p=>p.g>=1000?[r3(p.g/1000),'kg']:[p.g,'g']));try{await S.db.doc('mcfg/main').set(c)}catch(e){}}}}
+    const known=new Set((it.packs||[]).map(p=>gOf(p[0],p[1])));const fresh=packs.filter(p=>!known.has(p.g));if(fresh.length){const c=JSON.parse(JSON.stringify(cfg()));const ci=c.items.find(i=>i.id===f.item);if(ci){ci.packs=(ci.packs||[]).concat(fresh.map(p=>p.g>=1000?[r3(p.g/1000),'kg']:[p.g,'g']));try{await cfgPut(c)}catch(e){}}}}
   else if(f.kind==='dgl'){const packs=[];for(const p of f.packs){const g=gOf(p.w,p.u),q=num(p.q);if(!g&&!q)continue;if(!g)return msg('Có dòng chưa gõ trọng lượng.');if(!q)return msg('Có dòng chưa gõ số gói.');packs.push({g,q})}
     if(!packs.length)return msg('Gõ ít nhất 1 quy cách và số gói.');const kgTP=r3(packs.reduce((s,p)=>s+p.g*p.q/1000,0));const src=C.kd.get(f.item);
     const bu=num(f.bagsUse);if(it.bich&&bu&&!num(f.bagW)&&!(src&&src.bags>0))return msg('Gõ trọng lượng 1 bịch.');let use=useKg(f,src);if(!use)use=kgTP;
     if(src&&!(f.kind==='dg'&&src.kg<=0.001)&&use>src.kg+0.5&&!await ask(`Dùng ${fm(use)} kg nhưng ${f.kind==='dg'?'nhà máy':'kho đông'} chỉ còn ${fm(src.kg)} kg. Vẫn lưu?`))return;
     if(use<kgTP*0.95&&!await ask(`Thành phẩm ${fm(kgTP)} kg lớn hơn số dùng ${fm(use)} kg. Vẫn lưu?`))return;
     Object.assign(d,{packs,kgTP,kgUse:use,bagsUse:bu,bagW:num(f.bagW)||(bu?r3(use/bu):0)});if(f.kind==='dgl')d.xe=xeVal(f);
-    const known=new Set((it.packs||[]).map(p=>gOf(p[0],p[1])));const fresh=packs.filter(p=>!known.has(p.g));if(fresh.length){const c=JSON.parse(JSON.stringify(cfg()));const ci=c.items.find(i=>i.id===f.item);if(ci){ci.packs=(ci.packs||[]).concat(fresh.map(p=>p.g>=1000?[r3(p.g/1000),'kg']:[p.g,'g']));try{await S.db.doc('mcfg/main').set(c)}catch(e){}}}}
+    const known=new Set((it.packs||[]).map(p=>gOf(p[0],p[1])));const fresh=packs.filter(p=>!known.has(p.g));if(fresh.length){const c=JSON.parse(JSON.stringify(cfg()));const ci=c.items.find(i=>i.id===f.item);if(ci){ci.packs=(ci.packs||[]).concat(fresh.map(p=>p.g>=1000?[r3(p.g/1000),'kg']:[p.g,'g']));try{await cfgPut(c)}catch(e){}}}}
   else if(f.kind==='xuat'){const lines=[],X=xSel(f);
     for(const x of X.tp){const q0=C.tp.get(packKey(x.item,x.g))||0;if(x.q>q0+1e-9&&!await ask(`${itemOf(x.item).name} ${packLabel(x.g)}: xuất ${fm(x.q)} gói nhưng chỉ còn ${fm(q0)}. Vẫn lưu?`))return;lines.push({t:'tp',item:x.item,g:x.g,q:x.q})}
     for(const x of X.bl){const L=C.bix.get(x.item+'|'+x.lot),have=L?(x.w?(L.s[x.w]||0):L.loose):0;if(x.n>have+1e-6&&!await ask(`${itemOf(x.item).name} lô ${x.lot}: xuất ${fm(x.n)} ${x.w?'bịch':'kg'} nhưng chỉ còn ${fm(have)}. Vẫn lưu?`))return;lines.push({t:'bl',item:x.item,lot:x.lot,w:x.w,n:x.n,kg:x.kg,bags:x.bags})}
@@ -609,7 +611,7 @@ function viewDM(v){const c=cfg();const id=S.ui.dmItem&&c.items.some(i=>i.id===S.
     for(const k in c2.vt.sp)c2.vt.sp[k].m=c2.vt.sp[k].m.filter(Boolean);
     c2.vtGia=Object.assign({},c.vtGia||{});$$('[data-vg]').forEach(el=>{const ma=el.dataset.vg,t=el.value.trim();if(t==='')return;const g=num(t);if(g!==VTGIA0[ma]||c2.vtGia[ma]!=null)c2.vtGia[ma]=g});
     saveCfg(c2,'✓ Đã lưu định mức và đơn giá vật tư')};
-  const saveCfg=async(c2,m)=>{try{await S.db.doc('mcfg/main').set(c2);S.cfg=c2;toast(m||'✓ Đã lưu');render()}catch(e){toast('Chưa lưu được')}};
+  const saveCfg=async(c2,m)=>{try{await cfgPut(c2);S.cfg=c2;toast(m||'✓ Đã lưu');render()}catch(e){toast('Chưa lưu được')}};
   bindVtAdd(c,saveCfg);
   $('#dmSave').onclick=()=>{const c2=JSON.parse(JSON.stringify(c));const i2=c2.items.find(i=>i.id===id);i2.dm=i2.dm||{};$$('[data-dk]').forEach(el=>{const k=el.dataset.dk;if((k==='dien'||k==='gas')&&el.value.trim()===''&&$$('[data-dk=dien],[data-dk=gas]').every(x=>x.value.trim()===''))return;i2.dm[k]=num(el.value)});i2.bich=$('#dmB').value==='1';i2.nvl=$('#dmV').value;i2.name=$('#dmN').value.trim()||i2.name;i2.active=$('#dmA').checked;c2.gioCong=num($('#dmG').value)||8;c2.otK=num($('#dmOt').value)||1.5;c2.xe=$('#dmX').value.split(',').map(s=>s.trim()).filter(Boolean);i2.dmBy=S.uid;i2.dmAt=Date.now();saveCfg(c2)};
   $$('[data-nrm]').forEach(b=>b.onclick=async()=>{if(!await ask('Bỏ nhà cung cấp này khỏi danh sách chọn?'))return;const c2=JSON.parse(JSON.stringify(c));c2.ncc.splice(+b.dataset.nrm,1);saveCfg(c2)});
@@ -877,12 +879,12 @@ async function saveCh(){const f=S.form,C=calcCh(),msg=t=>$('#fMsg').innerHTML='<
     if(ot&&!pot)return msg('Gõ số người tăng ca.');if(!people||!(hours||ot)){if(!await ask('Chưa ghi số người / tổng số giờ làm. Vẫn lưu?'))return}
     const base=lotCode('CX'+(n.lot||'NCC'),f.date),cpc=cpCalc(f,T),sh=cpc.tot,btn=$('#fSave');btn.disabled=true;btn.textContent='Đang lưu…';let first=true;
     try{for(const [g,kg,pr] of [['A',a,num(f.priceA)],['B',b,num(f.priceB)]]){if(!kg)continue;const d2=Object.assign({},d,{grade:g,thung:num(g==='A'?f.thA:f.thB),kgThung:thungOf(f.loai),ncc:n.name,nccCode:n.code,kg,price:pr,ship:0,cpTien:Math.round(sh*kg/T),cp:cpc.det,lot:base+'-'+g,xe:cpXe(f),at:Date.now()+(g==='B'?1:0)});if(!first){d2.people=0;d2.hours=0;d2.pot=0;d2.ot=0}first=false;await S.db.doc('mlog/'+newId(f.date)).set(d2)}
-      if(n.fresh){const c=JSON.parse(JSON.stringify(cfg()));c.ncc.push({name:n.name,code:'',lot:n.lot,fresh:true,by:S.uid});try{await S.db.doc('mcfg/main').set(c)}catch(e){}}
+      if(n.fresh){const c=JSON.parse(JSON.stringify(cfg()));c.ncc.push({name:n.name,code:'',lot:n.lot,fresh:true,by:S.uid});try{await cfgPut(c)}catch(e){}}
       toast('✓ Đã lưu nhập chuối xanh A/B');S.form=null;S.tab='home';render();scrollTo(0,0)}
     catch(e){if(e&&e.code==='queued'){toast('⏳ Mạng yếu: đã giữ phiếu trên máy, app tự gửi lại');S.form=null;S.tab='home';render();return}btn.disabled=false;btn.textContent='Lưu';msg('Chưa lưu được: '+(e.message||'lỗi mạng')+'. Thử lại.')}return}
   if(f.kind==='cnx'){const n=nccPick(f);if(!n.name)return msg('Chọn nhà cung cấp.');const kg=num(f.kg);if(kg<=0)return msg('Gõ số thùng chuối xanh.');d.thung=num(f.th);d.kgThung=thungOf(f.loai);const price=num(f.price);if(price<=0&&!await ask('Chưa gõ giá nhập. Vẫn lưu (kế toán điền sau)?'))return;
     {const cpc=cpCalc(f,kg);d.cp=cpc.det;d.cpTien=cpc.tot}Object.assign(d,{ncc:n.name,nccCode:n.code,kg,price,ship:0,lot:lotCode('CX'+(n.lot||'NCC'),f.date),xe:cpXe(f)});
-    if(n.fresh){const c=JSON.parse(JSON.stringify(cfg()));c.ncc.push({name:n.name,code:'',lot:n.lot,fresh:true,by:S.uid});try{await S.db.doc('mcfg/main').set(c)}catch(e){}}}
+    if(n.fresh){const c=JSON.parse(JSON.stringify(cfg()));c.ncc.push({name:n.name,code:'',lot:n.lot,fresh:true,by:S.uid});try{await cfgPut(c)}catch(e){}}}
   else if(f.kind==='cvu'){const takes=[];for(const [id,v] of Object.entries(f.tk)){const kg=num(v);if(!kg)continue;const x=C.lotById.get(id);if(x&&x.date>f.date)return msg('Lô '+x.lot+' về ngày '+dmy(x.date)+' – sau ngày vào phòng '+dmy(f.date)+', không lấy được.');if(x&&kg>x.left+0.5&&!await ask(`Lô ${x.lot}: lấy ${fm(kg)} kg nhưng chỉ còn ${fm(x.left)} kg. Vẫn lưu?`))return;takes.push({id,lot:x?x.lot:'',kg,th:num((f.tt||{})[id])})}
     if(!takes.length)return msg('Gõ số kg lấy từ lô chuối xanh.');{const r=+f.room,bz=inRoom(C,r,f.date),tk=takes.reduce((s,t)=>s+t.kg,0);if(bz.length&&!khoFix(f.loai)&&!await ask(`Kho ${r} đang có mẻ ${bz.map(b=>b.code).join(', ')} (còn ${fm(bz.reduce((s,b)=>s+b.left,0))} kg). Vẫn cho vào?`))return;if(tk+(khoFix(f.loai)?bz.reduce((s,b)=>s+b.left,0):0)>capOf(r)&&!await ask(`${fm(tk)} kg vượt sức chứa kho ${r} (${fm(capOf(r))} kg). Vẫn lưu?`))return}{const sg=sugFor(f.date,f.loai);if(sg){d.sug=sg.need;if(sg.carry)d.carry=sg.carry;if(sg.nA!=null){d.sugA=sg.nA;d.sugB=sg.nB}}}Object.assign(d,{room:+f.room,gio:f.gio||'',code:batCode(f.date),takes,kg:r3(takes.reduce((s,t)=>s+t.kg,0)),th:r3(takes.reduce((s,t)=>s+t.th,0))})}
   else if(f.kind==='cloc'){const takes=[];for(const [b,v] of Object.entries(f.tk)){const kg=num(v);if(!kg)continue;const x=C.bat.get(b);if(x&&kg>x.left+0.5&&!await ask(`Mẻ ${x.code}: lấy ${fm(kg)} kg nhưng chỉ còn ${fm(x.left)} kg. Vẫn lưu?`))return;takes.push({b,kg})}
@@ -1100,7 +1102,7 @@ function viewDMCh(v){const c=chc();
   const collect=()=>{const c2=JSON.parse(JSON.stringify(c));c2.rl=[...new Set($('#cR').value.split(/[,; ]+/).map(x=>Math.round(num(x))).filter(x=>x>0))];if(!c2.rl.length)c2.rl=[2,4,5,6];c2.rooms=Math.max(...c2.rl);c2.v132=1;c2.dm={rate:num($('#cRate').value),khac:num($('#cKh').value),boc:num($('#cBoc').value)||80000,bocNX:num($('#cpBoc').value)||1020000,lai:num($('#cpLai').value),dau:{},vt:{}};$$('[data-cpd]').forEach(e=>c2.dm.dau[e.dataset.cpd]=num(e.value));$$('[data-cpv]').forEach(e=>c2.dm.vt[e.dataset.cpv]=num(e.value));if($('#cU')){c2.users=$('#cU').value.split(',').map(s=>s.trim()).filter(Boolean);c2.approvers=$('#cAp').value.split(',').map(s=>s.trim()).filter(Boolean)}c2.v122=1;c2.v125=1;c2.v134=1;c2.v141=1;c2.v142=1;c2.v152=1;c2.prods=JSON.parse(JSON.stringify(c.prods||[]));const cp=$('#cCap').value.split(',').map(x=>num(x));c2.caps={};c2.rl.forEach((r,i)=>{c2.caps[r]=cp[i]||5000});
     for(const t of Object.keys(c2.types)){c2.types[t].days=Math.max(1,Math.round(num($(`[data-td="${t}"]`).value))||c2.types[t].days);c2.types[t].cong100=num($(`[data-tc="${t}"]`).value);c2.types[t].yield=num($(`[data-ty="${t}"]`).value);c2.types[t].thung=num($(`[data-tt="${t}"]`).value)||thungOf(t);c2.types[t].ram=Math.max(1,Math.round(num($(`[data-tr="${t}"]`).value))||3);c2.types[t].kho=Math.round(num($(`[data-tk2="${t}"]`).value))||0;const mk={};$(`[data-tm="${t}"]`).value.split(',').forEach(x=>{const m=x.split(':');const n=Math.round(num(m[0]));if(n&&m[1])mk[n]=m.slice(1).join(':').trim()});c2.types[t].marks=mk}
     $$('[data-pi]').forEach(el=>{const p=c2.prods[+el.dataset.pi],k=el.dataset.pk;if(k==='active')p.active=el.checked;else if(k==='kg')p.kg=num(el.value)||1;else if(k==='bb')p.bb=num(el.value);else p[k]=el.value});return c2};
-  const save=async(c2,m)=>{const all=JSON.parse(JSON.stringify(cfg()));all.ch=c2;try{await S.db.doc('mcfg/main').set(all);S.cfg=all;toast(m||'✓ Đã lưu');render()}catch(e){toast('Chưa lưu được')}};
+  const save=async(c2,m)=>{const all=JSON.parse(JSON.stringify(cfg()));all.ch=c2;try{await cfgPut(all);S.cfg=all;toast(m||'✓ Đã lưu');render()}catch(e){toast('Chưa lưu được')}};
   $('#cSave').onclick=()=>save(collect());
   $('#pAdd2').onclick=()=>{const n=$('#pN').value.trim();if(!n)return toast('Gõ tên sản phẩm');const c2=collect();c2.prods.push({id:'p'+Date.now().toString(36),t:Object.keys(c2.types)[0],name:n,u:'kg',kg:1});save(c2,'✓ Đã thêm '+n)}}
 
@@ -1170,7 +1172,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<60&&!(c&&c.use)
   const [db,user]=await Promise.all([c.use('db'),c.use('user')]);if(!db){$('#view').innerHTML='<div class="alert r">Không kết nối được máy chủ dữ liệu. Kiểm tra mạng rồi tải lại.</div>';return}
   S.db=db;S.user=user;S.uid=await user.id();S.owner=await user.isOwner();
   db.doc('staff/'+S.uid).onSnapshot(s=>{S.staff=s.exists?s.data():null;soon()});
-  db.doc('mcfg/main').onSnapshot(s=>{S.cfg=s.exists?s.data():null;soon()});
+  db.doc('mcfg/main').onSnapshot(s=>{const d=s.exists?s.data():null;if(S.cfgW&&Date.now()-S.cfgWt<90000&&!(d&&(+d._w||0)>=S.cfgW))return;S.cfg=d;soon()});
   db.collection('mlog').onSnapshot(q=>{const L=[],P={},Q=[];for(const d of q.docs){const x=Object.assign({id:d.id},d.data());if(x.kind==='cplan')P[x.date]=x;else if(x.kind==='creq')Q.push(x);else L.push(x)}S.logs=L;S.plans=P;S.reqs=Q;loadNames();soon()});
   try{const p=await user.profiles([S.uid]);S.names[S.uid]=p[S.uid]&&p[S.uid].name||''}catch(e){}
   setTimeout(()=>{S.ready=true;render();if(isAdmin()&&(!S.cfg||!(S.cfg.v>=2))){const c=upgradeCfg(S.cfg);db.doc('mcfg/main').set(c).then(()=>{S.cfg=c;render()}).catch(()=>{})}else if(isAdmin()&&S.cfg&&S.cfg.v===4){const u=upgrade5(S.cfg);db.doc('mcfg/main').update(u).then(()=>{Object.assign(S.cfg,u);render()}).catch(()=>{})}else if(isAdmin()&&S.cfg&&S.cfg.v===3){const u=upgrade4(S.cfg);db.doc('mcfg/main').update(u).then(()=>{Object.assign(S.cfg,u);render()}).catch(()=>{})}else if(isAdmin()&&S.cfg&&S.cfg.v===2){const u=upgrade3(S.cfg);db.doc('mcfg/main').update(u).then(()=>{Object.assign(S.cfg,u);render()}).catch(()=>{})}},300);
