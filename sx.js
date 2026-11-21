@@ -117,7 +117,8 @@ const nvls=()=>(cfg().nvls||[]).filter(n=>n.active!==false);
 const nvlOf=id=>(cfg().nvls||[]).find(n=>n.id===id)||{id,name:id||'?'};
 const nvlId=l=>l.nvl||(l.item==='duaq'?'dua':l.item); /* phiếu nhập NVL / sản xuất cũ dùng item */
 const tpsOfNvl=n=>items().filter(i=>i.nvl===n);
-const role=()=>S.owner?'admin':(S.staff&&S.staff.active!==false?S.staff.role:null);
+const sxMgr=()=>!!(S.staff&&S.staff.active!==false&&S.staff.role==='sx'&&S.cfg&&(S.cfg.mgrs||[]).includes(S.uid));/* v160: nhân viên sx được Quản lý bật 'Như Quản lý' */
+const role=()=>S.owner?'admin':sxMgr()?'admin':(S.staff&&S.staff.active!==false?S.staff.role:null);
 const isAdmin=()=>role()==='admin';
 const canUse=()=>role()==='admin'||role()==='sx';
 const liveLogs=()=>S.logs.filter(l=>!l.deleted);
@@ -194,6 +195,12 @@ function bindTdk(){const f=$('#tdF');if(!f)return;$('#tdD').onchange=e=>{S.ui.td
       if(S.logs.some(l=>l.kind==='tdk'&&!l.deleted&&l.kho===kho)&&!await ask('Kho này đã có tồn đầu kỳ. Vẫn nhập thêm? (Có thể bị trùng – nên xoá bản cũ ở tab Đã nhập trước.)'))return;
       if(!await ask(`Lưu tồn đầu kỳ ${khoX(kho).n}: ${P.lines.length} lô, ${fm(tot)} kg, mốc hết ngày ${d.split('-').reverse().join('/')}?`))return;
       sb.disabled=true;sb.textContent='Đang lưu…';try{await S.db.doc('mlog/'+newId(d)).set({kind:'tdk',date:d,kho,lines:P.lines,people:0,hours:0,hv:2,note:'Nhập từ Excel '+file.name,by:S.uid,at:Date.now()});toast('✓ Đã nhập tồn đầu kỳ kho thuê');render()}catch(e){sb.disabled=false;sb.textContent='Lưu lại';toast('Chưa lưu được')}}}}
+/* v160: quyền "Như Quản lý" trong phân hệ Sản xuất (chỉ owner bật/tắt) */
+function mgrHTML(){if(!S.owner)return '';const M=new Set(cfg().mgrs||[]);const U=Object.entries(S.names).filter(([u,n])=>u!==S.uid&&n&&!/^QUẢN LÝ$/i.test(n)).sort((a,b)=>a[1].localeCompare(b[1],'vi'));
+  return `<div class="sec">👥 Quyền trong phân hệ Sản xuất</div><div class="group"><div class="row"><div class="grow s">Bật "Như Quản lý": xem tất cả các mục và nhập được mọi phiếu của cả Nhà máy và Xưởng chuối. Không quản lý nhân viên, mật khẩu, app bán hàng.</div></div>
+  ${U.map(([u,n])=>`<label class="row" style="cursor:pointer"><div class="grow"><div class="t">${esc(n)}</div><div class="s">${M.has(u)?'Như Quản lý':'Nhập phiếu theo xưởng'}</div></div><input type="checkbox" data-mgr="${u}"${M.has(u)?' checked':''} style="width:22px;height:22px"></label>`).join('')||'<div class="empty">Chưa có nhân viên nào đăng nhập.</div>'}</div>
+  <button class="btn block" id="mgrSave" style="margin-top:8px">Lưu quyền</button>`}
+function bindMgr(c,saveCfg){const b=$('#mgrSave');if(!b)return;b.onclick=()=>{const c2=JSON.parse(JSON.stringify(c));c2.mgrs=$$('[data-mgr]').filter(x=>x.checked).map(x=>x.dataset.mgr);saveCfg(c2,'✓ Đã lưu quyền')}}
 function vtNextCode(){let m=0;for(const k of Object.keys(vtc().cat||{})){const x=/^VT(\d+)$/.exec(k);if(x)m=Math.max(m,+x[1])}return 'VT'+String(m+1).padStart(3,'0')}
 function vtAddHTML(){const V=vtc(),e=S.ui.vtEd||'',E=e?(V.cat[e]||{}):{},own=Object.entries(V.cat||{}).filter(([k,x])=>x.own).sort((a,b)=>(b[1].at||0)-(a[1].at||0));
   const U=['Cái','Kg','Cuộn','Hộp','Thùng','Tờ','Bộ','Mét'],G=['Nhãn mác','Bao bì','Vật tư','Hoá chất'],u=E.u||'Cái',g=E.g||'Nhãn mác';
@@ -293,7 +300,7 @@ function render(){const v=$('#view');
   const T=tabsDef();if(!T.some(t=>t[0]===S.tab))S.tab='home';
   $('#tabs').innerHTML=T.map(([k,l,i])=>`<button data-tab="${k}" class="${S.tab===k?'on':''}"><span style="font-size:20px;line-height:1">${i}</span><span>${l}</span></button>`).join('');$('#tabbar').hidden=false;
   $$('#tabs [data-tab]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;S.form=null;S.post=null;render();scrollTo(0,0)});
-  if(isAdmin())$('#modeSw').innerHTML='<a class="btn sm" href="quanly.html">↩ App bán hàng</a>';
+  if(S.owner)$('#modeSw').innerHTML='<a class="btn sm" href="quanly.html">↩ App bán hàng</a>';else if(sxMgr())$('#modeSw').innerHTML='<span class="chip" style="background:#e3eefa;color:#1a5ea8;font-weight:700">Quản lý SX</span>';
   if(S.form)return S.form.kind==='ckh'?viewPlan(v):CORDER.includes(S.form.kind)?viewFormCh(v):viewForm(v);
   if(S.post&&S.tab==='home')return viewPost(v);
   const ch=xw()==='ch';({home:ch?viewHomeCh:viewHome,stock:ch?viewStockCh:viewStock,list:viewList,nc:viewNC,dm:ch?viewDMCh:viewDM,gt:ch?viewGTCh:viewGT})[S.tab](v);
@@ -700,6 +707,7 @@ function viewDM(v){const c=cfg();const id=S.ui.dmItem&&c.items.some(i=>i.id===S.
    <label class="chk"><input type="checkbox" id="dmM" ${isMat(it)?'checked':''}> <span><b>Hàng mát</b> – không gửi kho đông thuê (không hiện khi xuất vào kho thuê)</span></label>
    <button class="btn block pri" id="dmSave">Lưu định mức</button>
    ${vtDMHTML(it)}
+   ${mgrHTML()}
    ${khoHTML()}
    ${tdkHTML()}
    <div class="sec">Cài đặt chung</div><div class="group"><div class="row"><div class="grow t">Số giờ = 1 công</div><input class="dmin" id="dmG" value="${c.gioCong||8}" inputmode="decimal"></div><div class="row"><div class="grow"><div class="t">Hệ số giờ tăng ca</div><div class="s">1 giờ tăng ca = ? giờ thường khi tính tiền công</div></div><input class="dmin" id="dmOt" value="${String(c.otK||1.5).replace('.',',')}" inputmode="decimal"></div></div>
@@ -722,7 +730,7 @@ function viewDM(v){const c=cfg();const id=S.ui.dmItem&&c.items.some(i=>i.id===S.
     c2.vtGia=Object.assign({},c.vtGia||{});$$('[data-vg]').forEach(el=>{const ma=el.dataset.vg,t=el.value.trim();if(t==='')return;const g=num(t);if(g!==VTGIA0[ma]||c2.vtGia[ma]!=null)c2.vtGia[ma]=g});
     saveCfg(c2,'✓ Đã lưu định mức và đơn giá vật tư')};
   const saveCfg=async(c2,m)=>{try{await cfgPut(c2);S.cfg=c2;toast(m||'✓ Đã lưu');render()}catch(e){toast('Chưa lưu được')}};
-  bindVtAdd(c,saveCfg);bindKho(c,saveCfg);bindTdk();
+  bindVtAdd(c,saveCfg);bindKho(c,saveCfg);bindTdk();bindMgr(c,saveCfg);
   $('#dmSave').onclick=()=>{const c2=JSON.parse(JSON.stringify(c));const i2=c2.items.find(i=>i.id===id);i2.dm=i2.dm||{};$$('[data-dk]').forEach(el=>{const k=el.dataset.dk;if((k==='dien'||k==='gas')&&el.value.trim()===''&&$$('[data-dk=dien],[data-dk=gas]').every(x=>x.value.trim()===''))return;i2.dm[k]=num(el.value)});i2.bich=$('#dmB').value==='1';i2.nvl=$('#dmV').value;i2.name=$('#dmN').value.trim()||i2.name;i2.active=$('#dmA').checked;i2.mat=$('#dmM').checked;c2.gioCong=num($('#dmG').value)||8;c2.otK=num($('#dmOt').value)||1.5;c2.xe=$('#dmX').value.split(',').map(s=>s.trim()).filter(Boolean);i2.dmBy=S.uid;i2.dmAt=Date.now();saveCfg(c2)};
   $$('[data-nrm]').forEach(b=>b.onclick=async()=>{if(!await ask('Bỏ nhà cung cấp này khỏi danh sách chọn?'))return;const c2=JSON.parse(JSON.stringify(c));c2.ncc.splice(+b.dataset.nrm,1);saveCfg(c2)});
   $('#nAdd').onclick=()=>{const n=$('#nN').value.trim();if(!n)return toast('Gõ tên nhà cung cấp');const c2=JSON.parse(JSON.stringify(c));c2.ncc.push({name:n,code:$('#nC').value.trim(),lot:autoCode(n)});saveCfg(c2,'✓ Đã thêm nhà cung cấp')};
