@@ -784,7 +784,7 @@ function psUnseen(){if(R.mode!=='sale')return 0;const L=psList();const seen=psSe
   if(R.tab==='orders'&&R.ui.ordTab==='ps'){const mx=Math.max(seen,...L.map(o=>toNum(o.createdAt)||0));if(mx>seen)try{localStorage.setItem('viba.psSeen.'+R.uid,String(mx))}catch(e){}return 0}
   return L.filter(o=>(toNum(o.createdAt)||0)>seen&&o.status!=='cancel').length}
 function viewSaleOrders(v){if(R.ui.slX)return vdFailView(v,true);const tab=R.ui.ordTab==='ps'?'ps':'mine';const un=psUnseen();const fxN=fxList().filter(o=>fxSale(o)===R.uid).length;
-  const top=`${fxN?`<button id="slX" class="btn block" style="display:flex;justify-content:space-between;color:#b06f00;border:1.5px solid #f0d9a8;background:#fff8e6;font-weight:700;margin-bottom:8px"><span>⚠️ ${fxN} đơn ship không giao được – chờ bạn duyệt</span><span>›</span></button>`:''}<div class="seg" id="oTab" style="margin-bottom:2px">${[['mine','Đơn tôi lên'],['ps','Khách của tôi – người khác lên']].map(([k,l])=>`<button data-otab="${k}" class="${tab===k?'on':''}">${l}${k==='ps'&&un?' <span style="display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#d64545;color:#fff;font-size:11px;font-weight:800;vertical-align:1px">'+un+'</span>':''}</button>`).join('')}</div>`;
+  const top=`${fxN?`<button id="slX" class="btn block" style="display:flex;justify-content:space-between;align-items:center;gap:8px;white-space:normal;text-align:left;line-height:1.35;color:#b06f00;border:1.5px solid #f0d9a8;background:#fff8e6;font-weight:700;margin-bottom:8px"><span>⚠️ ${fxN} đơn ship không giao được – chờ bạn duyệt</span><span>›</span></button>`:''}<div class="seg" id="oTab" style="margin-bottom:2px">${[['mine','Đơn tôi lên'],['ps','Khách của tôi – người khác lên']].map(([k,l])=>`<button data-otab="${k}" class="${tab===k?'on':''}">${l}${k==='ps'&&un?' <span style="display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#d64545;color:#fff;font-size:11px;font-weight:800;vertical-align:1px">'+un+'</span>':''}</button>`).join('')}</div>`;
   if(tab==='mine')orderListView(v,R.orders.filter(o=>o.saleId===R.uid),{title:'Đơn của tôi',emptyHint:'Đơn bạn lên sẽ hiện ở đây.',top});
   else{const per=R.ui.psPer||'today',td=today();const f=per==='month'?td.slice(0,8)+'01':per==='week'?isoAdd(td,-((new Date(td+'T00:00:00').getDay()+6)%7)):td;
     const L=psList().filter(o=>{const d=psDay(o);return d>=f&&d<=td});const live=L.filter(o=>o.status!=='cancel');
@@ -1098,7 +1098,7 @@ function shipFail(o){if(!o)return;const f=o.fail||{};const d={r:f.reason||'',t:f
   openSheet('Không giao được – đơn '+o.no,'',draw)}
 function fxList(){return R.orders.filter(fxOn).sort((a,b)=>toNum(a.fail.at)-toNum(b.fail.at))}
 const fxLog=(o,act,x)=>(o.failLog||[]).concat([Object.assign({},o.fail,{act,actBy:R.uid,actAt:Date.now()},x||{})]);
-const fxBar=()=>{const n=fxList().length;return n?`<button id="vdX" class="btn block" style="display:flex;justify-content:space-between;color:#b06f00;border:1.5px solid #f0d9a8;background:#fff8e6;font-weight:700"><span>⚠️ Không giao được: ${n} đơn chờ sale duyệt</span><span>›</span></button>`:''};
+const fxBar=()=>{const n=fxList().length;return n?`<button id="vdX" class="btn block" style="display:flex;justify-content:space-between;align-items:center;gap:8px;white-space:normal;text-align:left;line-height:1.35;color:#b06f00;border:1.5px solid #f0d9a8;background:#fff8e6;font-weight:700"><span>⚠️ Không giao được: ${n} đơn chờ sale duyệt</span><span>›</span></button>`:''};
 function vdFailView(v,mine){const L=mine?fxList().filter(o=>fxSale(o)===R.uid):fxList();
   v.innerHTML=`<h1 class="big">${mine?'Duyệt đơn không giao được':'Vận đơn'}</h1><div class="stack"><div class="seg"><button data-fxb="1">‹ ${mine?'Đơn của tôi':'Vận đơn'}</button><button class="on" style="font-weight:700">⚠️ Không giao được ${L.length}</button></div>
    <div class="tiny muted" style="padding-left:4px">${mine?'Ship báo không giao được đơn của khách bạn phụ trách. Bạn chọn giao lại, chuyển tuyến hoặc huỷ – chỉ sale phụ trách được huỷ đơn đã nhận giao.':'Sale phụ trách khách xét duyệt. Khách chưa có sale (Sale công ty) do Quản lý duyệt. '+(R.mode==='admin'?'':'Tài khoản chỉ xem.')}</div>
@@ -2485,7 +2485,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='138';
+const APP_BUILD='139';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
