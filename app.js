@@ -472,7 +472,7 @@ function vMsgPrep(t){_vMsgLine='';const L=String(t||'').replace(/\r/g,'').split(
   const sc=s=>{const v=vLow(s);if(isKw(v))return 99;if(/^\d/.test(v))return -99;const W=words(s);if(!W.length)return -99;
     const lw=W.filter(w=>!V_LFILL.test(w));const lm=lw.length?vMatchLoc(lw):{sc:0};const pm=vMatchProd(W,'',!vHasAcc(s));return lm.sc+(lm.sure?.5:0)-(pm.sc||0)-(/\d/.test(v)&&!lm.sure?.3:0)};
   let k=0;if(L.length>1){const a=sc(L[0]),b=sc(L[L.length-1]);if(b>a)k=L.length-1}
-  const v=vLow(L[k]);if(/^\d/.test(v)&&!isKw(v))return L.join('\n');
+  const v=vLow(L[k]);/* v146: dòng bắt đầu bằng số nhưng là TÊN CỬA HÀNG (vd "3 hào", "3 hào mễ trì"): không khớp mặt hàng và 2 chữ đầu khớp nguyên cụm trong tên điểm giao → coi là địa điểm (xét cả dòng đầu và dòng cuối) */const isLN=s=>{const W=words(s);if(!W.length)return false;const pm=vMatchProd(W,'',!vHasAcc(s));if(pm&&pm.sc>=.6)return false;const t=vitN(noAcc(s)).replace(/[^a-z0-9]+/g,' ').trim().split(' ');if(t.length<2)return false;const p2=' '+t.slice(0,2).join(' ')+' ';return locIndex().some(x=>(' '+x.n.replace(/[^a-z0-9]+/g,' ')+' ').includes(p2))};if(/^\d/.test(v)&&!isKw(v)){if(!isLN(L[k])){const j=k===0?L.length-1:0;if(L.length>1&&/^\d/.test(vLow(L[j]))&&isLN(L[j]))k=j;else return L.join('\n')}}
   const loc=L.splice(k,1)[0];_vMsgLine=loc;return [(isKw(v)?'':'giao ')+loc,...L].join('\n')}
 /* v59: TÌM ĐỊA ĐIỂM THEO CẢ DÒNG TÊN KHÁCH trong tin nhắn (tính cả số nhà, tên khách hàng/chuỗi, bỏ mã vùng "(09.BTL)").
    Mỗi từ có trọng số theo độ hiếm (từ càng ít địa điểm có càng quan trọng); từ khớp TÊN KHÁCH (Easymart, Tmart…) được nhân 1,5.
@@ -2531,7 +2531,7 @@ async function init(){render();let c=window.claude;for(let i=0;i<40&&!(c&&c.use)
   render()}
 const _sheetObs=new MutationObserver(()=>{if($('#sheet').hidden)soon()});_sheetObs.observe($('#sheet'),{attributes:true,attributeFilter:['hidden']});
 /* v49: TỰ BÁO CÓ BẢN MỚI – so APP_BUILD với version.json trên máy chủ (lúc mở lại app và mỗi 5 phút); khác thì hiện thanh bấm để tải lại */
-const APP_BUILD='145';
+const APP_BUILD='146';
 async function chkUpdate(){try{const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
   if(j&&j.v&&String(j.v)!==APP_BUILD&&!document.getElementById('updBar')){const b=document.createElement('div');b.id='updBar';b.textContent='🔄 Có bản app mới – bấm để cập nhật';
     b.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:9999;background:#1b6aa5;color:#fff;font-weight:700;text-align:center;padding:12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
